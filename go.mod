@@ -1,0 +1,3 @@
+module kxp
+
+go 1.26.5
