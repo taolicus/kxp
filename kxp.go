@@ -1,159 +1,207 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
-	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 )
 
 type Move string
 type Result string
 
 const (
-	Rock     Move = "rock"
-	Paper    Move = "paper"
-	Scissors Move = "scissors"
+	MoveRock     Move = "rock"
+	MovePaper    Move = "paper"
+	MoveScissors Move = "scissors"
 
-	Win  Result = "win"
-	Loss Result = "loss"
-	Draw Result = "draw"
+	ResultWin  Result = "win"
+	ResultLoss Result = "loss"
+	ResultDraw Result = "draw"
 )
 
-var menuOptions = []Move{Rock, Paper, Scissors}
+var menuOptions = []Move{MoveRock, MovePaper, MoveScissors}
 
 var winsAgainst = map[Move]Move{
-	Rock:     Scissors,
-	Paper:    Rock,
-	Scissors: Paper,
+	MoveRock:     MoveScissors,
+	MovePaper:    MoveRock,
+	MoveScissors: MovePaper,
+}
+
+type InputResult struct {
+	Move           Move
+	InputTime      time.Time
+	TimeDifference time.Duration
 }
 
 func EvaluateRound(p1, p2 Move) Result {
 	if p1 == p2 {
-		return Draw
+		return ResultDraw
 	}
 	if winsAgainst[p1] == p2 {
-		return Win
+		return ResultWin
 	}
-	return Loss
+	return ResultLoss
 }
 
-type InputResult struct {
-	Move          Move
-	InputTime     time.Time
-	TimeDifference time.Duration // How far off from target reveal time
-}
-
-// Visual countdown running concurrently
-func runCountdown(targetTimeChan chan time.Time) {
+func runCountdown(ctx context.Context, targetTimeChan chan<- time.Time) {
 	countdown := []string{"ROCK...", "PAPER...", "SCISSORS..."}
-	fmt.Println("\n=== GET READY ===")
-	fmt.Println("Enter your move (1: Rock, 2: Paper, 3: Scissors) right on SHOOT!\n")
+	fmt.Print("\r\n=== GET READY ===\r\n")
+	fmt.Print("Press key (1: Rock, 2: Paper, 3: Scissors) right on SHOOT!\r\n\r\n")
 
 	for _, word := range countdown {
-		fmt.Println(word)
-		time.Sleep(1 * time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(1 * time.Second):
+			fmt.Printf("%s\r\n", word)
+		}
 	}
 
-	// Lock in target time and announce SHOOT!
 	targetTime := time.Now()
-	targetTimeChan <- targetTime
-	fmt.Println("\n*** SHOOT! ***")
+	select {
+	case targetTimeChan <- targetTime:
+		fmt.Print("\r\n*** SHOOT! ***\r\n")
+	case <-ctx.Done():
+	}
 }
 
-// Non-blocking input collection
-func getPlayerInput(reader *bufio.Reader, inputChan chan InputResult) {
-	for {
-		input, err := reader.ReadString('\n')
-		inputTime := time.Now()
-		if err != nil {
-			continue
-		}
+// Single keypress listener using non-canonical raw terminal mode
+func getPlayerInput(ctx context.Context, inputChan chan<- InputResult) {
+	readChan := make(chan byte, 1)
 
-		choice, err := strconv.Atoi(strings.TrimSpace(input))
-		if err == nil && choice >= 1 && choice <= len(menuOptions) {
-			inputChan <- InputResult{
-				Move:      menuOptions[choice-1],
-				InputTime: inputTime,
+	// Non-blocking terminal read loop
+	go func() {
+		var buf [1]byte
+		for {
+			n, err := os.Stdin.Read(buf[:])
+			if err != nil || n == 0 {
+				return
+			}
+			select {
+			case readChan <- buf[0]:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case char := <-readChan:
+			inputTime := time.Now()
+
+			var chosenMove Move
+			switch char {
+			case '1':
+				chosenMove = MoveRock
+			case '2':
+				chosenMove = MovePaper
+			case '3':
+				chosenMove = MoveScissors
+			default:
+				continue
+			}
+
+			select {
+			case inputChan <- InputResult{Move: chosenMove, InputTime: inputTime}:
+			case <-ctx.Done():
 			}
 			return
 		}
 	}
 }
 
-// CPU simulated input timed closely around SHOOT!
-func getCPUInput(targetTime time.Time, cpuChan chan InputResult) {
-	// CPU reacts between 50ms and 350ms AFTER shoot
-	reactionDelay := time.Duration(50+rand.Intn(300)) * time.Millisecond
-	time.Sleep(reactionDelay)
+func getCPUInput(ctx context.Context, targetTime time.Time, cpuChan chan<- InputResult) {
+	reactionDelay := time.Duration(50+rand.IntN(300)) * time.Millisecond
 
-	cpuChan <- InputResult{
-		Move:          menuOptions[rand.Intn(len(menuOptions))],
-		InputTime:     targetTime.Add(reactionDelay),
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(reactionDelay):
+	}
+
+	res := InputResult{
+		Move:           menuOptions[rand.IntN(len(menuOptions))],
+		InputTime:      targetTime.Add(reactionDelay),
 		TimeDifference: reactionDelay,
+	}
+
+	select {
+	case cpuChan <- res:
+	case <-ctx.Done():
 	}
 }
 
 func main() {
-	reader := bufio.NewReader(os.Stdin)
+	// Put terminal in raw mode to read single keypresses without Enter
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		fmt.Printf("Failed to enable raw terminal mode: %v\n", err)
+		return
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	targetTimeChan := make(chan time.Time)
-	playerInputChan := make(chan InputResult)
-	cpuChan := make(chan InputResult)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// 1. Start player input listener goroutine immediately
-	go getPlayerInput(reader, playerInputChan)
+	targetTimeChan := make(chan time.Time, 1)
+	playerInputChan := make(chan InputResult, 1)
+	cpuChan := make(chan InputResult, 1)
 
-	// 2. Start visual countdown concurrently
-	go runCountdown(targetTimeChan)
+	go getPlayerInput(ctx, playerInputChan)
+	go runCountdown(ctx, targetTimeChan)
 
-	// Wait for target time ("SHOOT!") to be generated
-	targetTime := <-targetTimeChan
-
-	// 3. Start CPU reaction thread synced to target time
-	go getCPUInput(targetTime, cpuChan)
-
-	// 4. Collect results with a maximum time limit (e.g., 2 seconds past target)
-	var playerRes, cpuRes InputResult
-	playerSubmitted := false
-
-	timeout := time.After(2 * time.Second)
-
-	for !playerSubmitted {
-		select {
-		case pInput := <-playerInputChan:
-			playerRes = pInput
-			playerRes.TimeDifference = playerRes.InputTime.Sub(targetTime)
-			playerSubmitted = true
-		case <-timeout:
-			fmt.Println("\n\nToo slow! You failed to enter a move in time.")
-			return
-		}
+	var targetTime time.Time
+	select {
+	case targetTime = <-targetTimeChan:
+	case <-time.After(5 * time.Second):
+		fmt.Print("\r\nGame timed out during countdown.\r\n")
+		return
 	}
 
-	cpuRes = <-cpuChan
+	go getCPUInput(ctx, targetTime, cpuChan)
 
-	// 5. Evaluate results and timing accuracy
-	fmt.Println("\n--- Outcome ---")
-	fmt.Printf("You chose %s (Timing: %v relative to SHOOT!)\n", strings.ToUpper(string(playerRes.Move)), playerRes.TimeDifference)
-	fmt.Printf("CPU chose %s (Timing: +%v relative to SHOOT!)\n", strings.ToUpper(string(cpuRes.Move)), cpuRes.TimeDifference)
+	var playerRes, cpuRes InputResult
+	timeout := time.After(2 * time.Second)
 
-	// Check for early penalty (jumped the gun by > 200ms)
+	select {
+	case playerRes = <-playerInputChan:
+		playerRes.TimeDifference = playerRes.InputTime.Sub(targetTime)
+	case <-timeout:
+		fmt.Print("\r\n\r\nToo slow! You failed to enter a move in time.\r\n")
+		return
+	}
+
+	select {
+	case cpuRes = <-cpuChan:
+	case <-time.After(1 * time.Second):
+		fmt.Print("\r\nError waiting for CPU turn.\r\n")
+		return
+	}
+
+	fmt.Print("\r\n--- Outcome ---\r\n")
+	fmt.Printf("You chose %s (Timing: %v relative to SHOOT!)\r\n", strings.ToUpper(string(playerRes.Move)), playerRes.TimeDifference)
+	fmt.Printf("CPU chose %s (Timing: +%v relative to SHOOT!)\r\n", strings.ToUpper(string(cpuRes.Move)), cpuRes.TimeDifference)
+
 	if playerRes.TimeDifference < -200*time.Millisecond {
-		fmt.Println("\nDisqualified! You entered your move too early before SHOOT!")
+		fmt.Print("\r\nDisqualified! You entered your move too early before SHOOT!\r\n")
 		return
 	}
 
 	result := EvaluateRound(playerRes.Move, cpuRes.Move)
 	switch result {
-	case Draw:
-		fmt.Println("It's a draw!")
-	case Win:
-		fmt.Println("You win!")
-	case Loss:
-		fmt.Println("Computer wins!")
+	case ResultDraw:
+		fmt.Print("It's a draw!\r\n")
+	case ResultWin:
+		fmt.Print("You win!\r\n")
+	case ResultLoss:
+		fmt.Print("Computer wins!\r\n")
 	}
 }
