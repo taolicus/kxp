@@ -18,17 +18,26 @@ original terminal game.
 ## Run
 
 ```sh
+go run .
+```
+
+The server auto-picks the first available port in the 8000–8999 range. The
+chosen port is printed on startup.
+
+To bind a specific address (e.g. behind nginx):
+
+```sh
 go run . -addr :8080
 ```
 
-or build and run the binary:
+Or build and run the binary:
 
 ```sh
 go build -o kxp .
 ./kxp
 ```
 
-Then open `http://localhost:8080`.
+Then open `http://localhost:<port>`.
 
 ## Play
 
