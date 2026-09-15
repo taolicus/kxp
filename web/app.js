@@ -1,4 +1,4 @@
-const aliases = { rock: '\u270a', paper: '\u270b', scissors: '\u270c' };
+const aliases = { rock: '\u270a\uFE0F', paper: '\u270b\uFE0F', scissors: '\u270c\uFE0F' };
 
 let id = null;
 let phase = 'idle'; // idle | waiting | countdown | shoot | result
