@@ -144,3 +144,7 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
 }
 
 #btn-again { margin-top: 0.5rem; }
+
+img {
+  max-width: 100%;
+}
