@@ -69,12 +69,12 @@ func (m *match) run() {
 	}
 
 	for _, w := range []string{"KA", "CHI"} {
+		for i := range m.sides {
+			m.send(i, evt("countdown", map[string]any{"n": w}))
+		}
 		if m.wait(countStep) {
 			m.abort()
 			return
-		}
-		for i := range m.sides {
-			m.send(i, evt("countdown", map[string]any{"n": w}))
 		}
 	}
 
