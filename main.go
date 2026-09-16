@@ -51,6 +51,6 @@ func main() {
 		log.Fatal("no available port in 8000–8999")
 	}
 
-	log.Printf("kxp listening on %s", listener.Addr())
+	log.Printf("KACHIPUN TOURNAMENT listening on %s", listener.Addr())
 	log.Fatal(http.Serve(listener, mux))
 }

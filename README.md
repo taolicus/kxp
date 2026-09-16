@@ -1,4 +1,4 @@
-# kxp
+# KACHIPUN TOURNAMENT
 
 A real-time online Rock-Paper-Scissors game in Go, with a web UI. Tap your move
 the moment **SHOOT!** appears — too early and you're disqualified, just like the
@@ -58,7 +58,7 @@ systemd service. Run it as a daemon (no terminal needed):
 ```ini
 # /etc/systemd/system/kxp.service
 [Unit]
-Description=kxp online RPS
+Description=KACHIPUN TOURNAMENT online RPS
 After=network.target
 
 [Service]
