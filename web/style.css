@@ -60,6 +60,12 @@ main {
   animation: pulse 1.6s ease infinite;
 }
 
+.stats {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: -1.25rem 0 1.75rem;
+}
+
 .buttons { display: flex; flex-direction: column; gap: 0.75rem; }
 
 button {

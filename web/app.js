@@ -23,6 +23,26 @@ function setOnline(n) {
   el.innerHTML = `<span class="dot"></span>${n} online now`;
 }
 
+function getStats() {
+  try {
+    const s = JSON.parse(localStorage.getItem('kxp-stats') || '{}');
+    return { wins: Number(s.wins) || 0, streak: Number(s.streak) || 0 };
+  } catch (e) {
+    return { wins: 0, streak: 0 };
+  }
+}
+
+function saveStats(s) {
+  try { localStorage.setItem('kxp-stats', JSON.stringify(s)); } catch (e) {}
+}
+
+function setStats() {
+  const s = getStats();
+  const el = $('#stats');
+  if (!el) return;
+  el.textContent = `${s.wins} wins \u00b7 ${s.streak} in a row`;
+}
+
 function lockMoves() {
   document.querySelectorAll('.move').forEach((b) => { b.disabled = true; });
   $('#stage').classList.remove('go');
@@ -154,13 +174,22 @@ function connect() {
     phase = 'result';
     clearTimeout(shootTimer);
     lockMoves();
-    renderResult(JSON.parse(e.data));
+    const d = JSON.parse(e.data);
+    const s = getStats();
+    if (d.outcome === 'win') { s.wins++; s.streak++; } else { s.streak = 0; }
+    saveStats(s);
+    setStats();
+    renderResult(d);
   });
 
   es.addEventListener('opponent-left', () => {
     phase = 'result';
     clearTimeout(shootTimer);
     lockMoves();
+    const s = getStats();
+    s.wins++; s.streak++;
+    saveStats(s);
+    setStats();
     banner('<p class="won">Opponent left \u2014 you win!</p>');
     $('#btn-again').classList.remove('hidden');
   });
@@ -181,6 +210,7 @@ function connect() {
 
 document.addEventListener('DOMContentLoaded', () => {
   connect();
+  setStats();
 
   $('#btn-online').addEventListener('click', () => post('/queue'));
   $('#btn-cpu').addEventListener('click', () => post('/cpu'));
