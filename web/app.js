@@ -172,7 +172,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('#btn-online').addEventListener('click', () => post('/queue'));
   $('#btn-cpu').addEventListener('click', () => post('/cpu'));
-  $('#btn-cancel').addEventListener('click', () => post('/cancel'));
+  $('#btn-cancel').addEventListener('click', () => {
+    if (phase === 'waiting') { phase = 'idle'; show('lobby'); }
+    post('/cancel');
+  });
 
   $('#btn-again').addEventListener('click', () => {
     resetGame();

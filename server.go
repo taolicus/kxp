@@ -292,12 +292,17 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
+	cancelled := false
 	h.mu.Lock()
 	if c.queueing {
 		h.dequeueLocked(c)
 		c.queueing = false
+		cancelled = true
 	}
 	h.mu.Unlock()
+	if cancelled {
+		c.sendEv(evt("state", map[string]any{"state": "idle"}))
+	}
 	w.Write([]byte("{}"))
 }
 
