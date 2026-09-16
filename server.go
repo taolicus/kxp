@@ -79,21 +79,25 @@ func NewHub() *Hub {
 
 func (h *Hub) getOrCreate(id string) *Client {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if id != "" {
 		if c, ok := h.clients[id]; ok {
+			h.mu.Unlock()
 			return c
 		}
 		if validID(id) {
 			c := newClient()
 			c.id = id
 			h.clients[id] = c
+			h.mu.Unlock()
+			h.broadcastOnline()
 			return c
 		}
 	}
 	c := newClient()
 	c.id = newID(6)
 	h.clients[c.id] = c
+	h.mu.Unlock()
+	h.broadcastOnline()
 	return c
 }
 
@@ -185,9 +189,11 @@ func (h *Hub) endConn(c *Client, connID string) {
 }
 
 func (h *Hub) removeClient(c *Client) {
+	removed := false
 	h.mu.Lock()
 	if h.clients[c.id] == c {
 		delete(h.clients, c.id)
+		removed = true
 	}
 	if c.queueing {
 		h.dequeueLocked(c)
@@ -196,6 +202,9 @@ func (h *Hub) removeClient(c *Client) {
 	c.match = nil
 	h.mu.Unlock()
 	c.cancel()
+	if removed {
+		h.broadcastOnline()
+	}
 }
 
 func (h *Hub) dequeueLocked(c *Client) {
@@ -210,7 +219,7 @@ func (h *Hub) dequeueLocked(c *Client) {
 func (h *Hub) snapshot(c *Client) map[string]any {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	out := map[string]any{"id": c.id, "state": "idle"}
+	out := map[string]any{"id": c.id, "state": "idle", "online": h.onlineLocked()}
 	if c.match != nil {
 		out["state"] = "ingame"
 		out["phase"] = c.match.phaseName()
@@ -218,6 +227,31 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 		out["state"] = "waiting"
 	}
 	return out
+}
+
+func (h *Hub) onlineLocked() int {
+	return len(h.clients)
+}
+
+func (h *Hub) broadcastOnline() {
+	h.mu.Lock()
+	n := h.onlineLocked()
+	ev := encodeEv(evt("online", map[string]any{"count": n}))
+	clients := make([]*Client, 0, n)
+	for _, c := range h.clients {
+		clients = append(clients, c)
+	}
+	h.mu.Unlock()
+	for _, c := range clients {
+		c.sendEvRaw(ev)
+	}
+}
+
+func (c *Client) sendEvRaw(b []byte) {
+	select {
+	case c.send <- b:
+	default:
+	}
 }
 
 func (h *Hub) tryMatch() {

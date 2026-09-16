@@ -16,6 +16,13 @@ function show(view) {
 
 function setCount(t) { $('#count').textContent = t; }
 
+function setOnline(n) {
+  const el = $('#online');
+  if (n == null) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `<span class="dot"></span>${n} online now`;
+}
+
 function lockMoves() {
   document.querySelectorAll('.move').forEach((b) => { b.disabled = true; });
   $('#stage').classList.remove('go');
@@ -87,6 +94,7 @@ function connect() {
       return;
     }
     id = d.id;
+    setOnline(d.online);
     if (d.state === 'waiting') {
       phase = 'waiting';
       show('queue');
@@ -106,6 +114,10 @@ function connect() {
       phase = 'idle';
       show('lobby');
     }
+  });
+
+  es.addEventListener('online', (e) => {
+    setOnline(JSON.parse(e.data).count);
   });
 
   es.addEventListener('waiting', () => {

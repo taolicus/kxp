@@ -44,6 +44,22 @@ main {
 
 .tagline { color: var(--muted); margin: 0.25rem 0 2.5rem; }
 
+.online {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: -1.5rem 0 1.75rem;
+}
+
+.online .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--win);
+  margin-right: 0.4rem;
+  animation: pulse 1.6s ease infinite;
+}
+
 .buttons { display: flex; flex-direction: column; gap: 0.75rem; }
 
 button {
