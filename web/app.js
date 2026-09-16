@@ -82,7 +82,7 @@ function renderResult(d) {
   const lines = [];
   if (d.yourNote === 'timeout') lines.push('Timed out \u2014 no pick.');
   else if (d.yourNote === 'early') lines.push(`Disqualified \u2014 ${-d.youTimingMs}ms early.`);
-  else if (d.youTimingMs != null) lines.push(`Your pick landed ${d.youTimingMs}ms after SHOOT!`);
+  else if (d.youTimingMs != null) lines.push(`Your pick landed ${d.youTimingMs}ms after PUN!`);
   lines.push(`Opponent picked: ${oppAlias}`);
 
   $('#timing').innerHTML = lines.join('<br>');
@@ -123,7 +123,7 @@ function connect() {
       resetGame();
       if (d.phase === 'shoot') {
         phase = 'shoot';
-        setCount('SHOOT!');
+        setCount('PUN!');
         $('#stage').classList.add('go');
         enableMoves();
       } else {
@@ -161,7 +161,7 @@ function connect() {
 
   es.addEventListener('shoot', () => {
     phase = 'shoot';
-    setCount('SHOOT!');
+    setCount('PUN!');
     $('#stage').classList.add('go');
     enableMoves();
     clearTimeout(shootTimer);

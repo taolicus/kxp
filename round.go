@@ -68,13 +68,13 @@ func (m *match) run() {
 		m.send(i, evt("matched", map[string]any{"opponentName": m.opponentName(i)}))
 	}
 
-	for _, n := range []int{3, 2, 1} {
+	for _, w := range []string{"KA", "CHI"} {
 		if m.wait(countStep) {
 			m.abort()
 			return
 		}
 		for i := range m.sides {
-			m.send(i, evt("countdown", map[string]any{"n": n}))
+			m.send(i, evt("countdown", map[string]any{"n": w}))
 		}
 	}
 
