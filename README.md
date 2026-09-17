@@ -124,7 +124,7 @@ Fix correctness and safety issues that affect reliability on a public server.
 - [x] **Phase-aware move validation** — `handleMove` must check
       `c.match.phase` before buffering; reject with `400` if the match is in
       countdown, done, or if the shoot deadline has passed
-- [ ] **Move channel lifecycle** — drain `c.moves` in both `endMatch` and
+- [x] **Move channel lifecycle** — drain `c.moves` in both `endMatch` and
       `start` so a leftover pick never pre-fills the next match
 - [ ] **Full-channel drop must error** — when `c.moves` is full,
       `handleMove` must return `409 conflict` instead of `200 {}` so the

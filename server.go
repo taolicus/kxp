@@ -259,6 +259,16 @@ func (c *Client) sendEvRaw(b []byte) {
 	}
 }
 
+func (c *Client) drainMoves() {
+	for {
+		select {
+		case <-c.moves:
+		default:
+			return
+		}
+	}
+}
+
 func (h *Hub) tryMatch() {
 	h.mu.Lock()
 	for len(h.queue) >= 2 {
@@ -292,6 +302,7 @@ func (h *Hub) endMatch(m *match) {
 	h.mu.Unlock()
 	for _, s := range m.sides {
 		if s.client != nil {
+			s.client.drainMoves()
 			s.client.sendEv(evt("state", map[string]any{"state": "idle"}))
 		}
 	}

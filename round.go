@@ -51,6 +51,7 @@ func (m *match) start() {
 	for _, s := range m.sides {
 		if s.client != nil {
 			s.client.match = m
+			s.client.drainMoves()
 		}
 	}
 	m.phase.Store(phaseCountdown)
