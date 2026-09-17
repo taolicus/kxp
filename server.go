@@ -417,6 +417,19 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "no active match")
 		return
 	}
+	switch phase := m.phase.Load(); phase {
+	case phaseCountdown:
+		h.handlerError(w, http.StatusBadRequest, "too early")
+		return
+	case phaseDone, phaseIdle:
+		h.handlerError(w, http.StatusBadRequest, "match over")
+		return
+	case phaseShoot:
+		if time.Now().After(m.shootAt.Add(shootWindow)) {
+			h.handlerError(w, http.StatusBadRequest, "too late")
+			return
+		}
+	}
 	msg := moveMsg{move: move, arrive: time.Now()}
 	select {
 	case c.moves <- msg:

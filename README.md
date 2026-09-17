@@ -121,7 +121,7 @@ android/arm64 host.
 
 Fix correctness and safety issues that affect reliability on a public server.
 
-- [ ] **Phase-aware move validation** — `handleMove` must check
+- [x] **Phase-aware move validation** — `handleMove` must check
       `c.match.phase` before buffering; reject with `400` if the match is in
       countdown, done, or if the shoot deadline has passed
 - [ ] **Move channel lifecycle** — drain `c.moves` in both `endMatch` and
