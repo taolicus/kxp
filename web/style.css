@@ -122,6 +122,14 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
   margin-bottom: 1.5rem;
 }
 
+.fighter-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0 0 0.5rem;
+}
+
 .fighter {
   display: flex;
   flex-direction: column;
