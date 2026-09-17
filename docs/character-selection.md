@@ -15,7 +15,10 @@ the opponent slot, and the result line).
 - The CPU picks a random fighter per match, server-side.
 - Roster lives in two mirrored places:
   - `characters.go` — server-side: validation + CPU random pick.
-  - `web/characters.js` — client-side: rendering (maps `id` → image + name).
+  - `web/characters.js` — client-side: rendering (maps `id` → emoji + name).
+    Fighter art is placeholder emoji for now; the `emoji` field will be swapped
+    for real artwork later. Placeholder roster: Alakran (🦂), Hielito (🧊),
+    Rayito (⚡).
 
 ## Data flow
 
@@ -44,13 +47,12 @@ the opponent slot, and the result line).
 
 ## Client changes
 
-- `web/characters.js` (new): roster array + helpers.
+- `web/characters.js` (new): roster array + helpers (emoji placeholders).
 - `web/index.html`: "Choose your fighter" picker in the lobby; a VS bar on the
   game screen with your slot and the opponent slot.
 - `web/app.js`: render/handle picker, persist + POST selection, re-POST on
   reconnect, render fighter slots from events.
 - `web/style.css`: picker grid, selected highlight, avatar styles.
-- `web/char/*.svg`: placeholder avatars (Scorpion, Sub-Zero, Raiden).
 
 ## Default / edge behaviour
 
@@ -62,9 +64,9 @@ the opponent slot, and the result line).
 ## Adding a fighter
 
 1. Add `Character{id, name}` to the roster in `characters.go`.
-2. Add `{ id, name, img }` to `CHARACTERS` in `web/characters.js`.
-3. Drop the avatar image at `web/char/<id>.svg`.
-4. Done — the picker, validation, and CPU randomiser pick it up automatically.
+2. Add `{ id, name, emoji }` to `CHARACTERS` in `web/characters.js` (or swap the
+   emoji for a real image path once artwork exists).
+3. Done — the picker, validation, and CPU randomiser pick it up automatically.
 
 ## Out of scope
 

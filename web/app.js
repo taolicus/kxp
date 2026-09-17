@@ -47,7 +47,7 @@ function renderFighters() {
   const pick = loadCharacter();
   $('#fighters').innerHTML = CHARACTERS.map((c) => `
     <button class="fighter${c.id === pick ? ' selected' : ''}" data-char="${c.id}" aria-label="${c.name}">
-      <img src="${c.img}" alt="${c.name}" />
+      <span class="fighter-emoji">${c.emoji}</span>
       <span>${c.name}</span>
     </button>
   `).join('');
@@ -55,7 +55,7 @@ function renderFighters() {
 
 function fighterHTML(charId, label) {
   const c = characterByID(charId);
-  return `<img src="${c.img}" alt="${c.name}" /><span>${label}</span>`;
+  return `<span class="slot-emoji">${c.emoji}</span><span>${label}</span>`;
 }
 
 function setYouSlot() {

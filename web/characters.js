@@ -1,7 +1,7 @@
 const CHARACTERS = [
-  { id: 'scorpion', name: 'Scorpion', img: '/char/scorpion.svg' },
-  { id: 'subzero', name: 'Sub-Zero', img: '/char/subzero.svg' },
-  { id: 'raiden', name: 'Raiden', img: '/char/raiden.svg' },
+  { id: 'scorpion', name: 'Alakran', emoji: '🦂' },
+  { id: 'subzero', name: 'Hielito', emoji: '🧊' },
+  { id: 'raiden', name: 'Rayito', emoji: '⚡' },
 ];
 
 function characterByID(id) {

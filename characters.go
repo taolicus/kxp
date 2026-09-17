@@ -8,9 +8,9 @@ type Character struct {
 }
 
 var characters = []Character{
-	{ID: "scorpion", Name: "Scorpion"},
-	{ID: "subzero", Name: "Sub-Zero"},
-	{ID: "raiden", Name: "Raiden"},
+	{ID: "scorpion", Name: "Alakran"},
+	{ID: "subzero", Name: "Hielito"},
+	{ID: "raiden", Name: "Rayito"},
 }
 
 func characterByID(id string) (Character, bool) {
