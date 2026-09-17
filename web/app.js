@@ -212,7 +212,7 @@ function connect() {
     lockMoves();
     const d = JSON.parse(e.data);
     const s = getStats();
-    if (d.outcome === 'win') { s.wins++; s.streak++; } else { s.streak = 0; }
+    if (d.outcome === 'win') { s.wins++; s.streak++; } else if (d.outcome === 'loss') { s.streak = 0; }
     saveStats(s);
     setStats();
     renderResult(d);
