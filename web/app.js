@@ -43,6 +43,34 @@ function setStats() {
   el.textContent = `${s.wins} wins \u00b7 ${s.streak} in a row`;
 }
 
+function renderFighters() {
+  const pick = loadCharacter();
+  $('#fighters').innerHTML = CHARACTERS.map((c) => `
+    <button class="fighter${c.id === pick ? ' selected' : ''}" data-char="${c.id}" aria-label="${c.name}">
+      <img src="${c.img}" alt="${c.name}" />
+      <span>${c.name}</span>
+    </button>
+  `).join('');
+}
+
+function fighterHTML(charId, label) {
+  const c = characterByID(charId);
+  return `<img src="${c.img}" alt="${c.name}" /><span>${label}</span>`;
+}
+
+function setYouSlot() {
+  $('#you-slot').innerHTML = fighterHTML(loadCharacter(), 'YOU');
+}
+
+function setOppSlot(charId, name) {
+  const label = name || (charId ? characterByID(charId).name : 'Opponent');
+  if (charId) {
+    $('#opp-slot').innerHTML = fighterHTML(charId, label);
+  } else {
+    $('#opp-slot').innerHTML = `<span class="slot-tag">${label}</span>`;
+  }
+}
+
 function lockMoves() {
   document.querySelectorAll('.move').forEach((b) => { b.disabled = true; });
   $('#stage').classList.remove('go');
@@ -88,7 +116,8 @@ function renderResult(d) {
   $('#timing').innerHTML = lines.join('<br>');
   $('#timing').classList.remove('hidden');
   $('#btn-again').classList.remove('hidden');
-  $('#opp').textContent = `vs ${d.opponentName || 'Opponent'}`;
+  setYouSlot();
+  setOppSlot(d.opponentCharacter, d.opponentName);
 }
 
 async function post(path, body = {}) {
@@ -115,12 +144,15 @@ function connect() {
     }
     id = d.id;
     setOnline(d.online);
+    post('/character', { character: loadCharacter() });
     if (d.state === 'waiting') {
       phase = 'waiting';
       show('queue');
     } else if (d.state === 'ingame') {
       show('game');
       resetGame();
+      setYouSlot();
+      setOppSlot(null, 'Opponent');
       if (d.phase === 'shoot') {
         phase = 'shoot';
         setCount('PUN!');
@@ -145,10 +177,13 @@ function connect() {
     show('queue');
   });
 
-  es.addEventListener('matched', () => {
+  es.addEventListener('matched', (e) => {
+    const d = JSON.parse(e.data);
     phase = 'countdown';
     show('game');
     resetGame();
+    setYouSlot();
+    setOppSlot(d.opponentCharacter, d.opponentName);
     setCount('Get ready');
   });
 
@@ -211,6 +246,16 @@ function connect() {
 document.addEventListener('DOMContentLoaded', () => {
   connect();
   setStats();
+  renderFighters();
+
+  $('#fighters').addEventListener('click', (e) => {
+    const b = e.target.closest('.fighter');
+    if (!b) return;
+    const cid = b.dataset.char;
+    saveCharacter(cid);
+    renderFighters();
+    post('/character', { character: cid });
+  });
 
   $('#btn-online').addEventListener('click', () => post('/queue'));
   $('#btn-cpu').addEventListener('click', () => post('/cpu'));

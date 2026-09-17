@@ -13,6 +13,7 @@
     <h1 class="mkx-title">KACHIPUN TOURNAMENT</h1>
     <p id="online" class="online hidden"></p>
     <p id="stats" class="stats"></p>
+    <div id="fighters" class="fighters" aria-label="Choose your fighter"></div>
     <div class="buttons">
       <button id="btn-online" class="primary">Play Online</button>
       <button id="btn-cpu">Play vs CPU</button>
@@ -26,7 +27,11 @@
   </section>
 
   <section id="game" class="view hidden">
-    <div id="opp" class="opp"></div>
+    <div class="fighters-bar">
+      <div id="you-slot" class="slot"></div>
+      <div class="vs-tag">VS</div>
+      <div id="opp-slot" class="slot"></div>
+    </div>
     <div id="stage" class="stage">
       <div id="count" class="count">&#8203;</div>
     </div>
@@ -41,6 +46,7 @@
   </section>
 
 </main>
+<script src="/characters.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

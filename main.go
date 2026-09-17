@@ -31,6 +31,7 @@ func main() {
 	mux.HandleFunc("POST /cancel", hub.handleCancel)
 	mux.HandleFunc("POST /cpu", hub.handleCPU)
 	mux.HandleFunc("POST /move", hub.handleMove)
+	mux.HandleFunc("POST /character", hub.handleCharacter)
 
 	var listener net.Listener
 	if *addr != "" {

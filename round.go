@@ -24,8 +24,9 @@ type moveMsg struct {
 }
 
 type side struct {
-	client *Client
-	bot    bool
+	client    *Client
+	bot       bool
+	character string
 }
 
 type match struct {
@@ -65,7 +66,10 @@ func (m *match) run() {
 	}
 
 	for i := range m.sides {
-		m.send(i, evt("matched", map[string]any{"opponentName": m.opponentName(i)}))
+		m.send(i, evt("matched", map[string]any{
+			"opponentName":      m.opponentName(i),
+			"opponentCharacter": m.opponentCharacter(i),
+		}))
 	}
 
 	for _, w := range []string{"KA", "CHI"} {
@@ -185,6 +189,23 @@ func (m *match) opponentName(i int) string {
 	return "Opponent"
 }
 
+func (m *match) sideCharacter(i int) string {
+	s := m.sides[i]
+	if s.bot {
+		return s.character
+	}
+	if s.client == nil {
+		return defaultCharacterID()
+	}
+	m.hub.mu.Lock()
+	defer m.hub.mu.Unlock()
+	return s.client.character
+}
+
+func (m *match) opponentCharacter(i int) string {
+	return m.sideCharacter(1 - i)
+}
+
 type pickOutcome struct {
 	move   Move
 	timing time.Duration
@@ -231,14 +252,16 @@ func (m *match) resolve() {
 	for i := range m.sides {
 		opp := 1 - i
 		data := map[string]any{
-			"you":              string(ps[i].move),
-			"youTimingMs":      timingMs(ps[i]),
-			"yourNote":         ps[i].note,
-			"opponent":         string(ps[opp].move),
-			"opponentTimingMs": timingMs(ps[opp]),
-			"opponentNote":     ps[opp].note,
-			"outcome":          string(res[i]),
-			"opponentName":     m.opponentName(i),
+			"you":               string(ps[i].move),
+			"youTimingMs":       timingMs(ps[i]),
+			"yourNote":          ps[i].note,
+			"youCharacter":      m.sideCharacter(i),
+			"opponent":          string(ps[opp].move),
+			"opponentTimingMs":  timingMs(ps[opp]),
+			"opponentNote":      ps[opp].note,
+			"opponentCharacter": m.sideCharacter(opp),
+			"outcome":           string(res[i]),
+			"opponentName":      m.opponentName(i),
 		}
 		m.send(i, evt("result", data))
 	}

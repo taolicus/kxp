@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd54a"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="58" r="52" fill="url(#bg)"/>
+  <path d="M72 22 L40 66 L56 66 L50 98 L88 54 L70 54 Z" fill="#ffffff" opacity="0.95"/>
+  <text x="64" y="123" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#e8eaf2" letter-spacing="2">RAIDEN</text>
+</svg>

@@ -29,11 +29,12 @@ func encodeEv(ev sseEv) []byte {
 }
 
 type Client struct {
-	id     string
-	send   chan []byte
-	moves  chan moveMsg
-	alive  context.Context
-	cancel context.CancelFunc
+	id        string
+	send      chan []byte
+	moves     chan moveMsg
+	alive     context.Context
+	cancel    context.CancelFunc
+	character string
 
 	mu       sync.Mutex
 	connID   string
@@ -44,10 +45,11 @@ type Client struct {
 func newClient() *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
-		send:   make(chan []byte, 64),
-		moves:  make(chan moveMsg, 1),
-		alive:  ctx,
-		cancel: cancel,
+		send:      make(chan []byte, 64),
+		moves:     make(chan moveMsg, 1),
+		alive:     ctx,
+		cancel:    cancel,
+		character: defaultCharacterID(),
 	}
 }
 
@@ -356,8 +358,32 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		h.dequeueLocked(c)
 		c.queueing = false
 	}
-	m := h.makeMatch(newID(4), side{client: c}, side{bot: true})
+	m := h.makeMatch(newID(4), side{client: c}, side{bot: true, character: randomCharacterID()})
 	h.startMatchLocked(m)
+	h.mu.Unlock()
+	w.Write([]byte("{}"))
+}
+
+func (h *Hub) handleCharacter(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID        string `json:"id"`
+		Character string `json:"character"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.handlerError(w, http.StatusBadRequest, "bad request")
+		return
+	}
+	if !validCharacter(req.Character) {
+		h.handlerError(w, http.StatusBadRequest, "invalid character")
+		return
+	}
+	c := h.client(req.ID)
+	if c == nil {
+		h.handlerError(w, http.StatusBadRequest, "not connected")
+		return
+	}
+	h.mu.Lock()
+	c.character = req.Character
 	h.mu.Unlock()
 	w.Write([]byte("{}"))
 }
