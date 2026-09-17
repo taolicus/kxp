@@ -1,8 +1,8 @@
 :root {
   --bg: #0f1117;
   --panel: #1a1d29;
-  --accent: #7c5cff;
-  --accent-2: #4fc3f7;
+  --accent: #ff9500;
+  --accent-2: #e60000;
   --win: #26d07c;
   --lose: #ff5c72;
   --draw: #ffcf5c;
@@ -11,6 +11,27 @@
 }
 
 * { box-sizing: border-box; }
+
+@font-face {
+  font-family: 'MKX Title';
+  src: url('/MKX-Title.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.mkx-title {
+  font-family: 'MKX Title', sans-serif;
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  background: linear-gradient(to bottom, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0 0 2rem;
+}
 
 body {
   margin: 0;
@@ -64,7 +85,6 @@ button {
   color: var(--text);
   background: var(--panel);
   border: 1px solid #2a2f45;
-  border-radius: 12px;
   padding: 0.9rem 1.5rem;
   cursor: pointer;
   transition: transform 0.05s ease, background 0.15s ease, border-color 0.15s ease;
@@ -98,21 +118,17 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
 .opp { color: var(--muted); min-height: 1.5em; margin-bottom: 1rem; }
 
 .stage {
-  border: 1px solid #2a2f45;
-  border-radius: 16px;
-  background: var(--panel);
   padding: 3rem 1rem;
   margin-bottom: 1.5rem;
   position: relative;
   min-height: 8rem;
 }
 
-.stage.go { border-color: var(--accent); box-shadow: 0 0 24px rgba(124, 92, 255, 0.35); }
-
 .count {
+  font-family: 'MKX Title', sans-serif;
   font-size: 3.5rem;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
 .stage.go .count {
