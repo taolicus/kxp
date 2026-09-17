@@ -135,7 +135,7 @@ Fix correctness and safety issues that affect reliability on a public server.
       just finished"
 - [x] **Graceful server shutdown** — add signal handling, use
       `http.Server.Shutdown`, drain SSE connections cleanly
-- [ ] **Request timeouts** — add `ReadTimeout`/`WriteTimeout` to
+- [x] **Request timeouts** — add `ReadTimeout`/`WriteTimeout` to
       `http.Server`; enforce request body size limits via
       `http.MaxBytesReader`
 - [ ] **Rate limiting** — basic per-IP token-bucket or fixed-window limiter

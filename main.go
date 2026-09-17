@@ -63,7 +63,11 @@ func main() {
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 20 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
 		log.Println("shutting down")

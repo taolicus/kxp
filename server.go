@@ -5,11 +5,14 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 )
+
+const maxBodyBytes = 1 << 10
 
 type sseEv struct {
 	Type string
@@ -139,6 +142,20 @@ func (h *Hub) handlerError(w http.ResponseWriter, code int, msg string) {
 	fmt.Fprintf(w, `{"error":%q}`, msg)
 }
 
+func (h *Hub) decode(w http.ResponseWriter, r *http.Request, v any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			h.handlerError(w, http.StatusRequestEntityTooLarge, "body too large")
+		} else {
+			h.handlerError(w, http.StatusBadRequest, "bad request")
+		}
+		return err
+	}
+	return nil
+}
+
 func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
 	c := h.getOrCreate(r.URL.Query().Get("id"))
 
@@ -150,6 +167,11 @@ func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	connID := c.beginConn()
 	defer h.endConn(c, connID)
+
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		h.handlerError(w, http.StatusInternalServerError, "streaming timeout unsupported")
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -319,8 +341,7 @@ func (h *Hub) endMatch(m *match) {
 
 func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 	var req struct{ ID string }
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.handlerError(w, http.StatusBadRequest, "bad request")
+	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
 	c := h.client(req.ID)
@@ -342,8 +363,7 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 	var req struct{ ID string }
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.handlerError(w, http.StatusBadRequest, "bad request")
+	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
 	c := h.client(req.ID)
@@ -367,8 +387,7 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	var req struct{ ID string }
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.handlerError(w, http.StatusBadRequest, "bad request")
+	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
 	c := h.client(req.ID)
@@ -392,8 +411,7 @@ func (h *Hub) handleCharacter(w http.ResponseWriter, r *http.Request) {
 		ID        string `json:"id"`
 		Character string `json:"character"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.handlerError(w, http.StatusBadRequest, "bad request")
+	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
 	if !validCharacter(req.Character) {
@@ -416,8 +434,7 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		ID   string `json:"id"`
 		Move string `json:"move"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.handlerError(w, http.StatusBadRequest, "bad request")
+	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
 	move := Move(req.Move)
