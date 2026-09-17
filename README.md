@@ -83,12 +83,105 @@ location /events {
 (You can also set the response header `X-Accel-Buffering: no` — the server
 already sends it.)
 
+## Technical Scope
+
+The server is a single Go binary with zero external dependencies. It serves an
+embedded web UI, uses SSE for server→client push and plain JSON POSTs for
+player→server actions. All game rules are enforced server-side — the browser is
+a renderer only.
+
+**Game state machine** — matches progress through four phases: `idle` →
+`countdown` → `shoot` (PUN) → `done`. Each phase is tracked via an
+`atomic.Int32` on the `match` struct. Transition enforcement is implicit in the
+`run()` goroutine flow rather than via an explicit transition validator.
+
+**Timing model** — the server records `shootAt = time.Now()` when the shoot
+phase begins. Reaction time is calculated as `arrival.Sub(shootAt)` where
+`arrival` is `time.Now()` captured at POST receipt. Picks arriving before PUN
+are disqualified; no pick within 1.2 seconds of PUN is a timeout loss. Displayed
+reaction times include client→server network latency.
+
+**Matchmaking** — a single global FIFO queue pairs players under the hub mutex.
+Anonymous clients receive server-issued random IDs on first SSE connection.
+
+**SSE lifecycle** — connections are guarded by a `connID` freshness check so a
+newer connection survives an overlapping reconnection. A 20-second keepalive
+comment frame prevents idle-proxy disconnection. Disconnect cancels the client's
+`alive` context, which triggers match abandonment and notifies the opponent.
+
+**Testing** — 9 tests covering PvP outcomes, early-pick disqualification,
+timeout losses, CPU matches, and character selection. Tests exercise the match
+engine directly via `Client` channels without a live HTTP listener but depend on
+real wall-clock timing. The race detector is not available on the current
+android/arm64 host.
+
 ## Roadmap
 
-- [x] Web server with SSE + matchmaking (PvP and CPU)
-- [ ] Leaderboard
-- [ ] Character selection
-- [ ] Game mode selection (best of 5, multiple rounds, etc.)
-- [ ] Solo campaign with Mortal Kombat–style tower climbing
-- [ ] Player names / lobby rooms
-- [ ] Game history / stats
+### Phase 1 — Core hardening
+
+Fix correctness and safety issues that affect reliability on a public server.
+
+- [ ] **Stale-move channel leak** — drain `c.moves` on `endMatch`/`start`
+      so a leftover pick doesn't pre-fill the next match
+- [ ] **Late-action rejection** — return `400` from `handleMove` when the
+      shoot deadline has passed, instead of silently buffering
+- [ ] **Graceful server shutdown** — add signal handling, use
+      `http.Server.Shutdown`, drain SSE connections cleanly
+- [ ] **Request timeouts** — add `ReadTimeout`/`WriteTimeout` to
+      `http.Server`; enforce request body size limits via
+      `http.MaxBytesReader`
+- [ ] **Rate limiting** — basic per-IP token-bucket or fixed-window limiter
+      on POST endpoints
+- [ ] **Resource limits** — cap concurrent clients, active matches, and
+      queue length; reject with `503` when full
+- [ ] **Anonymous abuse prevention** — enforce a max number of anonymous
+      clients per IP or time window
+
+### Phase 2 — Testing & observability
+
+Make the system testable and debuggable in production.
+
+- [ ] **Timing edge-case tests** — exactly-at-PUN, just-after-PUN,
+      at-deadline, and after-deadline boundary cases
+- [ ] **Disconnect tests** — disconnect before PUN, after PUN, during match,
+      and after result; verify `opponent-left` in each
+- [ ] **Simultaneous-move tests** — both players submit moves concurrently
+      via goroutines
+- [ ] **Game-state transition tests** — verify every valid transition and
+      reject invalid ones
+- [ ] **CPU determinism hooks** — inject a deterministic clock and move
+      picker for automated tests
+- [ ] **Request/response logging** — structured logs for connection,
+      matchmaking, match lifecycle, and errors
+- [ ] **Automated test workflow** — Makefile test target + `go test -race`
+      in CI when a suitable host is available
+
+### Phase 3 — Architecture & features
+
+Build on a stable foundation without rewriting the core.
+
+- [ ] **Pure game engine** — extract the state machine from `round.go` so
+      it depends only on interfaces, not on `Hub`/`Client`/SSE
+- [ ] **Game-mode architecture** — refactor `run()`/`resolve()` to support
+      best-of-N and multi-round modes
+- [ ] **SSE reconnection with match resume** — preserve match state across
+      reconnects instead of aborting
+- [ ] **Player names** — defined model for assignment, validation, and
+      display
+- [ ] **Multiple-tab handling** — deduplicate or isolate sessions from the
+      same browser
+
+### Phase 4 — Public features
+
+Features that depend on identity, persistence, or ranking.
+
+- [ ] **Leaderboard** — server-authoritative with anti-cheat (reject
+      client-submitted timestamps, cap CPU streaks)
+- [ ] **Leaderboard identity** — persistent player identity model (account,
+      token, or anonymous persistent ID)
+- [ ] **Lobby / room architecture** — private room creation, joining,
+      discovery, and access control
+- [ ] **Tournament model** — bracket/round structure for multi-match
+      competition
+- [ ] **Solo campaign** — Mortal Kombat–style tower climbing with
+      progression
