@@ -191,3 +191,6 @@ Features that depend on identity, persistence, or ranking.
       competition
 - [ ] **Solo campaign** — Mortal Kombat–style tower climbing with
       progression
+- [ ] **Random fight backgrounds** — display a random background scenario
+      (arena/stage) for each fight, chosen server-side and sent to clients
+      via SSE
