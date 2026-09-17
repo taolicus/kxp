@@ -20,7 +20,7 @@ function setOnline(n) {
   const el = $('#online');
   const btn = $('#btn-online');
   if (n == null) { el.innerHTML = '&hellip;'; return; }
-  el.innerHTML = `<span class="dot"></span>${n} online now`;
+  el.innerHTML = `<span class="dot${n === 0 ? ' dim' : ''}"></span>${n} online now`;
   btn.disabled = n === 0;
 }
 

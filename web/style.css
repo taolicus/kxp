@@ -67,7 +67,10 @@ main {
   border-radius: 50%;
   background: var(--win);
   margin-right: 0.4rem;
-  animation: pulse 1.6s ease infinite;
+}
+
+.online .dot.dim {
+  background: #3a3f52;
 }
 
 .stats {
