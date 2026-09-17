@@ -221,7 +221,7 @@ func (h *Hub) dequeueLocked(c *Client) {
 func (h *Hub) snapshot(c *Client) map[string]any {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	out := map[string]any{"id": c.id, "state": "idle", "online": h.onlineLocked()}
+	out := map[string]any{"id": c.id, "state": "idle", "online": h.othersOnlineLocked()}
 	if c.match != nil {
 		out["state"] = "ingame"
 		out["phase"] = c.match.phaseName()
@@ -231,15 +231,18 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 	return out
 }
 
-func (h *Hub) onlineLocked() int {
-	return len(h.clients)
+func (h *Hub) othersOnlineLocked() int {
+	if n := len(h.clients); n > 0 {
+		return n - 1
+	}
+	return 0
 }
 
 func (h *Hub) broadcastOnline() {
 	h.mu.Lock()
-	n := h.onlineLocked()
+	n := h.othersOnlineLocked()
 	ev := encodeEv(evt("online", map[string]any{"count": n}))
-	clients := make([]*Client, 0, n)
+	clients := make([]*Client, 0, len(h.clients))
 	for _, c := range h.clients {
 		clients = append(clients, c)
 	}
