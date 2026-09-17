@@ -133,7 +133,7 @@ Fix correctness and safety issues that affect reliability on a public server.
       `"idle"` for both `phaseIdle` and `phaseDone`; return `"done"` for
       `phaseDone` so `snapshot()` can distinguish "no match" from "match
       just finished"
-- [ ] **Graceful server shutdown** — add signal handling, use
+- [x] **Graceful server shutdown** — add signal handling, use
       `http.Server.Shutdown`, drain SSE connections cleanly
 - [ ] **Request timeouts** — add `ReadTimeout`/`WriteTimeout` to
       `http.Server`; enforce request body size limits via

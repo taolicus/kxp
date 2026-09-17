@@ -1,13 +1,19 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 //go:embed web
@@ -53,5 +59,25 @@ func main() {
 	}
 
 	log.Printf("KACHIPUN TOURNAMENT listening on %s", listener.Addr())
-	log.Fatal(http.Serve(listener, mux))
+
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
+	srv := &http.Server{Handler: mux}
+	go func() {
+		<-ctx.Done()
+		log.Println("shutting down")
+		hub.Shutdown()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("graceful shutdown: %v", err)
+			srv.Close()
+		}
+	}()
+
+	if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal(err)
+	}
+	log.Println("server stopped")
 }

@@ -73,10 +73,17 @@ type Hub struct {
 	mu      sync.Mutex
 	clients map[string]*Client
 	queue   []*Client
+	down    context.Context
+	stop    context.CancelFunc
 }
 
 func NewHub() *Hub {
-	return &Hub{clients: make(map[string]*Client)}
+	down, stop := context.WithCancel(context.Background())
+	return &Hub{clients: make(map[string]*Client), down: down, stop: stop}
+}
+
+func (h *Hub) Shutdown() {
+	h.stop()
 }
 
 func (h *Hub) getOrCreate(id string) *Client {
@@ -157,6 +164,8 @@ func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
+			return
+		case <-h.down.Done():
 			return
 		case b := <-c.send:
 			if _, err := w.Write(b); err != nil {
