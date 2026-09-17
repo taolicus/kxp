@@ -295,6 +295,8 @@ func (m *match) phaseName() string {
 		return "countdown"
 	case phaseShoot:
 		return "shoot"
+	case phaseDone:
+		return "done"
 	default:
 		return "idle"
 	}

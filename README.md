@@ -129,7 +129,7 @@ Fix correctness and safety issues that affect reliability on a public server.
 - [x] **Full-channel drop must error** — when `c.moves` is full,
       `handleMove` must return `409 conflict` instead of `200 {}` so the
       client knows the move was not accepted
-- [ ] **Snapshot phaseDone vs phaseIdle** — `phaseName()` currently returns
+- [x] **Snapshot phaseDone vs phaseIdle** — `phaseName()` currently returns
       `"idle"` for both `phaseIdle` and `phaseDone`; return `"done"` for
       `phaseDone` so `snapshot()` can distinguish "no match" from "match
       just finished"
