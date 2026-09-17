@@ -19,8 +19,7 @@ function setCount(t) { $('#count').textContent = t; }
 function setOnline(n) {
   const el = $('#online');
   const btn = $('#btn-online');
-  if (n == null) { el.style.visibility = 'hidden'; return; }
-  el.style.visibility = 'visible';
+  if (n == null) { el.innerHTML = '&hellip;'; return; }
   el.innerHTML = `<span class="dot"></span>${n} online now`;
   btn.disabled = n === 0;
 }
