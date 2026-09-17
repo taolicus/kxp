@@ -445,6 +445,8 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 	select {
 	case c.moves <- msg:
 	default:
+		h.handlerError(w, http.StatusConflict, "move already submitted")
+		return
 	}
 	w.Write([]byte("{}"))
 }

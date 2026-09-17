@@ -126,7 +126,7 @@ Fix correctness and safety issues that affect reliability on a public server.
       countdown, done, or if the shoot deadline has passed
 - [x] **Move channel lifecycle** — drain `c.moves` in both `endMatch` and
       `start` so a leftover pick never pre-fills the next match
-- [ ] **Full-channel drop must error** — when `c.moves` is full,
+- [x] **Full-channel drop must error** — when `c.moves` is full,
       `handleMove` must return `409 conflict` instead of `200 {}` so the
       client knows the move was not accepted
 - [ ] **Snapshot phaseDone vs phaseIdle** — `phaseName()` currently returns

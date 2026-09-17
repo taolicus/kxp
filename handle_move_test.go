@@ -120,3 +120,36 @@ func TestHandleMoveAcceptedDuringShoot(t *testing.T) {
 		t.Fatal("move not buffered during shoot phase")
 	}
 }
+
+func TestHandleMoveConflictsWhenFull(t *testing.T) {
+	h := NewHub()
+	c := registerMoveTestClient(h, "n6")
+	newMoveMatch(c, phaseShoot, time.Now())
+
+	rr1 := postMove(h, "n6", "rock")
+	if rr1.Code != http.StatusOK {
+		t.Fatalf("first status = %d, want 200", rr1.Code)
+	}
+
+	rr2 := postMove(h, "n6", "paper")
+	if rr2.Code != http.StatusConflict {
+		t.Fatalf("second status = %d, want 409", rr2.Code)
+	}
+	if !strings.Contains(rr2.Body.String(), "move already submitted") {
+		t.Errorf("body = %s, want move already submitted", rr2.Body.String())
+	}
+
+	select {
+	case msg := <-c.moves:
+		if msg.move != MoveRock {
+			t.Errorf("channel holds %q, want rock", msg.move)
+		}
+	default:
+		t.Fatal("expected first move still buffered")
+	}
+	select {
+	case msg := <-c.moves:
+		t.Errorf("unexpected extra move in channel: %+v", msg)
+	default:
+	}
+}
