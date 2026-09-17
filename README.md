@@ -1,17 +1,17 @@
 # KACHIPUN TOURNAMENT
 
 A real-time online Rock-Paper-Scissors game in Go, with a web UI. Tap your move
-the moment **SHOOT!** appears — too early and you're disqualified, just like the
+the moment **PUN!** appears — too early and you're disqualified, just like the
 original terminal game.
 
 ## Features
 
 - **Single-binary web app** — the UI is embedded in the executable.
 - **Play Online** — matchmaking pairs you with another player, synced countdown
-  and a shared **SHOOT!** instant.
+  and a shared **PUN!** instant.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay.
-- **Timing rules** — picks arriving before SHOOT are disqualified; no pick
-  within 1.2s of SHOOT is a timeout loss.
+- **Timing rules** — picks arriving before PUN are disqualified; no pick within
+  1.2s of PUN is a timeout loss.
 - Server-sent events (SSE) for push, plain `POST` for player actions — no
   WebSocket dependency.
 
@@ -43,8 +43,8 @@ Then open `http://localhost:<port>`.
 
 1. Open the app in two browser tabs (one per player) and hit **Play Online** in
    both to face each other, or hit **Play vs CPU** for a solo match.
-2. A 3–2–1 countdown leads to **SHOOT!**.
-3. Tap ✊ ✋ ✌️ right on SHOOT. Results are shown with your reaction timing.
+2. A **KA–CHI** countdown leads to **PUN!**.
+3. Tap ✊ ✋ ✌️ right on PUN — results are shown with your reaction timing.
 
 ## Deploy (makefile)
 
@@ -86,6 +86,9 @@ already sends it.)
 ## Roadmap
 
 - [x] Web server with SSE + matchmaking (PvP and CPU)
+- [ ] Leaderboard
+- [ ] Character selection
+- [ ] Game mode selection (best of 5, multiple rounds, etc.)
+- [ ] Solo campaign with Mortal Kombat–style tower climbing
 - [ ] Player names / lobby rooms
-- [ ] Best-of-N matches and rematches
 - [ ] Game history / stats
