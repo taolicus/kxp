@@ -121,10 +121,18 @@ android/arm64 host.
 
 Fix correctness and safety issues that affect reliability on a public server.
 
-- [ ] **Stale-move channel leak** — drain `c.moves` on `endMatch`/`start`
-      so a leftover pick doesn't pre-fill the next match
-- [ ] **Late-action rejection** — return `400` from `handleMove` when the
-      shoot deadline has passed, instead of silently buffering
+- [ ] **Phase-aware move validation** — `handleMove` must check
+      `c.match.phase` before buffering; reject with `400` if the match is in
+      countdown, done, or if the shoot deadline has passed
+- [ ] **Move channel lifecycle** — drain `c.moves` in both `endMatch` and
+      `start` so a leftover pick never pre-fills the next match
+- [ ] **Full-channel drop must error** — when `c.moves` is full,
+      `handleMove` must return `409 conflict` instead of `200 {}` so the
+      client knows the move was not accepted
+- [ ] **Snapshot phaseDone vs phaseIdle** — `phaseName()` currently returns
+      `"idle"` for both `phaseIdle` and `phaseDone`; return `"done"` for
+      `phaseDone` so `snapshot()` can distinguish "no match" from "match
+      just finished"
 - [ ] **Graceful server shutdown** — add signal handling, use
       `http.Server.Shutdown`, drain SSE connections cleanly
 - [ ] **Request timeouts** — add `ReadTimeout`/`WriteTimeout` to
@@ -164,8 +172,6 @@ Build on a stable foundation without rewriting the core.
       it depends only on interfaces, not on `Hub`/`Client`/SSE
 - [ ] **Game-mode architecture** — refactor `run()`/`resolve()` to support
       best-of-N and multi-round modes
-- [ ] **SSE reconnection with match resume** — preserve match state across
-      reconnects instead of aborting
 - [ ] **Player names** — defined model for assignment, validation, and
       display
 - [ ] **Multiple-tab handling** — deduplicate or isolate sessions from the
