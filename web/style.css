@@ -1,27 +1,110 @@
+/* ==========================================================================
+   KACHIPUN TOURNAMENT — stylesheet
+   Sections: 1) Tokens  2) Base & reset  3) Backdrop  4) Shell layout
+   5) Typography  6) Buttons  7) Loading  8) Lobby  9) Game  10) Result
+   11) Motion  12) Responsive  13) Utilities
+   ========================================================================== */
+
+/* 1) Tokens -------------------------------------------------------------- */
 :root {
   --bg: #0f1117;
+  --bg-glow: #1c2240;
   --panel: #1a1d29;
+  --panel-2: #232840;
+  --panel-3: #262b3f;
+  --border: #2a2f45;
+  --border-2: #39405f;
+  --muted-dot: #3a3f52;
+
+  --text: #e8eaf2;
+  --muted: #8b90a5;
+
   --accent: #ff9500;
   --accent-2: #e60000;
   --win: #26d07c;
   --lose: #ff5c72;
   --draw: #ffcf5c;
-  --text: #e8eaf2;
-  --muted: #8b90a5;
+
+  --font-ui: system-ui, -apple-system, sans-serif;
+  --font-title: 'MKX Title', var(--font-ui);
+
+  --s1: 0.5rem;
+  --s2: 0.75rem;
+  --s3: 1rem;
+  --s4: 1.5rem;
+  --s5: 2rem;
 }
 
-* { box-sizing: border-box; }
-
-@font-face {
-  font-family: 'MKX Title';
-  src: url('/MKX-Title.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: block;
+/* 2) Base & reset -------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh; /* mobile URL bar: fit the visible viewport */
+  display: flex;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 3) Backdrop ------------------------------------------------------------
+   Pinned to the viewport via position: fixed so an animated game background
+   never shifts when content height changes. Replaces background-attachment:
+   fixed, which is unreliable and expensive on iOS. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(1200px 600px at 70% -10%, var(--bg-glow), var(--bg));
+}
+
+body.in-game::before {
+  background-image:
+    linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
+    url('/img/bg/mk2.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.in-game::before {
+    background-image:
+      linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
+      url('/img/bg/mk2-static.webp');
+  }
+}
+
+/* 4) Shell layout --------------------------------------------------------
+   main margins to auto center vertically without clipping overflow: when the
+   content is taller than the viewport the top stays reachable (no cut-off),
+   which removes phantom scrolling caused by align-items:center. */
+main {
+  width: min(440px, 100vw - 2rem);
+  margin: auto;
+  padding: var(--s5) 0;
+  text-align: center;
+}
+
+.view {
+  width: 100%;
+}
+
+/* 5) Typography ---------------------------------------------------------- */
 .mkx-title {
-  font-family: 'MKX Title', sans-serif;
+  margin: 0 0 var(--s4);
+  font-family: var(--font-title);
   font-size: 2.6rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -30,105 +113,59 @@
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin: 0 0 2rem;
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: radial-gradient(1200px 600px at 70% -10%, #1c2240, var(--bg));
-  color: var(--text);
-  font-family: system-ui, -apple-system, sans-serif;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-body.in-game {
-  background-image:
-    linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
-    url('/img/bg/mk2.webp');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body.in-game {
-    background-image:
-      linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
-      url('/img/bg/mk2-static.webp');
-    background-attachment: fixed;
-  }
-}
-
-main {
-  width: min(440px, 100vw - 2rem);
-  text-align: center;
-  padding: 2rem 0;
-}
-
-.hidden { display: none !important; }
-
-.tagline { color: var(--muted); margin: 0.25rem 0 2.5rem; }
-
-.online {
+.tagline {
+  margin: 0 0 var(--s5);
   color: var(--muted);
-  font-size: 0.9rem;
-  margin: -1.5rem 0 1.75rem;
 }
 
-.online .dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--win);
-  margin-right: 0.4rem;
-}
-
-.online .dot.dim {
-  background: #3a3f52;
-}
-
-.stats {
+h2 {
+  margin: 0 0 var(--s4);
   color: var(--muted);
-  font-size: 0.9rem;
-  margin: -1.25rem 0 1.75rem;
+  font-weight: 500;
 }
 
-.buttons { display: flex; flex-direction: column; gap: 0.75rem; }
-
+/* 6) Buttons ------------------------------------------------------------- */
 button {
+  padding: 0.9rem 1.5rem;
   font: inherit;
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--text);
   background: var(--panel);
-  border: 1px solid #2a2f45;
-  padding: 0.9rem 1.5rem;
+  border: 1px solid var(--border);
   cursor: pointer;
   transition: transform 0.05s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
-button:hover { background: #232840; border-color: #39405f; }
+button:hover { background: var(--panel-2); border-color: var(--border-2); }
 button:active { transform: translateY(1px); }
 button:disabled { opacity: 0.35; cursor: default; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 button.primary {
   background: linear-gradient(120deg, var(--accent), var(--accent-2));
   border: none;
-  color: #0f1117;
+  color: var(--bg);
 }
-button.primary:hover { filter: brightness(1.08); }
+button.primary:hover {
+  background: linear-gradient(120deg, var(--accent), var(--accent-2));
+  filter: brightness(1.08);
+}
 
-h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
 
+/* 7) Loading ------------------------------------------------------------- */
 .spinner {
   width: 42px;
   height: 42px;
-  margin: 0 auto 1.75rem;
-  border: 4px solid #2a2f45;
+  margin: 0 auto var(--s4);
+  border: 4px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
@@ -136,19 +173,43 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.fighters {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
-  margin-bottom: 1.5rem;
+/* 8) Lobby --------------------------------------------------------------- */
+.online {
+  margin: 0 0 var(--s4);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.online .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: var(--win);
+}
+
+.online .dot.dim { background: var(--muted-dot); }
+
+.stats {
+  margin: 0 0 var(--s4);
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .fighter-label {
+  margin: 0 0 var(--s2);
   color: var(--muted);
   font-size: 0.85rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  margin: 0 0 0.5rem;
+}
+
+.fighters {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s2);
+  margin-bottom: var(--s4);
 }
 
 .fighter {
@@ -156,33 +217,40 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.7rem 0.5rem;
+  padding: var(--s2) var(--s1);
   font-size: 0.8rem;
 }
 
 .fighter-emoji {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: 2px solid #2a2f45;
-  background: var(--panel);
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
   font-size: 1.8rem;
   line-height: 1;
 }
 
-.fighter.selected { border-color: var(--accent); background: #262b3f; }
+.fighter.selected { border-color: var(--accent); background: var(--panel-3); }
 .fighter.selected .fighter-emoji { border-color: var(--accent); }
+
+/* 9) Game ---------------------------------------------------------------- */
+#game {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
 
 .fighters-bar {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: var(--s3);
   min-height: 4rem;
+  margin-bottom: var(--s1);
 }
 
 .slot {
@@ -190,46 +258,45 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
   flex-direction: column;
   align-items: center;
   gap: 0.3rem;
+  min-width: 5rem;
   font-size: 0.8rem;
   color: var(--text);
-  min-width: 5rem;
 }
 
 .slot-emoji {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 2px solid #2a2f45;
-  background: var(--panel);
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
   font-size: 1.6rem;
   line-height: 1;
 }
 
 .slot-tag {
-  color: var(--muted);
-  min-height: 2.5em;
   display: flex;
   align-items: center;
+  min-height: 2.5em;
+  color: var(--muted);
 }
 
 .vs-tag {
   color: var(--muted);
-  font-weight: 800;
   font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .stage {
-  padding: 3rem 1rem;
-  margin-bottom: 1.5rem;
   position: relative;
-  min-height: 8rem;
+  min-height: 7rem;
+  padding: var(--s4) var(--s3);
 }
 
 .count {
-  font-family: 'MKX Title', sans-serif;
+  font-family: var(--font-title);
   font-size: 3.5rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -240,49 +307,89 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
   animation: pulse 0.4s ease;
 }
 
-@keyframes pulse {
-  0% { transform: scale(1.3); opacity: 0.4; }
-  100% { transform: scale(1); opacity: 1; }
+.moves {
+  display: flex;
+  justify-content: center;
+  gap: var(--s2);
 }
-
-.moves { display: flex; gap: 0.75rem; justify-content: center; }
 
 .move {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  padding: var(--s4) 0.5rem;
   font-size: 2rem;
   line-height: 1;
-  padding: 1.1rem 0.5rem;
 }
 
-.move.picked { border-color: var(--accent); background: #262b3f; }
+.move.picked { border-color: var(--accent); background: var(--panel-3); }
 
-.banner { margin: 1.25rem 0 0.75rem; }
+/* 10) Result ------------------------------------------------------------- */
+.banner { margin: var(--s2) 0 var(--s1); }
 
-.banner p { margin: 0 0 0.5rem; }
+.banner p { margin: 0 0 var(--s1); }
 
-.won { color: var(--win); font-size: 1.6rem; font-weight: 800; }
-.lost { color: var(--lose); font-size: 1.6rem; font-weight: 800; }
-.draw { color: var(--draw); font-size: 1.6rem; font-weight: 800; }
+.won,
+.lost,
+.draw {
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+.won { color: var(--win); }
+.lost { color: var(--lose); }
+.draw { color: var(--draw); }
 
 .timing {
+  margin-bottom: var(--s2);
   color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.6;
-  margin-bottom: 1.25rem;
 }
 
 .result-actions {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
+  gap: var(--s2);
+  margin-top: var(--s1);
 }
 
-#game-stats { margin: 0 0 1rem; }
+#game-stats { margin: 0 0 var(--s2); }
 
-img {
-  max-width: 100%;
+/* 11) Motion ------------------------------------------------------------- */
+@keyframes pulse {
+  0% { transform: scale(1.3); opacity: 0.4; }
+  100% { transform: scale(1); opacity: 1; }
 }
+
+/* 12) Responsive ---------------------------------------------------------
+   Short screens (most phones in portrait default to heights < 800px): compact
+   the game screen so it fits one viewport and avoids nested scroll. */
+@media (max-height: 800px) and (max-width: 768px) {
+  .mkx-title { font-size: 2.2rem; margin-bottom: var(--s3); }
+
+  .stage {
+    min-height: 5.5rem;
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
+  }
+
+  .count { font-size: 3rem; }
+
+  .move { padding-top: var(--s2); padding-bottom: var(--s2); }
+}
+
+@media (max-height: 600px) {
+  .mkx-title { font-size: 1.9rem; margin-bottom: var(--s2); }
+  .stage {
+    min-height: 4.5rem;
+    padding-top: var(--s1);
+    padding-bottom: var(--s1);
+  }
+  .count { font-size: 2.5rem; }
+}
+
+/* 13) Utilities ---------------------------------------------------------- */
+.hidden { display: none !important; }
+
+img { max-width: 100%; }
