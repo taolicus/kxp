@@ -1,0 +1,96 @@
+package main
+
+import (
+	"testing"
+	"time"
+)
+
+type timingCase struct {
+	name     string
+	aOff     time.Duration
+	bOff     time.Duration
+	aOutcome string
+	bOutcome string
+	aNote    string
+	bNote    string
+	aMs      *int64
+	bMs      *int64
+}
+
+func ms(v int64) *int64 { return &v }
+
+func resolveTimed(t *testing.T, aOff, bOff time.Duration) (map[string]any, map[string]any) {
+	t.Helper()
+	h := NewHub()
+	a, b := newClient(), newClient()
+	m := &match{hub: h, id: "tm", sides: [2]side{{client: a}, {client: b}}}
+	a.match, b.match = m, m
+	shootAt := time.Now()
+	m.shootAt = shootAt
+	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(aOff)}
+	m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(bOff)}
+	m.resolve()
+	ra := waitForEvent(t, a, "result")
+	rb := waitForEvent(t, b, "result")
+	return ra, rb
+}
+
+func TestResolveTimingBoundaries(t *testing.T) {
+	cases := []timingCase{
+		{name: "exactly-at-pun", aOff: 0, bOff: 0, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(0), bMs: ms(0)},
+		{name: "just-after-pun", aOff: time.Millisecond, bOff: time.Millisecond, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(1), bMs: ms(1)},
+		{name: "just-before-pun", aOff: -time.Millisecond, bOff: 0, aOutcome: "loss", bOutcome: "win", aNote: "early", bNote: "", aMs: nil, bMs: ms(0)},
+		{name: "at-deadline", aOff: shootWindow, bOff: shootWindow, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(1200), bMs: ms(1200)},
+		{name: "after-deadline", aOff: shootWindow + time.Millisecond, bOff: shootWindow, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(1201), bMs: ms(1200)},
+		{name: "mid-window", aOff: 50 * time.Millisecond, bOff: 50 * time.Millisecond, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(50), bMs: ms(50)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ra, rb := resolveTimed(t, tc.aOff, tc.bOff)
+
+			if got := ra["outcome"]; got != tc.aOutcome {
+				t.Errorf("a outcome = %v, want %v", got, tc.aOutcome)
+			}
+			if got := ra["yourNote"]; got != tc.aNote {
+				t.Errorf("a note = %v, want %q", got, tc.aNote)
+			}
+			if got := ra["youTimingMs"]; !equalIntPtr(got, tc.aMs) {
+				t.Errorf("a timing = %v, want %v", got, tc.aMs)
+			}
+			if tc.aOff < 0 {
+				if got := ra["opponentNote"]; got != "" {
+					t.Errorf("a opponentNote = %v, want none", got)
+				}
+			}
+
+			if got := rb["outcome"]; got != tc.bOutcome {
+				t.Errorf("b outcome = %v, want %v", got, tc.bOutcome)
+			}
+			if got := rb["yourNote"]; got != tc.bNote {
+				t.Errorf("b note = %v, want %q", got, tc.bNote)
+			}
+			if got := rb["youTimingMs"]; !equalIntPtr(got, tc.bMs) {
+				t.Errorf("b timing = %v, want %v", got, tc.bMs)
+			}
+		})
+	}
+}
+
+func equalIntPtr(got any, want *int64) bool {
+	if want == nil {
+		return got == nil
+	}
+	f, ok := got.(float64)
+	return ok && int64(f) == *want
+}
+
+func TestResolveEarlyNeverTimesOut(t *testing.T) {
+	ra, _ := resolveTimed(t, -time.Hour, time.Hour)
+	if ra["yourNote"] != "early" {
+		t.Errorf("a note = %v, want early", ra["yourNote"])
+	}
+	if ra["youTimingMs"] != nil {
+		t.Errorf("a timing = %v, want nil for early pick", ra["youTimingMs"])
+	}
+}

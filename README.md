@@ -144,12 +144,18 @@ Fix correctness and safety issues that affect reliability on a public server.
       queue length; reject with `503` when full
 - [ ] **Anonymous abuse prevention** — enforce a max number of anonymous
       clients per IP or time window
+- [ ] **Deterministic deadline enforcement** — `resolve()` accepts a pick
+      whose `arrive` is past the shoot deadline whenever its `moveMsg` reaches
+      the match (it only checks `timing >= 0`), so the run-loop's channel-vs-
+      timer race decides the outcome at the exact 1200ms boundary. Enforce
+      `arrive <= shootAt+shootWindow` inside `resolve()` so a late pick always
+      resolves as a timeout, making the at-deadline result deterministic.
 
 ### Phase 2 — Testing & observability
 
 Make the system testable and debuggable in production.
 
-- [ ] **Timing edge-case tests** — exactly-at-PUN, just-after-PUN,
+- [x] **Timing edge-case tests** — exactly-at-PUN, just-after-PUN,
       at-deadline, and after-deadline boundary cases
 - [ ] **Disconnect tests** — disconnect before PUN, after PUN, during match,
       and after result; verify `opponent-left` in each
