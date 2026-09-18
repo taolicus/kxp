@@ -33,7 +33,7 @@ test('preserved gameplay transitions', () => {
 });
 
 test('rematch routing after a result', () => {
-  assert.strictEqual(next('result', 'rematch:cpu'), 'countdown');
+  assert.strictEqual(next('result', 'matched'), 'countdown');
   assert.strictEqual(next('result', 'rematch:online'), 'waiting');
   assert.strictEqual(next('result', 'mode'), 'lobby');
   assert.strictEqual(next('result', 'shoot'), null);

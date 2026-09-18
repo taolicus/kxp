@@ -136,6 +136,7 @@ function renderResult(d) {
   $('#timing').classList.toggle('hidden', lines.length === 0);
   $('#game-stats').classList.remove('hidden');
   $('#btn-again').classList.remove('hidden');
+  $('#btn-again').disabled = false;
   $('#btn-mode').classList.remove('hidden');
   setYouSlot();
   setOppSlot(d.opponentCharacter, d.opponentName);
@@ -317,8 +318,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('#btn-again').addEventListener('click', () => {
     if (lastMode === 'cpu') {
-      transition('rematch:cpu');
-      post('/cpu');
+      $('#btn-again').disabled = true;
+      post('/cpu').then((res) => {
+        if (!res || !res.ok) $('#btn-again').disabled = false;
+      });
     } else {
       transition('rematch:online');
       post('/queue');

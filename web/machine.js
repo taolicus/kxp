@@ -13,7 +13,7 @@
     'result', 'opponentLeft',
     'stateIdle',
     'snapshot:idle', 'snapshot:waiting', 'snapshot:countdown', 'snapshot:shoot',
-    'rematch:cpu', 'rematch:online', 'mode',
+    'rematch:online', 'mode',
   ];
 
   const transitions = {
@@ -22,7 +22,7 @@
     countdown: { countdown: 'countdown', matched: 'countdown', shoot: 'shoot', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     shoot: { move: 'locked', lock: 'locked', reject: 'locked', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     locked: { move: 'locked', reject: 'locked', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
-    result: { 'rematch:cpu': 'countdown', 'rematch:online': 'waiting', mode: 'lobby' },
+    result: { matched: 'countdown', 'rematch:online': 'waiting', mode: 'lobby' },
   };
 
   STATES.forEach((s) => {
