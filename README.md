@@ -136,6 +136,10 @@ Fix correctness and safety issues that affect reliability on a public server.
       edges no-op silently (log under `?debug`) instead of drifting state. The
       Go match phases route through `advance(from, to)` with an explicit edge
       table. Validated by `web/machine.test.cjs` (`node --test`) plus Go tests.
+- [x] **Mode-aware rematch** — results carry the match `mode` (`cpu`/`online`),
+      and the result screen's "Play Again" branches on it: online re-enters the
+      queue, CPU starts the next match immediately. A "Change mode" button
+      returns to the lobby to pick a different mode or fighter.
 - [x] **Phase-aware move validation** — `handleMove` must check
       `c.match.phase` before buffering; reject with `400` if the match is in
       countdown, done, or if the shoot deadline has passed

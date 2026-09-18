@@ -72,6 +72,9 @@ func TestPVPRound(t *testing.T) {
 	if ra["you"] != "rock" || ra["opponent"] != "scissors" {
 		t.Errorf("a result moves wrong: %v", ra)
 	}
+	if ra["mode"] != "online" {
+		t.Errorf("a mode = %v, want online", ra["mode"])
+	}
 	rb := waitForEvent(t, b, "result")
 	if rb["outcome"] != "loss" {
 		t.Errorf("b outcome = %v, want loss", rb["outcome"])
@@ -158,6 +161,9 @@ func TestCPURound(t *testing.T) {
 	ra := waitForEvent(t, a, "result")
 	if ra["opponentName"] != "CPU" {
 		t.Errorf("opponentName = %v, want CPU", ra["opponentName"])
+	}
+	if ra["mode"] != "cpu" {
+		t.Errorf("mode = %v, want cpu", ra["mode"])
 	}
 	if ra["you"] != "paper" {
 		t.Errorf("you = %v, want paper", ra["you"])

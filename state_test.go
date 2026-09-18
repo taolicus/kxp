@@ -77,7 +77,10 @@ func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 	m.abort()
 	m.abort()
 
-	waitForEvent(t, b, "opponent-left")
+	d := waitForEvent(t, b, "opponent-left")
+	if d["mode"] != "online" {
+		t.Errorf("opponent-left mode = %v, want online", d["mode"])
+	}
 	select {
 	case b2 := <-b.send:
 		typ, _ := parseChunk(t, b2)

@@ -311,6 +311,10 @@ func (m *match) resolve() {
 
 	for i := range m.sides {
 		opp := 1 - i
+		mode := "online"
+		if m.sides[opp].bot {
+			mode = "cpu"
+		}
 		data := map[string]any{
 			"you":               string(ps[i].move),
 			"youTimingMs":       timingMs(ps[i]),
@@ -324,6 +328,7 @@ func (m *match) resolve() {
 			"opponentCharacter": m.sideCharacter(opp),
 			"outcome":           string(res[i]),
 			"opponentName":      m.opponentName(i),
+			"mode":              mode,
 		}
 		m.send(i, evt("result", data))
 	}
@@ -355,7 +360,7 @@ func (m *match) abort() {
 		}
 		other := m.sides[1-i]
 		if other.client != nil && other.client.alive.Err() == nil {
-			other.client.sendEv(evt("opponent-left", map[string]any{"outcome": ResultWin}))
+			other.client.sendEv(evt("opponent-left", map[string]any{"outcome": ResultWin, "mode": "online"}))
 		}
 	}
 }

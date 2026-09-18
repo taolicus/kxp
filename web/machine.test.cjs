@@ -30,7 +30,15 @@ test('preserved gameplay transitions', () => {
   assert.strictEqual(next('shoot', 'lock'), 'locked');
   assert.strictEqual(next('locked', 'reject'), 'locked');
   assert.strictEqual(next('locked', 'result'), 'result');
-  assert.strictEqual(next('result', 'again'), 'lobby');
+});
+
+test('rematch routing after a result', () => {
+  assert.strictEqual(next('result', 'rematch:cpu'), 'countdown');
+  assert.strictEqual(next('result', 'rematch:online'), 'waiting');
+  assert.strictEqual(next('result', 'mode'), 'lobby');
+  assert.strictEqual(next('result', 'shoot'), null);
+  assert.strictEqual(next('result', 'stateIdle'), null);
+  assert.strictEqual(next('countdown', 'matched'), 'countdown');
 });
 
 test('snapshot reconcile is total for every state', () => {

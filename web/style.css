@@ -256,7 +256,12 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
   margin-bottom: 1.25rem;
 }
 
-#btn-again { margin-top: 0.5rem; }
+.result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
 
 img {
   max-width: 100%;

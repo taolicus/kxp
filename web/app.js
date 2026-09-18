@@ -3,6 +3,7 @@ const SM = window.StateMachine;
 
 let id = null;
 let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
+let lastMode = 'online'; // online | cpu — mode of the finished match
 let es = null;
 let shootTimer = null;
 let punWindowMs = 1200;
@@ -99,6 +100,7 @@ function resetGame() {
   $('#banner').classList.add('hidden');
   $('#timing').classList.add('hidden');
   $('#btn-again').classList.add('hidden');
+  $('#btn-mode').classList.add('hidden');
   flashPick(null);
   setCount('\u200b');
 }
@@ -127,6 +129,7 @@ function renderResult(d) {
   $('#timing').innerHTML = lines.join('<br>');
   $('#timing').classList.toggle('hidden', lines.length === 0);
   $('#btn-again').classList.remove('hidden');
+  $('#btn-mode').classList.remove('hidden');
   setYouSlot();
   setOppSlot(d.opponentCharacter, d.opponentName);
 }
@@ -173,6 +176,8 @@ const enter = {
       resetGame();
       setYouSlot();
       setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
+    } else if (d.opponentCharacter) {
+      setOppSlot(d.opponentCharacter, d.opponentName);
     }
     setCount(d.n ?? 'Get ready');
     $('#stage').classList.remove('go');
@@ -210,6 +215,7 @@ const enter = {
   result(d) {
     clearTimeout(shootTimer);
     lockMoves();
+    lastMode = d.mode || 'online';
     const s = getStats();
     if (d.outcome === 'win') { s.wins++; s.streak++; } else if (d.outcome === 'loss') { s.streak = 0; }
     saveStats(s);
@@ -299,7 +305,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   $('#btn-again').addEventListener('click', () => {
-    transition('again');
+    if (lastMode === 'cpu') {
+      transition('rematch:cpu');
+      post('/cpu');
+    } else {
+      transition('rematch:online');
+      post('/queue');
+    }
+  });
+  $('#btn-mode').addEventListener('click', () => {
+    transition('mode');
   });
 
   document.querySelectorAll('.move').forEach((b) => {
