@@ -91,9 +91,10 @@ player→server actions. All game rules are enforced server-side — the browser
 a renderer only.
 
 **Game state machine** — matches progress through four phases: `idle` →
-`countdown` → `shoot` (PUN) → `done`. Each phase is tracked via an
-`atomic.Int32` on the `match` struct. Transition enforcement is implicit in the
-`run()` goroutine flow rather than via an explicit transition validator.
+`countdown` → `shoot` (PUN) → `done`, tracked via an `atomic.Int32` on the
+`match` struct. Every phase change goes through `advance(from, to)`, which
+rejects illegal edges (see `allowedPhaseEdge`) and uses `CompareAndSwap` so a
+stale goroutine can never clobber a newer phase.
 
 **Timing model** — the server records `shootAt = time.Now()` when the shoot
 phase begins. Reaction time is calculated as `arrival.Sub(shootAt)` where
@@ -109,7 +110,7 @@ newer connection survives an overlapping reconnection. A 20-second keepalive
 comment frame prevents idle-proxy disconnection. Disconnect cancels the client's
 `alive` context, which triggers match abandonment and notifies the opponent.
 
-**Testing** — `go test ./...`
+**Testing** — `go test ./...`; client state machine: `node --test web/machine.test.cjs`
 
 ## Roadmap
 
@@ -129,6 +130,12 @@ Fix correctness and safety issues that affect reliability on a public server.
       the hard-coded 1500ms in `app.js`, which disagrees with the server's
       1200ms) and can surface `400`/`409` rejections inline instead of
       silently reporting a "Timed out" result.
+- [x] **State machine for screen transitions** — extract a pure, table-driven
+      transition machine (`web/machine.js`) so every screen change is a legal
+      `[state][event]` edge with centralized enter-effects in `app.js`; invalid
+      edges no-op silently (log under `?debug`) instead of drifting state. The
+      Go match phases route through `advance(from, to)` with an explicit edge
+      table. Validated by `web/machine.test.cjs` (`node --test`) plus Go tests.
 - [x] **Phase-aware move validation** — `handleMove` must check
       `c.match.phase` before buffering; reject with `400` if the match is in
       countdown, done, or if the shoot deadline has passed

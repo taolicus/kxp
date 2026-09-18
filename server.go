@@ -326,7 +326,8 @@ func (h *Hub) startMatchLocked(m *match) {
 }
 
 func (h *Hub) endMatch(m *match) {
-	m.phase.Store(phaseDone)
+	m.advance(phaseShoot, phaseDone)
+	m.advance(phaseCountdown, phaseDone)
 	h.mu.Lock()
 	for _, s := range m.sides {
 		if s.client != nil && s.client.match == m {

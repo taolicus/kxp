@@ -1,11 +1,15 @@
 const aliases = { rock: '\u270a\uFE0F', paper: '\u270b\uFE0F', scissors: '\u270c\uFE0F' };
+const SM = window.StateMachine;
 
 let id = null;
-let phase = 'idle'; // idle | waiting | countdown | shoot | result
+let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
 let es = null;
 let shootTimer = null;
 let punWindowMs = 1200;
 let sawPunAt = 0;
+
+const DEBUG = /[?&]debug/.test(location.search);
+const GAME_STATES = ['countdown', 'shoot', 'locked'];
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -91,7 +95,6 @@ function flashPick(move) {
 
 function resetGame() {
   clearTimeout(shootTimer);
-  phase = 'idle';
   sawPunAt = 0;
   $('#banner').classList.add('hidden');
   $('#timing').classList.add('hidden');
@@ -106,21 +109,23 @@ function banner(html) {
 }
 
 function renderResult(d) {
-  const oppAlias = d.opponent ? aliases[d.opponent] : '\u2014';
   const cls = d.outcome === 'win' ? 'won' : d.outcome === 'loss' ? 'lost' : 'draw';
-  const lbl = d.outcome === 'win' ? 'You win!' : d.outcome === 'loss' ? 'You lose' : 'Draw!';
+  const lbl = d.note || (d.outcome === 'win' ? 'You win!' : d.outcome === 'loss' ? 'You lose' : 'Draw!');
   banner(`<p class="${cls}">${lbl}</p>`);
 
   const lines = [];
-  if (d.yourNote === 'timeout') lines.push('Timed out \u2014 no pick.');
-  else if (d.yourNote === 'early') lines.push(`Disqualified \u2014 ${-d.youTimingMs}ms early.`);
-  else if (d.youClientMs != null) lines.push(`Your pick landed ${d.youClientMs}ms after PUN!`);
-  else if (d.youTimingMs != null) lines.push(`Your pick landed ${d.youTimingMs}ms after PUN!`);
-  const oppMs = d.opponentClientMs != null ? d.opponentClientMs : d.opponentTimingMs;
-  lines.push(`Opponent picked: ${oppAlias}${oppMs != null ? ` (${oppMs}ms)` : ''}`);
+  if (d.you || d.opponent) {
+    const oppAlias = d.opponent ? aliases[d.opponent] : '\u2014';
+    if (d.yourNote === 'timeout') lines.push('Timed out \u2014 no pick.');
+    else if (d.yourNote === 'early') lines.push(`Disqualified \u2014 ${-d.youTimingMs}ms early.`);
+    else if (d.youClientMs != null) lines.push(`Your pick landed ${d.youClientMs}ms after PUN!`);
+    else if (d.youTimingMs != null) lines.push(`Your pick landed ${d.youTimingMs}ms after PUN!`);
+    const oppMs = d.opponentClientMs != null ? d.opponentClientMs : d.opponentTimingMs;
+    lines.push(`Opponent picked: ${oppAlias}${oppMs != null ? ` (${oppMs}ms)` : ''}`);
+  }
 
   $('#timing').innerHTML = lines.join('<br>');
-  $('#timing').classList.remove('hidden');
+  $('#timing').classList.toggle('hidden', lines.length === 0);
   $('#btn-again').classList.remove('hidden');
   setYouSlot();
   setOppSlot(d.opponentCharacter, d.opponentName);
@@ -140,6 +145,79 @@ async function post(path, body = {}) {
   } catch (e) { return null; }
 }
 
+function transition(ev, data) {
+  const to = SM.next(state, ev);
+  if (!to) {
+    if (DEBUG) console.warn(`kxp: no transition ${state} + ${ev}`);
+    return false;
+  }
+  const from = state;
+  state = to;
+  if (enter[to]) enter[to](data || {}, from);
+  return true;
+}
+
+const enter = {
+  lobby() {
+    resetGame();
+    show('lobby');
+  },
+
+  waiting() {
+    show('queue');
+  },
+
+  countdown(d, from) {
+    show('game');
+    if (!GAME_STATES.includes(from)) {
+      resetGame();
+      setYouSlot();
+      setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
+    }
+    setCount(d.n ?? 'Get ready');
+    $('#stage').classList.remove('go');
+  },
+
+  shoot(d, from) {
+    show('game');
+    if (!GAME_STATES.includes(from)) {
+      resetGame();
+      setYouSlot();
+      setOppSlot(null, 'Opponent');
+    }
+    sawPunAt = Date.now();
+    if (d.windowMs) punWindowMs = d.windowMs;
+    setCount('PUN!');
+    $('#stage').classList.add('go');
+    enableMoves();
+    clearTimeout(shootTimer);
+    shootTimer = setTimeout(() => transition('lock'), punWindowMs);
+  },
+
+  locked(d) {
+    lockMoves();
+    if (d.move) flashPick(d.move);
+    if (d.error) {
+      const label = d.error === 'too early' ? 'TOO EARLY!'
+        : d.error === 'too late' ? 'TOO LATE!'
+        : d.error === 'move already submitted' ? 'ALREADY PICKED'
+        : 'NOT ACCEPTED';
+      setCount(label);
+      $('#stage').classList.add('go');
+    }
+  },
+
+  result(d) {
+    clearTimeout(shootTimer);
+    lockMoves();
+    const s = getStats();
+    if (d.outcome === 'win') { s.wins++; s.streak++; } else if (d.outcome === 'loss') { s.streak = 0; }
+    saveStats(s);
+    setStats();
+    renderResult(d);
+  },
+};
+
 function connect() {
   es = new EventSource(id ? `/events?id=${encodeURIComponent(id)}` : '/events');
 
@@ -154,33 +232,9 @@ function connect() {
     id = d.id;
     setOnline(d.online);
     post('/character', { character: loadCharacter() });
-    if (d.state === 'waiting') {
-      phase = 'waiting';
-      show('queue');
-    } else if (d.state === 'ingame') {
-      show('game');
-      resetGame();
-      setYouSlot();
-      setOppSlot(null, 'Opponent');
-      if (d.phase === 'shoot') {
-        phase = 'shoot';
-        sawPunAt = Date.now();
-        if (d.windowMs) punWindowMs = d.windowMs;
-        setCount('PUN!');
-        $('#stage').classList.add('go');
-        enableMoves();
-        clearTimeout(shootTimer);
-        shootTimer = setTimeout(() => {
-          if (phase === 'shoot') { phase = 'locked'; lockMoves(); }
-        }, punWindowMs);
-      } else {
-        phase = 'countdown';
-        setCount('Get ready');
-      }
-    } else {
-      phase = 'idle';
-      show('lobby');
-    }
+    if (d.state === 'waiting') transition('snapshot:waiting', d);
+    else if (d.state === 'ingame') transition(d.phase === 'shoot' ? 'snapshot:shoot' : 'snapshot:countdown', d);
+    else transition('snapshot:idle', d);
   });
 
   es.addEventListener('online', (e) => {
@@ -188,74 +242,33 @@ function connect() {
   });
 
   es.addEventListener('waiting', () => {
-    phase = 'waiting';
-    show('queue');
+    transition('waiting');
   });
 
   es.addEventListener('matched', (e) => {
-    const d = JSON.parse(e.data);
-    phase = 'countdown';
-    show('game');
-    resetGame();
-    setYouSlot();
-    setOppSlot(d.opponentCharacter, d.opponentName);
-    setCount('Get ready');
+    transition('matched', JSON.parse(e.data));
   });
 
   es.addEventListener('countdown', (e) => {
-    const n = JSON.parse(e.data).n;
-    phase = 'countdown';
-    setCount(n);
-    $('#stage').classList.remove('go');
+    transition('countdown', JSON.parse(e.data));
   });
 
   es.addEventListener('shoot', (e) => {
-    const d = JSON.parse(e.data);
-    phase = 'shoot';
-    sawPunAt = Date.now();
-    if (d.windowMs) punWindowMs = d.windowMs;
-    setCount('PUN!');
-    $('#stage').classList.add('go');
-    enableMoves();
-    clearTimeout(shootTimer);
-    shootTimer = setTimeout(() => {
-      if (phase === 'shoot') { phase = 'locked'; lockMoves(); }
-    }, punWindowMs);
+    transition('shoot', JSON.parse(e.data));
   });
 
   es.addEventListener('result', (e) => {
-    phase = 'result';
-    clearTimeout(shootTimer);
-    lockMoves();
-    const d = JSON.parse(e.data);
-    const s = getStats();
-    if (d.outcome === 'win') { s.wins++; s.streak++; } else if (d.outcome === 'loss') { s.streak = 0; }
-    saveStats(s);
-    setStats();
-    renderResult(d);
+    transition('result', JSON.parse(e.data));
   });
 
-  es.addEventListener('opponent-left', () => {
-    phase = 'result';
-    clearTimeout(shootTimer);
-    lockMoves();
-    const s = getStats();
-    s.wins++; s.streak++;
-    saveStats(s);
-    setStats();
-    banner('<p class="won">Opponent left \u2014 you win!</p>');
-    $('#btn-again').classList.remove('hidden');
+  es.addEventListener('opponent-left', (e) => {
+    transition('result', { ...JSON.parse(e.data), note: 'Opponent left \u2014 you win!' });
   });
 
   es.addEventListener('state', (e) => {
     const s = JSON.parse(e.data).state;
-    if (s === 'idle' && phase !== 'result') {
-      phase = 'idle';
-      show('lobby');
-    } else if (s === 'waiting') {
-      phase = 'waiting';
-      show('queue');
-    }
+    if (s === 'idle') transition('stateIdle');
+    else transition('snapshot:waiting');
   });
 
   es.onerror = () => { /* EventSource auto-reconnects */ };
@@ -275,32 +288,26 @@ document.addEventListener('DOMContentLoaded', () => {
     post('/character', { character: cid });
   });
 
-  $('#btn-online').addEventListener('click', () => post('/queue'));
+  $('#btn-online').addEventListener('click', () => {
+    transition('queue');
+    post('/queue');
+  });
   $('#btn-cpu').addEventListener('click', () => post('/cpu'));
   $('#btn-cancel').addEventListener('click', () => {
-    if (phase === 'waiting') { phase = 'idle'; show('lobby'); }
+    transition('cancel');
     post('/cancel');
   });
 
   $('#btn-again').addEventListener('click', () => {
-    resetGame();
-    show('lobby');
+    transition('again');
   });
 
   document.querySelectorAll('.move').forEach((b) => {
     b.addEventListener('click', () => {
-      if (phase !== 'shoot') return;
-      phase = 'locked';
-      lockMoves();
-      flashPick(b.dataset.move);
-      post('/move', { move: b.dataset.move, clickedAt: Date.now(), sawPunAt }).then((res) => {
-        if (!res || res.ok) return;
-        const label = res.error === 'too early' ? 'TOO EARLY!'
-          : res.error === 'too late' ? 'TOO LATE!'
-          : res.error === 'move already submitted' ? 'ALREADY PICKED'
-          : 'NOT ACCEPTED';
-        setCount(label);
-        $('#stage').classList.add('go');
+      const move = b.dataset.move;
+      if (!transition('move', { move })) return;
+      post('/move', { move, clickedAt: Date.now(), sawPunAt }).then((res) => {
+        if (res && !res.ok) transition('reject', { error: res.error });
       });
     });
   });

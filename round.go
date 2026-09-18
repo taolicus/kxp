@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,60 @@ const (
 	phaseShoot
 	phaseDone
 )
+
+func phaseLabel(v int32) string {
+	switch v {
+	case phaseCountdown:
+		return "countdown"
+	case phaseShoot:
+		return "shoot"
+	case phaseDone:
+		return "done"
+	default:
+		return "idle"
+	}
+}
+
+// Allowed match phase transitions. advance returns false when the edge isn't
+// legal (see allowedPhaseEdge) or when the current phase isn't "from" (e.g. a
+// stale goroutine racing a finished match), so only the first transition wins.
+//
+//	          idle       countdown   shoot
+//	countdown start
+//	shoot                run()
+//	done      --         abort()     abort(), endMatch, run() after resolve
+func allowedPhaseEdge(from, to int32) bool {
+	switch from {
+	case phaseIdle:
+		return to == phaseCountdown
+	case phaseCountdown:
+		return to == phaseShoot || to == phaseDone
+	case phaseShoot:
+		return to == phaseDone
+	default:
+		return false
+	}
+}
+
+var stateDebug = false
+
+func (m *match) advance(from, to int32) bool {
+	if !allowedPhaseEdge(from, to) {
+		if stateDebug {
+			fmt.Printf("kxp: illegal phase edge %s -> %s (current %s)\n",
+				phaseLabel(from), phaseLabel(to), m.phaseName())
+		}
+		return false
+	}
+	if !m.phase.CompareAndSwap(from, to) {
+		if stateDebug {
+			fmt.Printf("kxp: stale phase transition %s -> %s (current %s)\n",
+				phaseLabel(from), phaseLabel(to), m.phaseName())
+		}
+		return false
+	}
+	return true
+}
 
 type moveMsg struct {
 	move   Move
@@ -56,7 +111,7 @@ func (m *match) start() {
 			s.client.drainMoves()
 		}
 	}
-	m.phase.Store(phaseCountdown)
+	m.advance(phaseIdle, phaseCountdown)
 	go m.run()
 }
 
@@ -90,7 +145,7 @@ func (m *match) run() {
 		return
 	}
 
-	m.phase.Store(phaseShoot)
+	m.advance(phaseCountdown, phaseShoot)
 	m.shootAt = time.Now()
 	for i := range m.sides {
 		m.send(i, evt("shoot", map[string]any{"windowMs": shootWindow.Milliseconds()}))
@@ -126,7 +181,7 @@ loop:
 	}
 
 	m.resolve()
-	m.phase.Store(phaseDone)
+	m.advance(phaseShoot, phaseDone)
 }
 
 func (m *match) wait(d time.Duration) bool {
@@ -291,7 +346,9 @@ func clientReactionMs(msg *moveMsg) *int64 {
 }
 
 func (m *match) abort() {
-	m.phase.Store(phaseDone)
+	if !m.advance(phaseShoot, phaseDone) && !m.advance(phaseCountdown, phaseDone) {
+		return
+	}
 	for i, s := range m.sides {
 		if s.client == nil || s.client.alive.Err() == nil {
 			continue
@@ -304,14 +361,5 @@ func (m *match) abort() {
 }
 
 func (m *match) phaseName() string {
-	switch m.phase.Load() {
-	case phaseCountdown:
-		return "countdown"
-	case phaseShoot:
-		return "shoot"
-	case phaseDone:
-		return "done"
-	default:
-		return "idle"
-	}
+	return phaseLabel(m.phase.Load())
 }
