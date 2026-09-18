@@ -10,8 +10,8 @@ original terminal game.
 - **Play Online** — matchmaking pairs you with another player, synced countdown
   and a shared **PUN!** instant.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay.
-- **Timing rules** — picks arriving before PUN are disqualified; no pick within
-  1.2s of PUN is a timeout loss.
+- **Timing rules** — picks outside the shoot window are rejected with `400`; no
+  pick within 1.2s of PUN is a timeout loss.
 - Server-sent events (SSE) for push, plain `POST` for player actions — no
   WebSocket dependency.
 
@@ -97,9 +97,9 @@ a renderer only.
 
 **Timing model** — the server records `shootAt = time.Now()` when the shoot
 phase begins. Reaction time is calculated as `arrival.Sub(shootAt)` where
-`arrival` is `time.Now()` captured at POST receipt. Picks arriving before PUN
-are disqualified; no pick within 1.2 seconds of PUN is a timeout loss. Displayed
-reaction times include client→server network latency.
+`arrival` is `time.Now()` captured at POST receipt. Picks outside the 1.2s shoot
+window are rejected with `400`; failing to pick within it is a timeout loss.
+Displayed reaction times include network round-trip latency.
 
 **Matchmaking** — a single global FIFO queue pairs players under the hub mutex.
 Anonymous clients receive server-issued random IDs on first SSE connection.
@@ -109,11 +109,7 @@ newer connection survives an overlapping reconnection. A 20-second keepalive
 comment frame prevents idle-proxy disconnection. Disconnect cancels the client's
 `alive` context, which triggers match abandonment and notifies the opponent.
 
-**Testing** — 9 tests covering PvP outcomes, early-pick disqualification,
-timeout losses, CPU matches, and character selection. Tests exercise the match
-engine directly via `Client` channels without a live HTTP listener but depend on
-real wall-clock timing. The race detector is not available on the current
-android/arm64 host.
+**Testing** — `go test ./...`
 
 ## Roadmap
 
