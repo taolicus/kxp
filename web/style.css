@@ -263,6 +263,8 @@ h2 { color: var(--muted); font-weight: 500; margin-bottom: 1.75rem; }
   margin-top: 0.5rem;
 }
 
+#game-stats { margin: 0 0 1rem; }
+
 img {
   max-width: 100%;
 }

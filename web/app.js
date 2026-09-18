@@ -46,9 +46,11 @@ function saveStats(s) {
 
 function setStats() {
   const s = getStats();
+  const text = `${s.wins} wins \u00b7 ${s.streak} in a row`;
   const el = $('#stats');
-  if (!el) return;
-  el.textContent = `${s.wins} wins \u00b7 ${s.streak} in a row`;
+  if (el) el.textContent = text;
+  const g = $('#game-stats');
+  if (g) g.textContent = text;
 }
 
 function renderFighters() {
@@ -99,6 +101,7 @@ function resetGame() {
   sawPunAt = 0;
   $('#banner').classList.add('hidden');
   $('#timing').classList.add('hidden');
+  $('#game-stats').classList.add('hidden');
   $('#btn-again').classList.add('hidden');
   $('#btn-mode').classList.add('hidden');
   flashPick(null);
@@ -128,6 +131,7 @@ function renderResult(d) {
 
   $('#timing').innerHTML = lines.join('<br>');
   $('#timing').classList.toggle('hidden', lines.length === 0);
+  $('#game-stats').classList.remove('hidden');
   $('#btn-again').classList.remove('hidden');
   $('#btn-mode').classList.remove('hidden');
   setYouSlot();
