@@ -121,6 +121,18 @@ android/arm64 host.
 
 Fix correctness and safety issues that affect reliability on a public server.
 
+- [ ] **Latency-fair reaction timing** — the reported reaction time is
+      `arrive − shootAt`, which includes full network RTT, so a high-latency
+      player always appears slower and gets a smaller effective window. Have
+      the client send its click timestamp so the *displayed* reaction is
+      network-neutral, while win/loss stays server-authoritative on arrival
+      time. Spoofed client times are cosmetic only and don't affect ranking
+      (see Phase 4 anti-cheat).
+- [ ] **Server-sent PUN window** — send `windowMs` in each `shoot` event so
+      the client uses the authoritative window for its input lock (replacing
+      the hard-coded 1500ms in `app.js`, which disagrees with the server's
+      1200ms) and can surface `400`/`409` rejections inline instead of
+      silently reporting a "Timed out" result.
 - [x] **Phase-aware move validation** — `handleMove` must check
       `c.match.phase` before buffering; reject with `400` if the match is in
       countdown, done, or if the shoot deadline has passed
@@ -187,8 +199,8 @@ Build on a stable foundation without rewriting the core.
 
 Features that depend on identity, persistence, or ranking.
 
-- [ ] **Leaderboard** — server-authoritative with anti-cheat (reject
-      client-submitted timestamps, cap CPU streaks)
+- [ ] **Leaderboard** — server-authoritative with anti-cheat (ignore
+      client-submitted timestamps for ranking, cap CPU streaks)
 - [ ] **Leaderboard identity** — persistent player identity model (account,
       token, or anonymous persistent ID)
 - [ ] **Lobby / room architecture** — private room creation, joining,
@@ -197,6 +209,11 @@ Features that depend on identity, persistence, or ranking.
       competition
 - [ ] **Solo campaign** — Mortal Kombat–style tower climbing with
       progression
+- [ ] **Reconnection (re-evaluate later)** — a match lasts ~3.2s and today a
+      TCP drop instantly forfeits via `opponent-left`, with the dropped
+      player seeing no result. Options for later: resume a live match plus a
+      short (2–3s) forfeit grace, vs. accepting forfeits for such a quick
+      game. Revisit once public play shows how often drops actually occur.
 - [ ] **Random fight backgrounds** — display a random background scenario
       (arena/stage) for each fight, chosen server-side and sent to clients
       via SSE
