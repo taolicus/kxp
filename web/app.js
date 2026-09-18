@@ -121,11 +121,14 @@ function renderResult(d) {
   const lines = [];
   if (d.you || d.opponent) {
     const oppAlias = d.opponent ? aliases[d.opponent] : '\u2014';
+    const oppMs = d.opponentClientMs != null ? d.opponentClientMs : d.opponentTimingMs;
     if (d.yourNote === 'timeout') lines.push('Timed out \u2014 no pick.');
     else if (d.yourNote === 'early') lines.push(`Disqualified \u2014 ${-d.youTimingMs}ms early.`);
-    else if (d.youClientMs != null) lines.push(`Your pick landed ${d.youClientMs}ms after PUN!`);
-    else if (d.youTimingMs != null) lines.push(`Your pick landed ${d.youTimingMs}ms after PUN!`);
-    const oppMs = d.opponentClientMs != null ? d.opponentClientMs : d.opponentTimingMs;
+    else {
+      const youAlias = d.you ? aliases[d.you] : '\u2014';
+      const youMs = d.youClientMs != null ? d.youClientMs : d.youTimingMs;
+      lines.push(`You picked: ${youAlias}${youMs != null ? ` (${youMs}ms)` : ''}`);
+    }
     lines.push(`Opponent picked: ${oppAlias}${oppMs != null ? ` (${oppMs}ms)` : ''}`);
   }
 
