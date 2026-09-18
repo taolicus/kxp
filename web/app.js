@@ -46,7 +46,7 @@ function saveStats(s) {
 
 function setStats() {
   const s = getStats();
-  const text = `${s.wins} wins \u00b7 ${s.streak} in a row \u00b7 best ${s.best}`;
+  const text = `${s.wins} wins \u00b7 ${s.streak} in a row \u00b7 best streak ${s.best}`;
   const el = $('#stats');
   if (el) el.textContent = text;
   const g = $('#game-stats');
