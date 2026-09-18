@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	countStep   = time.Second
-	shootWindow = 1200 * time.Millisecond
+	countStep   = 2 * time.Second
+	shootWindow = 2 * time.Second
 )
 
 const (

@@ -6,7 +6,7 @@ let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
 let lastMode = 'online'; // online | cpu — mode of the finished match
 let es = null;
 let shootTimer = null;
-let punWindowMs = 1200;
+let punWindowMs = 2000;
 let sawPunAt = 0;
 
 const DEBUG = /[?&]debug/.test(location.search);

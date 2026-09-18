@@ -40,8 +40,8 @@ func TestResolveTimingBoundaries(t *testing.T) {
 		{name: "exactly-at-pun", aOff: 0, bOff: 0, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(0), bMs: ms(0)},
 		{name: "just-after-pun", aOff: time.Millisecond, bOff: time.Millisecond, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(1), bMs: ms(1)},
 		{name: "just-before-pun", aOff: -time.Millisecond, bOff: 0, aOutcome: "loss", bOutcome: "win", aNote: "early", bNote: "", aMs: nil, bMs: ms(0)},
-		{name: "at-deadline", aOff: shootWindow, bOff: shootWindow, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(1200), bMs: ms(1200)},
-		{name: "after-deadline", aOff: shootWindow + time.Millisecond, bOff: shootWindow, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(1201), bMs: ms(1200)},
+		{name: "at-deadline", aOff: shootWindow, bOff: shootWindow, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(shootWindow.Milliseconds()), bMs: ms(shootWindow.Milliseconds())},
+		{name: "after-deadline", aOff: shootWindow + time.Millisecond, bOff: shootWindow, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(shootWindow.Milliseconds() + 1), bMs: ms(shootWindow.Milliseconds())},
 		{name: "mid-window", aOff: 50 * time.Millisecond, bOff: 50 * time.Millisecond, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(50), bMs: ms(50)},
 	}
 

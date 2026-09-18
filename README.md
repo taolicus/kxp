@@ -11,7 +11,7 @@ original terminal game.
   and a shared **PUN!** instant.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay.
 - **Timing rules** — picks outside the shoot window are rejected with `400`; no
-  pick within 1.2s of PUN is a timeout loss.
+  pick within 2s of PUN is a timeout loss.
 - Server-sent events (SSE) for push, plain `POST` for player actions — no
   WebSocket dependency.
 
@@ -98,7 +98,7 @@ stale goroutine can never clobber a newer phase.
 
 **Timing model** — the server records `shootAt = time.Now()` when the shoot
 phase begins. Reaction time is calculated as `arrival.Sub(shootAt)` where
-`arrival` is `time.Now()` captured at POST receipt. Picks outside the 1.2s shoot
+`arrival` is `time.Now()` captured at POST receipt. Picks outside the 2s shoot
 window are rejected with `400`; failing to pick within it is a timeout loss.
 Displayed reaction times include network round-trip latency.
 
@@ -166,7 +166,7 @@ Fix correctness and safety issues that affect reliability on a public server.
 - [ ] **Deterministic deadline enforcement** — `resolve()` accepts a pick
       whose `arrive` is past the shoot deadline whenever its `moveMsg` reaches
       the match (it only checks `timing >= 0`), so the run-loop's channel-vs-
-      timer race decides the outcome at the exact 1200ms boundary. Enforce
+      timer race decides the outcome at the exact shoot-window boundary. Enforce
       `arrive <= shootAt+shootWindow` inside `resolve()` so a late pick always
       resolves as a timeout, making the at-deadline result deterministic.
 
