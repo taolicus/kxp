@@ -44,6 +44,22 @@ body {
   justify-content: center;
 }
 
+body.in-game {
+  background-image:
+    linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
+    url('/img/bg/mk2.webp');
+  background-size: cover;
+  background-position: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.in-game {
+    background-image:
+      linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
+      url('/img/bg/mk2-static.webp');
+  }
+}
+
 main {
   width: min(440px, 100vw - 2rem);
   text-align: center;

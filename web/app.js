@@ -18,6 +18,7 @@ function show(view) {
   document.querySelectorAll('.view').forEach((v) => {
     v.classList.toggle('hidden', v.id !== view);
   });
+  document.body.classList.toggle('in-game', view === 'game');
   if (view !== 'game') lockMoves();
 }
 
