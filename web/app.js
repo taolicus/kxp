@@ -34,9 +34,9 @@ function setOnline(n) {
 function getStats() {
   try {
     const s = JSON.parse(localStorage.getItem('kxp-stats') || '{}');
-    return { wins: Number(s.wins) || 0, streak: Number(s.streak) || 0 };
+    return { wins: Number(s.wins) || 0, streak: Number(s.streak) || 0, best: Number(s.best) || 0 };
   } catch (e) {
-    return { wins: 0, streak: 0 };
+    return { wins: 0, streak: 0, best: 0 };
   }
 }
 
@@ -46,7 +46,7 @@ function saveStats(s) {
 
 function setStats() {
   const s = getStats();
-  const text = `${s.wins} wins \u00b7 ${s.streak} in a row`;
+  const text = `${s.wins} wins \u00b7 ${s.streak} in a row \u00b7 best ${s.best}`;
   const el = $('#stats');
   if (el) el.textContent = text;
   const g = $('#game-stats');
@@ -221,7 +221,11 @@ const enter = {
     lockMoves();
     lastMode = d.mode || 'online';
     const s = getStats();
-    if (d.outcome === 'win') { s.wins++; s.streak++; } else if (d.outcome === 'loss') { s.streak = 0; }
+    if (d.outcome === 'win') {
+      s.wins++;
+      s.streak++;
+      if (s.streak > s.best) s.best = s.streak;
+    } else if (d.outcome === 'loss') { s.streak = 0; }
     saveStats(s);
     setStats();
     renderResult(d);
