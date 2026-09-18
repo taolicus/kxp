@@ -101,6 +101,14 @@ main {
   width: 100%;
 }
 
+@font-face {
+  font-family: 'MKX Title';
+  src: url('/MKX-Title.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
 /* 5) Typography ---------------------------------------------------------- */
 .mkx-title {
   margin: 0 0 var(--s4);
