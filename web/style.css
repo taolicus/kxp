@@ -50,6 +50,7 @@ body.in-game {
     url('/img/bg/mk2.webp');
   background-size: cover;
   background-position: center;
+  background-attachment: fixed;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -57,6 +58,7 @@ body.in-game {
     background-image:
       linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
       url('/img/bg/mk2-static.webp');
+    background-attachment: fixed;
   }
 }
 
