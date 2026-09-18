@@ -131,6 +131,21 @@ func TestTimeoutLoses(t *testing.T) {
 	}
 }
 
+func TestShootEventCarriesWindow(t *testing.T) {
+	h := NewHub()
+	a := newClient()
+	m := h.makeMatch("sw1", side{client: a}, side{bot: true, character: "raiden"})
+	m.start()
+
+	waitForEvent(t, a, "matched")
+	d := waitForEvent(t, a, "shoot")
+	want := float64(shootWindow.Milliseconds())
+	if got := d["windowMs"]; got != want {
+		t.Errorf("windowMs = %v, want %v", got, want)
+	}
+	a.cancel()
+}
+
 func TestCPURound(t *testing.T) {
 	h := NewHub()
 	a := newClient()

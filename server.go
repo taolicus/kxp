@@ -256,6 +256,9 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 	if c.match != nil {
 		out["state"] = "ingame"
 		out["phase"] = c.match.phaseName()
+		if out["phase"] == "shoot" {
+			out["windowMs"] = shootWindow.Milliseconds()
+		}
 	} else if c.queueing {
 		out["state"] = "waiting"
 	}

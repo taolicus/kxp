@@ -124,7 +124,7 @@ Fix correctness and safety issues that affect reliability on a public server.
       network-neutral, while win/loss stays server-authoritative on arrival
       time. Spoofed client times are cosmetic only and don't affect ranking
       (see Phase 4 anti-cheat).
-- [ ] **Server-sent PUN window** — send `windowMs` in each `shoot` event so
+- [x] **Server-sent PUN window** — send `windowMs` in each `shoot` event so
       the client uses the authoritative window for its input lock (replacing
       the hard-coded 1500ms in `app.js`, which disagrees with the server's
       1200ms) and can surface `400`/`409` rejections inline instead of

@@ -93,7 +93,7 @@ func (m *match) run() {
 	m.phase.Store(phaseShoot)
 	m.shootAt = time.Now()
 	for i := range m.sides {
-		m.send(i, evt("shoot", map[string]any{}))
+		m.send(i, evt("shoot", map[string]any{"windowMs": shootWindow.Milliseconds()}))
 	}
 
 	if m.sides[1].bot {

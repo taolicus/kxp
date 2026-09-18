@@ -4,6 +4,7 @@ let id = null;
 let phase = 'idle'; // idle | waiting | countdown | shoot | result
 let es = null;
 let shootTimer = null;
+let punWindowMs = 1200;
 let sawPunAt = 0;
 
 const $ = (sel) => document.querySelector(sel);
@@ -126,14 +127,17 @@ function renderResult(d) {
 }
 
 async function post(path, body = {}) {
-  if (!id) return;
+  if (!id) return null;
   try {
-    await fetch(path, {
+    const resp = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...body }),
     });
-  } catch (e) { /* ignore */ }
+    let error = '';
+    try { error = (await resp.json()).error || ''; } catch (e) {}
+    return { ok: resp.ok, status: resp.status, error };
+  } catch (e) { return null; }
 }
 
 function connect() {
@@ -161,9 +165,14 @@ function connect() {
       if (d.phase === 'shoot') {
         phase = 'shoot';
         sawPunAt = Date.now();
+        if (d.windowMs) punWindowMs = d.windowMs;
         setCount('PUN!');
         $('#stage').classList.add('go');
         enableMoves();
+        clearTimeout(shootTimer);
+        shootTimer = setTimeout(() => {
+          if (phase === 'shoot') { phase = 'locked'; lockMoves(); }
+        }, punWindowMs);
       } else {
         phase = 'countdown';
         setCount('Get ready');
@@ -200,16 +209,18 @@ function connect() {
     $('#stage').classList.remove('go');
   });
 
-  es.addEventListener('shoot', () => {
+  es.addEventListener('shoot', (e) => {
+    const d = JSON.parse(e.data);
     phase = 'shoot';
     sawPunAt = Date.now();
+    if (d.windowMs) punWindowMs = d.windowMs;
     setCount('PUN!');
     $('#stage').classList.add('go');
     enableMoves();
     clearTimeout(shootTimer);
     shootTimer = setTimeout(() => {
       if (phase === 'shoot') { phase = 'locked'; lockMoves(); }
-    }, 1500);
+    }, punWindowMs);
   });
 
   es.addEventListener('result', (e) => {
@@ -282,7 +293,15 @@ document.addEventListener('DOMContentLoaded', () => {
       phase = 'locked';
       lockMoves();
       flashPick(b.dataset.move);
-      post('/move', { move: b.dataset.move, clickedAt: Date.now(), sawPunAt });
+      post('/move', { move: b.dataset.move, clickedAt: Date.now(), sawPunAt }).then((res) => {
+        if (!res || res.ok) return;
+        const label = res.error === 'too early' ? 'TOO EARLY!'
+          : res.error === 'too late' ? 'TOO LATE!'
+          : res.error === 'move already submitted' ? 'ALREADY PICKED'
+          : 'NOT ACCEPTED';
+        setCount(label);
+        $('#stage').classList.add('go');
+      });
     });
   });
 });

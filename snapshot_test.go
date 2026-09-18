@@ -36,6 +36,22 @@ func TestSnapshotReportsDonePhase(t *testing.T) {
 	}
 }
 
+func TestSnapshotCarriesShootWindow(t *testing.T) {
+	h := NewHub()
+	c := registerMoveTestClient(h, "sn3")
+	m := &match{id: "sn3"}
+	c.match = m
+	m.phase.Store(phaseShoot)
+
+	s := h.snapshot(c)
+	if s["phase"] != "shoot" {
+		t.Errorf("phase = %v, want shoot", s["phase"])
+	}
+	if got := s["windowMs"]; got != shootWindow.Milliseconds() {
+		t.Errorf("windowMs = %v, want %v", got, shootWindow.Milliseconds())
+	}
+}
+
 func TestSnapshotDistinguishesNoMatchFromDone(t *testing.T) {
 	h := NewHub()
 	c := registerMoveTestClient(h, "sn2")
