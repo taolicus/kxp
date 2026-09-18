@@ -4,6 +4,7 @@ let id = null;
 let phase = 'idle'; // idle | waiting | countdown | shoot | result
 let es = null;
 let shootTimer = null;
+let sawPunAt = 0;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -90,6 +91,7 @@ function flashPick(move) {
 function resetGame() {
   clearTimeout(shootTimer);
   phase = 'idle';
+  sawPunAt = 0;
   $('#banner').classList.add('hidden');
   $('#timing').classList.add('hidden');
   $('#btn-again').classList.add('hidden');
@@ -111,8 +113,10 @@ function renderResult(d) {
   const lines = [];
   if (d.yourNote === 'timeout') lines.push('Timed out \u2014 no pick.');
   else if (d.yourNote === 'early') lines.push(`Disqualified \u2014 ${-d.youTimingMs}ms early.`);
+  else if (d.youClientMs != null) lines.push(`Your pick landed ${d.youClientMs}ms after PUN!`);
   else if (d.youTimingMs != null) lines.push(`Your pick landed ${d.youTimingMs}ms after PUN!`);
-  lines.push(`Opponent picked: ${oppAlias}`);
+  const oppMs = d.opponentClientMs != null ? d.opponentClientMs : d.opponentTimingMs;
+  lines.push(`Opponent picked: ${oppAlias}${oppMs != null ? ` (${oppMs}ms)` : ''}`);
 
   $('#timing').innerHTML = lines.join('<br>');
   $('#timing').classList.remove('hidden');
@@ -156,6 +160,7 @@ function connect() {
       setOppSlot(null, 'Opponent');
       if (d.phase === 'shoot') {
         phase = 'shoot';
+        sawPunAt = Date.now();
         setCount('PUN!');
         $('#stage').classList.add('go');
         enableMoves();
@@ -197,6 +202,7 @@ function connect() {
 
   es.addEventListener('shoot', () => {
     phase = 'shoot';
+    sawPunAt = Date.now();
     setCount('PUN!');
     $('#stage').classList.add('go');
     enableMoves();
@@ -276,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
       phase = 'locked';
       lockMoves();
       flashPick(b.dataset.move);
-      post('/move', { move: b.dataset.move });
+      post('/move', { move: b.dataset.move, clickedAt: Date.now(), sawPunAt });
     });
   });
 });

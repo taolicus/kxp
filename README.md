@@ -117,7 +117,7 @@ comment frame prevents idle-proxy disconnection. Disconnect cancels the client's
 
 Fix correctness and safety issues that affect reliability on a public server.
 
-- [ ] **Latency-fair reaction timing** — the reported reaction time is
+- [x] **Latency-fair reaction timing** — the reported reaction time is
       `arrive − shootAt`, which includes full network RTT, so a high-latency
       player always appears slower and gets a smaller effective window. Have
       the client send its click timestamp so the *displayed* reaction is

@@ -431,8 +431,10 @@ func (h *Hub) handleCharacter(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID   string `json:"id"`
-		Move string `json:"move"`
+		ID        string `json:"id"`
+		Move      string `json:"move"`
+		SawPunAt  int64  `json:"sawPunAt"`
+		ClickedAt int64  `json:"clickedAt"`
 	}
 	if err := h.decode(w, r, &req); err != nil {
 		return
@@ -468,6 +470,10 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	msg := moveMsg{move: move, arrive: time.Now()}
+	if req.SawPunAt > 0 && req.ClickedAt > 0 {
+		msg.sawPun = req.SawPunAt
+		msg.click = req.ClickedAt
+	}
 	select {
 	case c.moves <- msg:
 	default:

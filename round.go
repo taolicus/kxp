@@ -21,6 +21,8 @@ const (
 type moveMsg struct {
 	move   Move
 	arrive time.Time
+	sawPun int64
+	click  int64
 }
 
 type side struct {
@@ -208,10 +210,11 @@ func (m *match) opponentCharacter(i int) string {
 }
 
 type pickOutcome struct {
-	move   Move
-	timing time.Duration
-	valid  bool
-	note   string
+	move     Move
+	timing   time.Duration
+	valid    bool
+	note     string
+	clientMs *int64
 }
 
 func (m *match) resolve() {
@@ -225,6 +228,7 @@ func (m *match) resolve() {
 		ps[i].move = msg.move
 		ps[i].timing = msg.arrive.Sub(m.shootAt)
 		ps[i].valid = ps[i].timing >= 0
+		ps[i].clientMs = clientReactionMs(msg)
 		if !ps[i].valid {
 			ps[i].note = "early"
 		}
@@ -255,10 +259,12 @@ func (m *match) resolve() {
 		data := map[string]any{
 			"you":               string(ps[i].move),
 			"youTimingMs":       timingMs(ps[i]),
+			"youClientMs":       ps[i].clientMs,
 			"yourNote":          ps[i].note,
 			"youCharacter":      m.sideCharacter(i),
 			"opponent":          string(ps[opp].move),
 			"opponentTimingMs":  timingMs(ps[opp]),
+			"opponentClientMs":  ps[opp].clientMs,
 			"opponentNote":      ps[opp].note,
 			"opponentCharacter": m.sideCharacter(opp),
 			"outcome":           string(res[i]),
@@ -273,6 +279,14 @@ func timingMs(p pickOutcome) *int64 {
 		return nil
 	}
 	ms := p.timing.Milliseconds()
+	return &ms
+}
+
+func clientReactionMs(msg *moveMsg) *int64 {
+	if msg.sawPun <= 0 || msg.click <= 0 || msg.click < msg.sawPun {
+		return nil
+	}
+	ms := msg.click - msg.sawPun
 	return &ms
 }
 

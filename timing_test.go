@@ -94,3 +94,76 @@ func TestResolveEarlyNeverTimesOut(t *testing.T) {
 		t.Errorf("a timing = %v, want nil for early pick", ra["youTimingMs"])
 	}
 }
+
+func resolveTimedClient(t *testing.T, aArrive time.Duration, aReaction time.Duration) (map[string]any, map[string]any) {
+	t.Helper()
+	h := NewHub()
+	a, b := newClient(), newClient()
+	m := &match{hub: h, id: "tmc", sides: [2]side{{client: a}, {client: b}}}
+	a.match, b.match = m, m
+	shootAt := time.Now()
+	m.shootAt = shootAt
+	const sawPun = int64(1_000_000_000)
+	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(aArrive), sawPun: sawPun, click: sawPun + aReaction.Milliseconds()}
+	m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(time.Millisecond)}
+	m.resolve()
+	ra := waitForEvent(t, a, "result")
+	rb := waitForEvent(t, b, "result")
+	return ra, rb
+}
+
+func intField(v any) int64 {
+	if f, ok := v.(float64); ok {
+		return int64(f)
+	}
+	return -1
+}
+
+func TestClientReactionExcludesNetwork(t *testing.T) {
+	ra, rb := resolveTimedClient(t, 300*time.Millisecond, 250*time.Millisecond)
+
+	if got := intField(ra["youClientMs"]); got != 250 {
+		t.Errorf("youClientMs = %v, want 250 (client clock reaction)", got)
+	}
+	if got := intField(ra["youTimingMs"]); got != 300 {
+		t.Errorf("youTimingMs = %v, want 300 (server clock still authoritative)", got)
+	}
+	if got := ra["outcome"]; got != "win" {
+		t.Errorf("a outcome = %v, want win (validity uses arrival time)", got)
+	}
+	if rb["youClientMs"] != nil {
+		t.Errorf("b youClientMs = %v, want nil without client timestamps", rb["youClientMs"])
+	}
+}
+
+func TestClientReactionSpoofedIgnored(t *testing.T) {
+	clients := []struct {
+		name   string
+		sawPun int64
+		click  int64
+	}{
+		{name: "click-before-pun", sawPun: 1_000_000_000, click: 999_999_999},
+		{name: "zero-timestamps", sawPun: 0, click: 0},
+		{name: "negative-click", sawPun: 1_000_000_000, click: -1},
+	}
+	for _, tc := range clients {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewHub()
+			a, b := newClient(), newClient()
+			m := &match{hub: h, id: "tmx", sides: [2]side{{client: a}, {client: b}}}
+			a.match, b.match = m, m
+			shootAt := time.Now()
+			m.shootAt = shootAt
+			m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(time.Millisecond), sawPun: tc.sawPun, click: tc.click}
+			m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(2 * time.Millisecond)}
+			m.resolve()
+			ra := waitForEvent(t, a, "result")
+			if ra["youClientMs"] != nil {
+				t.Errorf("youClientMs = %v, want nil for spoofed timestamps", ra["youClientMs"])
+			}
+			if got := ra["outcome"]; got != "win" {
+				t.Errorf("a outcome = %v, want win", got)
+			}
+		})
+	}
+}

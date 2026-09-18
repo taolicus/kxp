@@ -153,3 +153,46 @@ func TestHandleMoveConflictsWhenFull(t *testing.T) {
 	default:
 	}
 }
+
+func TestHandleMoveStoresClientTimestamps(t *testing.T) {
+	h := NewHub()
+	c := registerMoveTestClient(h, "n7")
+	newMoveMatch(c, phaseShoot, time.Now())
+
+	body := `{"id":"n7","move":"paper","sawPunAt":1000000000,"clickedAt":1000000250}`
+	req := httptest.NewRequest(http.MethodPost, "/move", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.handleMove(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	select {
+	case msg := <-c.moves:
+		if msg.sawPun != 1000000000 || msg.click != 1000000250 {
+			t.Errorf("stored timestamps = %d/%d, want 1000000000/1000000250", msg.sawPun, msg.click)
+		}
+	default:
+		t.Fatal("move not buffered")
+	}
+}
+
+func TestHandleMoveIgnoresAbsentTimestamps(t *testing.T) {
+	h := NewHub()
+	c := registerMoveTestClient(h, "n8")
+	newMoveMatch(c, phaseShoot, time.Now())
+
+	rr := postMove(h, "n8", "rock")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	select {
+	case msg := <-c.moves:
+		if msg.sawPun != 0 || msg.click != 0 {
+			t.Errorf("timestamps set for plain move: %d/%d", msg.sawPun, msg.click)
+		}
+	default:
+		t.Fatal("move not buffered")
+	}
+}
