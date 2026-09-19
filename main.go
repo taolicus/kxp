@@ -30,15 +30,8 @@ func main() {
 
 	hub := NewHub()
 
-	mux := http.NewServeMux()
+	mux := hub.routes()
 	mux.Handle("/", http.FileServer(http.FS(sub)))
-	mux.HandleFunc("GET /events", hub.handleEvents)
-	mux.HandleFunc("POST /queue", hub.handleQueue)
-	mux.HandleFunc("POST /cancel", hub.handleCancel)
-	mux.HandleFunc("POST /cpu", hub.handleCPU)
-	mux.HandleFunc("POST /ready", hub.handleReady)
-	mux.HandleFunc("POST /move", hub.handleMove)
-	mux.HandleFunc("POST /character", hub.handleCharacter)
 
 	var listener net.Listener
 	if *addr != "" {

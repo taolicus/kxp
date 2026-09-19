@@ -121,7 +121,12 @@ few seconds, forces a reconnect so the `connected` snapshot reconciles it back
 out; snapshots for a finished (`done`) or already-expired (`shoot`) match route
 straight to the lobby rather than a dead end.
 
-**Testing** — `go test ./...`; client state machine: `node --test web/machine.test.cjs`
+**Testing** — `make test` (or `go test ./...`) runs the Go suite, which now
+includes HTTP/SSE integration tests for the full CPU and PvP match flows,
+concurrent-move submissions, mid-match disconnects, and endpoint validation
+alongside the unit tests; client state machine: `node --test web/machine.test.cjs`.
+(`go test -race` is not supported on the device this is developed on (arm64
+Android); see the Roadmap note under "Automated test workflow" if you add CI.)
 
 **Protocol contract** — the full wire format (events, endpoints, the client
 state table, and clock handling) is specified in [`docs/protocol.md`](docs/protocol.md).
@@ -210,10 +215,13 @@ Make the system testable and debuggable in production.
 
 - [x] **Timing edge-case tests** — exactly-at-PUN, just-after-PUN,
       at-deadline, and after-deadline boundary cases
-- [ ] **Disconnect tests** — disconnect before PUN, after PUN, during match,
-      and after result; verify `opponent-left` in each
-- [ ] **Simultaneous-move tests** — both players submit moves concurrently
-      via goroutines
+- [x] **Disconnect tests** — HTTP/SSE integration test (`TestPVPDisconnectDuringMatch`)
+      disconnects one side mid-match and verifies the survivor receives
+      `opponent-left` and returns to `state idle`; the client stall-watchdog
+      path is covered by the recovery hardening in Phase 1
+- [x] **Simultaneous-move tests** — `TestPVPSimultaneousMove` submits both
+      players' moves concurrently via goroutines and verifies each receives a
+      consistent result with no move lost
 - [x] **Game-state transition tests** — `TestAllowedTransitionTable` walks the
       full valid/invalid edge set, with `TestAdvanceRejectsWrongFrom` and
       `TestAdvanceWinsOnlyOnce` covering rejection and idempotency
@@ -221,8 +229,9 @@ Make the system testable and debuggable in production.
       picker for automated tests
 - [ ] **Request/response logging** — structured logs for connection,
       matchmaking, match lifecycle, and errors
-- [ ] **Automated test workflow** — Makefile test target + `go test -race`
-      in CI when a suitable host is available
+- [x] **Automated test workflow** — `make test` target added; `go test -race` is
+      not runnable on the arm64 Android dev device ("race is not supported on
+      android/arm64"), so wire it into CI whenever a suitable host is available
 
 ### Phase 3 — Architecture & features
 

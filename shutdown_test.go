@@ -10,9 +10,7 @@ import (
 
 func TestHubShutdownEndsSSE(t *testing.T) {
 	h := NewHub()
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /events", h.handleEvents)
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(h.routes())
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/events")

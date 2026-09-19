@@ -103,6 +103,21 @@ func NewHub() *Hub {
 	return &Hub{clients: make(map[string]*Client), down: down, stop: stop}
 }
 
+// routes wires every HTTP endpoint to the hub. The static file server for the
+// embedded web assets is the caller's (main.go) concern, so tests get the API
+// surface without it.
+func (h *Hub) routes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /events", h.handleEvents)
+	mux.HandleFunc("POST /queue", h.handleQueue)
+	mux.HandleFunc("POST /cancel", h.handleCancel)
+	mux.HandleFunc("POST /cpu", h.handleCPU)
+	mux.HandleFunc("POST /ready", h.handleReady)
+	mux.HandleFunc("POST /move", h.handleMove)
+	mux.HandleFunc("POST /character", h.handleCharacter)
+	return mux
+}
+
 func (h *Hub) Shutdown() {
 	h.stop()
 }
