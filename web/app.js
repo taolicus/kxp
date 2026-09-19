@@ -11,8 +11,16 @@ let sawPunAt = 0;
 
 const DEBUG = /[?&]debug/.test(location.search);
 const GAME_STATES = ['countdown', 'shoot', 'locked'];
+const BGS = ['pool', 'forest', 'tomb'];
 
 const $ = (sel) => document.querySelector(sel);
+
+function randomizeBg() {
+  const bg = BGS[Math.floor(Math.random() * BGS.length)];
+  const r = document.documentElement.style;
+  r.setProperty('--bg-anim', `url('/img/bg/${bg}.webp')`);
+  r.setProperty('--bg-static', `url('/img/bg/${bg}-static.webp')`);
+}
 
 function show(view) {
   document.querySelectorAll('.view').forEach((v) => {
@@ -182,6 +190,7 @@ const enter = {
   countdown(d, from) {
     show('game');
     if (!GAME_STATES.includes(from)) {
+      randomizeBg();
       resetGame();
       setYouSlot();
       setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
@@ -195,6 +204,7 @@ const enter = {
   shoot(d, from) {
     show('game');
     if (!GAME_STATES.includes(from)) {
+      randomizeBg();
       resetGame();
       setYouSlot();
       setOppSlot(null, 'Opponent');

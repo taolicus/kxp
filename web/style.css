@@ -33,6 +33,10 @@
   --s3: 1rem;
   --s4: 1.5rem;
   --s5: 2rem;
+
+  /* game-screen background (JS picks one per match) */
+  --bg-anim: url('/img/bg/pool.webp');
+  --bg-static: url('/img/bg/pool-static.webp');
 }
 
 /* 2) Base & reset -------------------------------------------------------- */
@@ -74,7 +78,7 @@ body::before {
 body.in-game::before {
   background-image:
     linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
-    url('/img/bg/pool.webp');
+    var(--bg-anim);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -84,7 +88,7 @@ body.in-game::before {
   body.in-game::before {
     background-image:
       linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
-      url('/img/bg/pool-static.webp');
+      var(--bg-static);
   }
 }
 
