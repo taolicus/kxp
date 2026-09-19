@@ -11,7 +11,7 @@ let sawPunAt = 0;
 
 const DEBUG = /[?&]debug/.test(location.search);
 const GAME_STATES = ['countdown', 'shoot', 'locked'];
-const BGS = ['pool', 'forest', 'tomb'];
+const BGS = ['pool', 'forest', 'tomb', 'arena', 'portal'];
 
 const $ = (sel) => document.querySelector(sel);
 

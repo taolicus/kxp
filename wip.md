@@ -65,5 +65,10 @@ animation as a game-screen background, commit only lightweight artifacts.
 - forest (639x480, 19fr):       webp 408K + static 40K + gif 688K (~1.1M)
 - tomb  (639x480, 160fr -> every 4th): webp 824K + static 40K + gif 1.4M
   (~2.3M, WEBP_QUALITY=65)
+- arena  (636x479, 27fr):       webp 636K + static 44K + gif 944K (~1.6M)
+- portal (636x479, 54fr -> every 2nd): webp 528K + static 24K + gif 1.3M
+  (~1.85M)
+- Game screen picks one at random per match (app.js BGS list).
 - Script knobs: MAX_SOURCE_FRAMES/SAMPLE_FPS/SAMPLE_STEP/WEBP_QUALITY env overrides.
-  Auto-sampling kicks in above 90 source frames; preserves loop duration.
+  Auto-sampling kicks in above 90 source frames; SAMPLE_STEP also forces
+  sampling below the threshold. Loop duration is preserved.

@@ -70,7 +70,7 @@ fi
 
 VF_SAMPLE=""
 VF_ARGS=()
-if [ "${SRC_FRAMES:-0}" -gt "$MAX_SOURCE_FRAMES" ]; then
+if [ "${SRC_FRAMES:-0}" -gt "$MAX_SOURCE_FRAMES" ] || [ "${SAMPLE_STEP:-0}" -gt 1 ]; then
   if [ "${SAMPLE_STEP:-0}" -gt 1 ]; then
     STEP="$SAMPLE_STEP"
   else
