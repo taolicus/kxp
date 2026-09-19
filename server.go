@@ -547,6 +547,13 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
+	// The phase/deadline check below is best-effort and races the run loop:
+	// the deadline may fire between this check and the buffered send, or the
+	// match may resolve. Either way the accepted move is never silently
+	// corrupted: drainPending counts anything buffered before the deadline
+	// fired, and a move that lands after the run loop captured its snapshot is
+	// just drained at finishMatch (it can only lose a round that had already
+	// effectively closed).
 	m := c.match
 	h.mu.Unlock()
 	if m == nil {

@@ -100,8 +100,12 @@ stale goroutine can never clobber a newer phase.
 phase begins. Reaction time is calculated as `arrival.Sub(shootAt)` where
 `arrival` is `time.Now()` captured at POST receipt. Picks outside the 2s shoot
 window are rejected with `400`; failing to pick within it is a timeout loss.
-Displayed reaction times use the client's own click timestamps when provided
-(network-neutral); win/loss remains server-authoritative on arrival time.
+`handleMove`'s phase/deadline check is best-effort and races the deadline
+timer; a move accepted there is never silently dropped — `drainPending` counts
+anything buffered before the deadline, and a straggler is drained at
+`finishMatch` (it can only lose an already-closed round). Displayed reaction
+times use the client's own click timestamps when provided (network-neutral);
+win/loss remains server-authoritative on arrival time.
 
 **Matchmaking** — a single global FIFO queue pairs players under the hub mutex.
 Anonymous clients receive server-issued random IDs on first SSE connection.
