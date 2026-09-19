@@ -231,6 +231,10 @@ Features that depend on identity, persistence, or ranking.
       token, or anonymous persistent ID)
 - [ ] **Lobby / room architecture** — private room creation, joining,
       discovery, and access control
+- [ ] **Send challenge** — a player creates a match and gets a shareable
+      link (`/play?challenge=...` or similar) that any guest can open to
+      join that specific match directly, bypassing the global queue; the
+      host side shows a waiting + cancel state until the challenger joins
 - [ ] **Tournament model** — bracket/round structure for multi-match
       competition
 - [ ] **Solo campaign** — Mortal Kombat–style tower climbing with
