@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"sync/atomic"
 	"time"
@@ -43,7 +42,7 @@ func phaseLabel(v int32) string {
 //	          idle       countdown   shoot
 //	countdown start
 //	shoot                run()
-//	done      --         abort()     abort(), endMatch, run() after resolve
+//	done      --         abort()     abort(), finish(), run() after resolve
 func allowedPhaseEdge(from, to int32) bool {
 	switch from {
 	case phaseIdle:
@@ -57,21 +56,11 @@ func allowedPhaseEdge(from, to int32) bool {
 	}
 }
 
-var stateDebug = false
-
 func (m *match) advance(from, to int32) bool {
 	if !allowedPhaseEdge(from, to) {
-		if stateDebug {
-			fmt.Printf("kxp: illegal phase edge %s -> %s (current %s)\n",
-				phaseLabel(from), phaseLabel(to), m.phaseName())
-		}
 		return false
 	}
 	if !m.phase.CompareAndSwap(from, to) {
-		if stateDebug {
-			fmt.Printf("kxp: stale phase transition %s -> %s (current %s)\n",
-				phaseLabel(from), phaseLabel(to), m.phaseName())
-		}
 		return false
 	}
 	return true
@@ -84,30 +73,49 @@ type moveMsg struct {
 	click  int64
 }
 
-type side struct {
-	client    *Client
+// event is the neutral push primitive the engine emits; the hub wires it to
+// concrete clients (SSE framing in server.go).
+type event struct {
+	Type string
+	Data any
+}
+
+func evt(t string, data any) event {
+	return event{Type: t, Data: data}
+}
+
+// matchParty is everything the engine knows about one side of a match. The hub
+// fills these in from concrete clients (see Hub.makeMatch); the engine never
+// touches Hub, Client, OR SSE types — only channels, callbacks, and values.
+type matchParty struct {
 	bot       bool
+	name      string
 	character string
+	emit      func(event)     // nil for bots: delivers one event to this side
+	moves     <-chan moveMsg  // nil for bots: incoming move stream
+	left      <-chan struct{} // nil for bots: closed once this side leaves
 }
 
 type match struct {
-	hub     *Hub
 	id      string
-	sides   [2]side
+	sides   [2]matchParty
 	botMove chan moveMsg
 	phase   atomic.Int32
 	shootAt time.Time
 	moves   [2]*moveMsg
 	ready   atomic.Int32 // bitmask: bit i set once side i acked readiness
 	readyCh chan struct{}
+
+	// requeue re-queues side i after a failed ready handshake. Hub-provided;
+	// nil in engine-only tests.
+	requeue func(i int)
+	// finish runs exactly once when the match is over (hub cleanup). Must be
+	// provided for any match that actually runs.
+	finish func()
 }
 
-func (h *Hub) makeMatch(id string, s0, s1 side) *match {
-	m := &match{hub: h, id: id, sides: [2]side{s0, s1}, readyCh: make(chan struct{})}
-	if s1.bot {
-		m.botMove = make(chan moveMsg, 1)
-	}
-	return m
+func newMatch(id string) *match {
+	return &match{id: id, readyCh: make(chan struct{})}
 }
 
 // ackReady marks side i as ready to receive the countdown. Idempotent; closes
@@ -167,49 +175,35 @@ func (m *match) waitReady() bool {
 // readyTimeout cancels a match whose pair never acked and re-queues them.
 func (m *match) readyTimeout() {
 	m.advance(phaseCountdown, phaseDone)
-	h := m.hub
-	h.mu.Lock()
-	for _, s := range m.sides {
-		if s.client != nil && s.client.alive.Err() == nil && !s.client.queueing {
-			s.client.queueing = true
-			h.queue = append(h.queue, s.client)
-		}
-	}
-	h.mu.Unlock()
-	go h.tryMatch()
+	m.requeueSide(0)
+	m.requeueSide(1)
 }
 
 // readyAbandon cancels a pending match when side i left before the countdown;
 // the survivor is re-queued rather than awarded any result.
 func (m *match) readyAbandon(i int) {
 	m.advance(phaseCountdown, phaseDone)
-	other := m.sides[1-i]
-	if other.client == nil || other.client.alive.Err() != nil {
-		return
-	}
-	h := m.hub
-	h.mu.Lock()
-	if !other.client.queueing {
-		other.client.queueing = true
-		h.queue = append(h.queue, other.client)
-	}
-	h.mu.Unlock()
-	go h.tryMatch()
+	m.requeueSide(1 - i)
 }
 
-func (m *match) start() {
-	for _, s := range m.sides {
-		if s.client != nil {
-			s.client.match = m
-			s.client.drainMoves()
-		}
+func (m *match) requeueSide(i int) {
+	if m.requeue != nil {
+		m.requeue(i)
 	}
+}
+
+// start advances idle -> countdown and runs the match concurrently.
+func (m *match) start() {
 	m.advance(phaseIdle, phaseCountdown)
 	go m.run()
 }
 
 func (m *match) run() {
-	defer m.hub.endMatch(m)
+	defer func() {
+		if m.finish != nil {
+			m.finish()
+		}
+	}()
 
 	if m.left() {
 		m.abort()
@@ -315,7 +309,7 @@ func (m *match) moveCh(i int) <-chan moveMsg {
 	if m.sides[i].bot {
 		return m.botMove
 	}
-	return m.sides[i].client.moves
+	return m.sides[i].moves
 }
 
 // takeFirst returns the first move pending on side i's channel without
@@ -343,46 +337,50 @@ func (m *match) drainPending() {
 }
 
 func (m *match) leftCh(i int) <-chan struct{} {
-	s := m.sides[i]
-	if s.client == nil {
-		return nil
-	}
-	return s.client.alive.Done()
+	return m.sides[i].left
 }
 
 func (m *match) left() bool {
-	for _, s := range m.sides {
-		if s.client != nil && s.client.alive.Err() != nil {
+	for i := range m.sides {
+		if ch := m.sides[i].left; ch != nil && isClosed(ch) {
 			return true
 		}
 	}
 	return false
 }
 
-func (m *match) send(i int, ev sseEv) {
-	if s := m.sides[i]; s.client != nil {
-		s.client.sendEv(ev)
+func isClosed(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
 	}
+}
+
+func (m *match) send(i int, ev event) {
+	if s := m.sides[i]; s.emit != nil {
+		s.emit(ev)
+	}
+}
+
+// indexOfMoves returns the side whose move stream is ch, or -1. Used by the
+// hub to map a concrete client back to a party (snapshot, ready ack).
+func (m *match) indexOfMoves(ch <-chan moveMsg) int {
+	for i := range m.sides {
+		if !m.sides[i].bot && m.sides[i].moves == ch {
+			return i
+		}
+	}
+	return -1
 }
 
 func (m *match) opponentName(i int) string {
-	if m.sides[1-i].bot {
-		return "CPU"
-	}
-	return "Opponent"
+	return m.sides[1-i].name
 }
 
 func (m *match) sideCharacter(i int) string {
-	s := m.sides[i]
-	if s.bot {
-		return s.character
-	}
-	if s.client == nil {
-		return defaultCharacterID()
-	}
-	m.hub.mu.Lock()
-	defer m.hub.mu.Unlock()
-	return s.client.character
+	return m.sides[i].character
 }
 
 func (m *match) opponentCharacter(i int) string {
@@ -479,13 +477,17 @@ func (m *match) abort() {
 	if !m.advance(phaseShoot, phaseDone) && !m.advance(phaseCountdown, phaseDone) {
 		return
 	}
-	for i, s := range m.sides {
-		if s.client == nil || s.client.alive.Err() == nil {
+	for i := range m.sides {
+		side := m.sides[i]
+		if side.emit == nil {
+			continue
+		}
+		if side.left != nil && !isClosed(side.left) {
 			continue
 		}
 		other := m.sides[1-i]
-		if other.client != nil && other.client.alive.Err() == nil {
-			other.client.sendEv(evt("opponent-left", map[string]any{"outcome": ResultWin, "mode": "online"}))
+		if other.emit != nil && (other.left == nil || !isClosed(other.left)) {
+			m.send(1-i, evt("opponent-left", map[string]any{"outcome": ResultWin, "mode": "online"}))
 		}
 	}
 }

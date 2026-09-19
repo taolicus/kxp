@@ -224,8 +224,12 @@ Make the system testable and debuggable in production.
 
 Build on a stable foundation without rewriting the core.
 
-- [ ] **Pure game engine** — extract the state machine from `round.go` so
-      it depends only on interfaces, not on `Hub`/`Client`/SSE
+- [x] **Pure game engine** — `round.go`'s `match` no longer touches `Hub`,
+      `Client`, or SSE. Each side is a neutral `matchParty` (emit callback +
+      move/left channels + name/character), and the hub wires the engine's
+      `finish`/`requeue` callbacks back to real clients when it builds a match,
+      so the whole lifecycle, timing, and resolve logic is testable and
+      reusable without a hub or a wire.
 - [ ] **Game-mode architecture** — refactor `run()`/`resolve()` to support
       best-of-N and multi-round modes
 - [ ] **Player names** — defined model for assignment, validation, and

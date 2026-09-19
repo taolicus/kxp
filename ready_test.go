@@ -75,7 +75,7 @@ func TestReadyTimeoutRequeuesBoth(t *testing.T) {
 	m.start()
 
 	waitForEvent(t, a, "matched")
-	// Neither side acks: after readyTimeout both are re-queued and endMatch
+	// Neither side acks: after readyTimeout both are re-queued and finishMatch
 	// emits state idle (they may be instantly re-matched, which is fine).
 	d := waitForEvent(t, a, "state")
 	if d["state"] != "idle" {

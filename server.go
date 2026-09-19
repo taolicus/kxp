@@ -15,13 +15,12 @@ import (
 
 const maxBodyBytes = 1 << 10
 
-type sseEv struct {
-	Type string
-	Data any
-}
-
-func evt(t string, data any) sseEv {
-	return sseEv{Type: t, Data: data}
+// side is the hub-level view of one side of a match: the concrete client plus
+// match-time facts. Hub.makeMatch turns it into an engine matchParty.
+type side struct {
+	client    *Client
+	bot       bool
+	character string
 }
 
 var (
@@ -41,7 +40,7 @@ func logDroppedEvent(typ string, c *Client) {
 	log.Printf("kxp: dropped %q event for client %s (send backlog full)", typ, c.id)
 }
 
-func encodeEv(ev sseEv) []byte {
+func encodeEv(ev event) []byte {
 	b, err := json.Marshal(ev.Data)
 	if err != nil {
 		b = []byte("{}")
@@ -74,7 +73,7 @@ func newClient() *Client {
 	}
 }
 
-func (c *Client) sendEv(ev sseEv) {
+func (c *Client) sendEv(ev event) {
 	b := encodeEv(ev)
 	select {
 	case c.send <- b:
@@ -276,18 +275,15 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 		m := c.match
 		out["state"] = "ingame"
 		out["phase"] = m.phaseName()
+		if i := m.indexOfMoves(c.moves); i >= 0 {
+			out["opponentName"] = m.opponentName(i)
+			out["opponentCharacter"] = m.opponentCharacter(i)
+		}
 		if out["phase"] == "shoot" {
 			out["windowMs"] = shootWindow.Milliseconds()
 			out["shootAt"] = m.shootAt.UnixMilli()
 		}
-		for i, s := range m.sides {
-			if s.client == c {
-				out["opponentName"] = m.opponentName(i)
-				out["opponentCharacter"] = m.opponentCharacter(i)
-				break
-			}
-		}
-		if out["phase"] == "countdown" && c.match.needsReady() && !c.match.bothReady() {
+		if out["phase"] == "countdown" && m.needsReady() && !m.bothReady() {
 			out["pending"] = true
 		}
 	} else if c.queueing {
@@ -348,26 +344,68 @@ func (h *Hub) tryMatch() {
 	h.mu.Unlock()
 }
 
-func (h *Hub) startMatchLocked(m *match) {
-	for _, s := range m.sides {
+// makeMatch builds an engine match from concrete sides and wires the engine's
+// callbacks back to the hub. Callers must hold h.mu.
+func (h *Hub) makeMatch(id string, a, b side) *match {
+	src := [2]side{a, b}
+	m := newMatch(id)
+	for i := range src {
+		p := matchParty{name: "Opponent", character: src[i].character}
+		if src[i].client == nil {
+			p.bot = true
+			p.name = "CPU"
+		} else {
+			p.character = src[i].client.character
+			p.emit = src[i].client.sendEv
+			p.moves = src[i].client.moves
+			p.left = src[i].client.alive.Done()
+		}
+		m.sides[i] = p
+	}
+	if b.bot {
+		m.botMove = make(chan moveMsg, 1)
+	}
+	m.requeue = func(i int) {
+		s := src[i]
+		if s.client == nil {
+			return
+		}
+		h.mu.Lock()
+		if s.client.alive.Err() == nil && !s.client.queueing {
+			s.client.queueing = true
+			h.queue = append(h.queue, s.client)
+		}
+		h.mu.Unlock()
+		go h.tryMatch()
+	}
+	m.finish = func() { h.finishMatch(m, src) }
+
+	for _, s := range src {
 		if s.client != nil {
+			s.client.drainMoves()
 			s.client.match = m
 		}
 	}
+	return m
+}
+
+func (h *Hub) startMatchLocked(m *match) {
 	m.start()
 }
 
-func (h *Hub) endMatch(m *match) {
+// finishMatch tears down a finished or abandoned match: clears each client's
+// match pointer, drains stale moves, and tells both sides to return to idle.
+func (h *Hub) finishMatch(m *match, sides [2]side) {
 	m.advance(phaseShoot, phaseDone)
 	m.advance(phaseCountdown, phaseDone)
 	h.mu.Lock()
-	for _, s := range m.sides {
+	for _, s := range sides {
 		if s.client != nil && s.client.match == m {
 			s.client.match = nil
 		}
 	}
 	h.mu.Unlock()
-	for _, s := range m.sides {
+	for _, s := range sides {
 		if s.client != nil {
 			s.client.drainMoves()
 			s.client.sendEv(evt("state", map[string]any{"state": "idle"}))
@@ -438,11 +476,8 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "no active match")
 		return
 	}
-	for i, s := range m.sides {
-		if s.client == c {
-			m.ackReady(i)
-			break
-		}
+	if i := m.indexOfMoves(c.moves); i >= 0 {
+		m.ackReady(i)
 	}
 	w.Write([]byte("{}"))
 }

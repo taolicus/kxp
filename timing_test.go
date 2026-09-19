@@ -21,9 +21,8 @@ func ms(v int64) *int64 { return &v }
 
 func resolveTimed(t *testing.T, aOff, bOff time.Duration) (map[string]any, map[string]any) {
 	t.Helper()
-	h := NewHub()
 	a, b := newClient(), newClient()
-	m := &match{hub: h, id: "tm", sides: [2]side{{client: a}, {client: b}}}
+	m := newPartiedMatch(a, b)
 	a.match, b.match = m, m
 	shootAt := time.Now()
 	m.shootAt = shootAt
@@ -97,9 +96,8 @@ func TestResolveEarlyNeverTimesOut(t *testing.T) {
 
 func resolveTimedClient(t *testing.T, aArrive time.Duration, aReaction time.Duration) (map[string]any, map[string]any) {
 	t.Helper()
-	h := NewHub()
 	a, b := newClient(), newClient()
-	m := &match{hub: h, id: "tmc", sides: [2]side{{client: a}, {client: b}}}
+	m := newPartiedMatch(a, b)
 	a.match, b.match = m, m
 	shootAt := time.Now()
 	m.shootAt = shootAt
@@ -148,9 +146,8 @@ func TestClientReactionSpoofedIgnored(t *testing.T) {
 	}
 	for _, tc := range clients {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewHub()
 			a, b := newClient(), newClient()
-			m := &match{hub: h, id: "tmx", sides: [2]side{{client: a}, {client: b}}}
+			m := newPartiedMatch(a, b)
 			a.match, b.match = m, m
 			shootAt := time.Now()
 			m.shootAt = shootAt

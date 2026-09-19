@@ -22,24 +22,24 @@ func TestStartDrainsLeftoverMoves(t *testing.T) {
 	a.cancel()
 }
 
-func TestEndMatchDrainsLeftoverMoves(t *testing.T) {
+func TestFinishDrainsLeftoverMoves(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := &match{hub: h, id: "ml2", sides: [2]side{{client: a}, {client: b}}}
+	m := h.makeMatch("ml2", side{client: a}, side{client: b})
 	a.match = m
 	b.match = m
 	a.moves <- moveMsg{move: MovePaper, arrive: time.Now()}
 	b.moves <- moveMsg{move: MoveScissors, arrive: time.Now()}
 
-	h.endMatch(m)
+	m.finish()
 
 	if a.match != nil || b.match != nil {
-		t.Error("endMatch() left client.match set")
+		t.Error("finish() left client.match set")
 	}
 	for i, c := range []*Client{a, b} {
 		select {
 		case msg := <-c.moves:
-			t.Errorf("endMatch() left stale move for client %d: %+v", i, msg)
+			t.Errorf("finish() left stale move for client %d: %+v", i, msg)
 		default:
 		}
 	}
