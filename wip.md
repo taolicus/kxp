@@ -55,14 +55,15 @@ animation as a game-screen background, commit only lightweight artifacts.
 - Source images live in gitignored `web/img/sources/`.
 
 ## Results (as of build)
-- web/img/bg/mk2.webp         356K, 58 frames, infinite loop, 799x242
-- web/img/bg/mk2-static.webp   40K
-- web/img/bg/mk2.gif           272K, 58 frames, 5.75s (matches source timing)
+- web/img/bg/pool.webp         356K, 58 frames, infinite loop, 799x242
+- web/img/bg/pool-static.webp   40K
+- web/img/bg/pool.gif           272K, 58 frames, 5.75s (matches source timing)
 - Source 6.7M -> ~668K total (~10x reduction)
 
-## Additional backgrounds (as of build)
-- living-forest2 (639x480, 19fr): webp 408K + static 40K + gif 688K (~1.1M)
-- kombat-tomb (639x480, 160fr @ ~24fps -> sampled every 4th):
-  webp 824K + static 40K + gif 1.4M (~2.3M), WEBP_QUALITY=65
+## Backgrounds (renamed; naming scheme <name>.webp / -static.webp / .gif)
+- pool  (799x242, 58fr):        webp 356K + static 40K + gif 272K (~668K)
+- forest (639x480, 19fr):       webp 408K + static 40K + gif 688K (~1.1M)
+- tomb  (639x480, 160fr -> every 4th): webp 824K + static 40K + gif 1.4M
+  (~2.3M, WEBP_QUALITY=65)
 - Script knobs: MAX_SOURCE_FRAMES/SAMPLE_FPS/SAMPLE_STEP/WEBP_QUALITY env overrides.
   Auto-sampling kicks in above 90 source frames; preserves loop duration.

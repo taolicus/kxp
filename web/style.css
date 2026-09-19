@@ -74,7 +74,7 @@ body::before {
 body.in-game::before {
   background-image:
     linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
-    url('/img/bg/mk2.webp');
+    url('/img/bg/pool.webp');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -84,7 +84,7 @@ body.in-game::before {
   body.in-game::before {
     background-image:
       linear-gradient(rgba(15, 17, 23, 0.55), rgba(15, 17, 23, 0.78)),
-      url('/img/bg/mk2-static.webp');
+      url('/img/bg/pool-static.webp');
   }
 }
 
