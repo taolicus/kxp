@@ -94,7 +94,9 @@ a renderer only.
 `countdown` → `shoot` (PUN) → `done`, tracked via an `atomic.Int32` on the
 `match` struct. Every phase change goes through `advance(from, to)`, which
 rejects illegal edges (see `allowedPhaseEdge`) and uses `CompareAndSwap` so a
-stale goroutine can never clobber a newer phase.
+stale goroutine can never clobber a newer phase. The engine never prints debug
+state (no `stateDebug`-style diagnostics); observability is the structured
+`log` in `server.go`.
 
 **Timing model** — the server records `shootAt = time.Now()` when the shoot
 phase begins. Reaction time is calculated as `arrival.Sub(shootAt)` where
