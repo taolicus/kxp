@@ -119,6 +119,9 @@ straight to the lobby rather than a dead end.
 
 **Testing** — `go test ./...`; client state machine: `node --test web/machine.test.cjs`
 
+**Protocol contract** — the full wire format (events, endpoints, the client
+state table, and clock handling) is specified in [`docs/protocol.md`](docs/protocol.md).
+
 ## Roadmap
 
 ### Phase 1 — Core hardening
