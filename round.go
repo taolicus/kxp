@@ -67,10 +67,10 @@ func (m *match) advance(from, to int32) bool {
 }
 
 type moveMsg struct {
-	move   Move
-	arrive time.Time
-	sawPun int64
-	click  int64
+	move      Move
+	arrive    time.Time
+	sawPunAt  int64
+	clickedAt int64
 }
 
 // event is the neutral push primitive the engine emits; the hub wires it to
@@ -466,10 +466,10 @@ func timingMs(p pickOutcome) *int64 {
 }
 
 func clientReactionMs(msg *moveMsg) *int64 {
-	if msg.sawPun <= 0 || msg.click <= 0 || msg.click < msg.sawPun {
+	if msg.sawPunAt <= 0 || msg.clickedAt <= 0 || msg.clickedAt < msg.sawPunAt {
 		return nil
 	}
-	ms := msg.click - msg.sawPun
+	ms := msg.clickedAt - msg.sawPunAt
 	return &ms
 }
 

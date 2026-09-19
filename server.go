@@ -590,8 +590,8 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 	}
 	msg := moveMsg{move: move, arrive: time.Now()}
 	if req.SawPunAt > 0 && req.ClickedAt > 0 {
-		msg.sawPun = req.SawPunAt
-		msg.click = req.ClickedAt
+		msg.sawPunAt = req.SawPunAt
+		msg.clickedAt = req.ClickedAt
 	}
 	select {
 	case c.moves <- msg:

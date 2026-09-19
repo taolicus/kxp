@@ -170,8 +170,8 @@ func TestHandleMoveStoresClientTimestamps(t *testing.T) {
 	}
 	select {
 	case msg := <-c.moves:
-		if msg.sawPun != 1000000000 || msg.click != 1000000250 {
-			t.Errorf("stored timestamps = %d/%d, want 1000000000/1000000250", msg.sawPun, msg.click)
+		if msg.sawPunAt != 1000000000 || msg.clickedAt != 1000000250 {
+			t.Errorf("stored timestamps = %d/%d, want 1000000000/1000000250", msg.sawPunAt, msg.clickedAt)
 		}
 	default:
 		t.Fatal("move not buffered")
@@ -189,8 +189,8 @@ func TestHandleMoveIgnoresAbsentTimestamps(t *testing.T) {
 	}
 	select {
 	case msg := <-c.moves:
-		if msg.sawPun != 0 || msg.click != 0 {
-			t.Errorf("timestamps set for plain move: %d/%d", msg.sawPun, msg.click)
+		if msg.sawPunAt != 0 || msg.clickedAt != 0 {
+			t.Errorf("timestamps set for plain move: %d/%d", msg.sawPunAt, msg.clickedAt)
 		}
 	default:
 		t.Fatal("move not buffered")

@@ -101,8 +101,8 @@ func resolveTimedClient(t *testing.T, aArrive time.Duration, aReaction time.Dura
 	a.match, b.match = m, m
 	shootAt := time.Now()
 	m.shootAt = shootAt
-	const sawPun = int64(1_000_000_000)
-	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(aArrive), sawPun: sawPun, click: sawPun + aReaction.Milliseconds()}
+	const sawPunAt = int64(1_000_000_000)
+	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(aArrive), sawPunAt: sawPunAt, clickedAt: sawPunAt + aReaction.Milliseconds()}
 	m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(time.Millisecond)}
 	m.resolve()
 	ra := waitForEvent(t, a, "result")
@@ -136,13 +136,13 @@ func TestClientReactionExcludesNetwork(t *testing.T) {
 
 func TestClientReactionSpoofedIgnored(t *testing.T) {
 	clients := []struct {
-		name   string
-		sawPun int64
-		click  int64
+		name      string
+		sawPunAt  int64
+		clickedAt int64
 	}{
-		{name: "click-before-pun", sawPun: 1_000_000_000, click: 999_999_999},
-		{name: "zero-timestamps", sawPun: 0, click: 0},
-		{name: "negative-click", sawPun: 1_000_000_000, click: -1},
+		{name: "click-before-pun", sawPunAt: 1_000_000_000, clickedAt: 999_999_999},
+		{name: "zero-timestamps", sawPunAt: 0, clickedAt: 0},
+		{name: "negative-click", sawPunAt: 1_000_000_000, clickedAt: -1},
 	}
 	for _, tc := range clients {
 		t.Run(tc.name, func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestClientReactionSpoofedIgnored(t *testing.T) {
 			a.match, b.match = m, m
 			shootAt := time.Now()
 			m.shootAt = shootAt
-			m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(time.Millisecond), sawPun: tc.sawPun, click: tc.click}
+			m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(time.Millisecond), sawPunAt: tc.sawPunAt, clickedAt: tc.clickedAt}
 			m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(2 * time.Millisecond)}
 			m.resolve()
 			ra := waitForEvent(t, a, "result")
