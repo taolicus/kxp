@@ -174,3 +174,31 @@ func TestCPURound(t *testing.T) {
 		t.Errorf("outcome = %v, want win/loss/draw", ra["outcome"])
 	}
 }
+
+func TestDrainPendingCountsBufferedMove(t *testing.T) {
+	h := NewHub()
+	a := newClient()
+	m := h.makeMatch("dr1", side{client: a}, side{bot: true})
+	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}
+
+	m.drainPending()
+
+	if m.moves[0] == nil || m.moves[0].move != MoveRock {
+		t.Fatalf("moves[0] = %+v, want buffered rock pick counted", m.moves[0])
+	}
+	if m.moves[1] != nil {
+		t.Errorf("moves[1] = %+v, want nil with no bot move pending", m.moves[1])
+	}
+}
+
+func TestDrainPendingLeavesEmptyChannelAsTimeout(t *testing.T) {
+	h := NewHub()
+	a := newClient()
+	m := h.makeMatch("dr0", side{client: a}, side{bot: true})
+
+	m.drainPending()
+
+	if m.moves[0] != nil || m.moves[1] != nil {
+		t.Fatalf("drainPending filled empty channels: %+v / %+v", m.moves[0], m.moves[1])
+	}
+}

@@ -170,6 +170,7 @@ loop:
 				m.moves[1] = &msg
 			}
 		case <-deadline.C:
+			m.drainPending()
 			break loop
 		case <-m.leftCh(0):
 			m.abort()
@@ -215,6 +216,30 @@ func (m *match) moveCh(i int) <-chan moveMsg {
 		return m.botMove
 	}
 	return m.sides[i].client.moves
+}
+
+// takeFirst returns the first move pending on side i's channel without
+// blocking; ok is false when the channel is empty.
+func (m *match) takeFirst(i int) (msg moveMsg, ok bool) {
+	select {
+	case msg = <-m.moveCh(i):
+		return msg, true
+	default:
+		return moveMsg{}, false
+	}
+}
+
+// drainPending counts any move accepted into a side's channel before the
+// deadline fired, so an on-time tap is never dropped by a scheduler coin-flip
+// between the moves channel and the deadline timer.
+func (m *match) drainPending() {
+	for i := 0; i < 2; i++ {
+		if m.moves[i] == nil {
+			if msg, ok := m.takeFirst(i); ok {
+				m.moves[i] = &msg
+			}
+		}
+	}
 }
 
 func (m *match) leftCh(i int) <-chan struct{} {

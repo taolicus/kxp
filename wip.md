@@ -72,3 +72,12 @@ animation as a game-screen background, commit only lightweight artifacts.
 - Script knobs: MAX_SOURCE_FRAMES/SAMPLE_FPS/SAMPLE_STEP/WEBP_QUALITY env overrides.
   Auto-sampling kicks in above 90 source frames; SAMPLE_STEP also forces
   sampling below the threshold. Loop duration is preserved.
+
+## Minor work log
+- Flavor A deadline determinism: run loop drains each side's channel when the
+  shoot timer fires (round.go drainPending/takeFirst), so an on-time tap is
+  never dropped by the channel-vs-timer scheduler coin-flip. Added
+  TestDrainPendingCountsBufferedMove / TestDrainPendingLeavesEmptyChannelAsTimeout.
+  README: ticked Deterministic deadline enforcement, Game-state transition
+  tests, Random fight backgrounds; added unchecked "Latency compensation"
+  Phase 1 item for a future server-side grace window.

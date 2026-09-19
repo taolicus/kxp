@@ -163,12 +163,19 @@ Fix correctness and safety issues that affect reliability on a public server.
       queue length; reject with `503` when full
 - [ ] **Anonymous abuse prevention** — enforce a max number of anonymous
       clients per IP or time window
-- [ ] **Deterministic deadline enforcement** — `resolve()` accepts a pick
-      whose `arrive` is past the shoot deadline whenever its `moveMsg` reaches
-      the match (it only checks `timing >= 0`), so the run-loop's channel-vs-
-      timer race decides the outcome at the exact shoot-window boundary. Enforce
-      `arrive <= shootAt+shootWindow` inside `resolve()` so a late pick always
-      resolves as a timeout, making the at-deadline result deterministic.
+- [x] **Deterministic deadline enforcement** — a move accepted before the
+      deadline is now always counted: when the shoot-window timer fires, the
+      run loop drains each side's channel (`drainPending`) instead of leaving
+      the outcome to a scheduler coin-flip between the channel read and the
+      timer. Moves that arrive after the deadline are still rejected by
+      `handleMove` (`400 too late`), so an on-time tap never silently drops as
+      a timeout.
+- [ ] **Latency compensation** — network latency still shrinks the *effective*
+      window for high-latency players while the advertised window stays 2s: an
+      on-time reaction can be dropped as `400 too late` if its HTTP request
+      lands just after the deadline. Revisit a small server-side acceptance
+      grace and/or a `clickedAt`-based cutoff once real pings are known
+      (win/loss must stay arrival-time-authoritative; see Phase 4 anti-cheat).
 
 ### Phase 2 — Testing & observability
 
@@ -180,8 +187,9 @@ Make the system testable and debuggable in production.
       and after result; verify `opponent-left` in each
 - [ ] **Simultaneous-move tests** — both players submit moves concurrently
       via goroutines
-- [ ] **Game-state transition tests** — verify every valid transition and
-      reject invalid ones
+- [x] **Game-state transition tests** — `TestAllowedTransitionTable` walks the
+      full valid/invalid edge set, with `TestAdvanceRejectsWrongFrom` and
+      `TestAdvanceWinsOnlyOnce` covering rejection and idempotency
 - [ ] **CPU determinism hooks** — inject a deterministic clock and move
       picker for automated tests
 - [ ] **Request/response logging** — structured logs for connection,
@@ -221,6 +229,8 @@ Features that depend on identity, persistence, or ranking.
       player seeing no result. Options for later: resume a live match plus a
       short (2–3s) forfeit grace, vs. accepting forfeits for such a quick
       game. Revisit once public play shows how often drops actually occur.
-- [ ] **Random fight backgrounds** — display a random background scenario
-      (arena/stage) for each fight, chosen server-side and sent to clients
-      via SSE
+- [x] **Random fight backgrounds** — each match picks one of five stages at
+      random. Implemented client-side: `app.js` keeps a `BGS` roster and
+      `randomizeBg()` sets `--bg-anim`/`--bg-static` on the document (the
+      animated WebP plus its reduced-motion static frame), so the stage
+      changes between fights with no server round-trip.
