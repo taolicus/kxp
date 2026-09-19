@@ -8,6 +8,22 @@ let es = null;
 let shootTimer = null;
 let punWindowMs = 2000;
 let sawPunAt = 0;
+let stallTimer = null;
+
+// Last-resort recovery: if a PUN result never arrives (dropped SSE event,
+// wedged connection) we're stuck in a game state with nothing left to do.
+// Reconnect so the server snapshot reconciles us out of it. The watchdog is
+// only armed while a game view is live and disarms as soon as any transition
+// leaves the active round.
+function armStallWatchdog() {
+  clearTimeout(stallTimer);
+  stallTimer = setTimeout(() => {
+    if (state !== 'shoot' && state !== 'countdown') return;
+    if (DEBUG) console.warn('kxp: stalled in game state, re-syncing via reconnect');
+    es.close();
+    connect();
+  }, 6000);
+}
 
 const DEBUG = /[?&]debug/.test(location.search);
 const GAME_STATES = ['countdown', 'shoot', 'locked'];
@@ -200,17 +216,20 @@ function transition(ev, data) {
 const enter = {
   lobby() {
     stopReadyLoop();
+    clearTimeout(stallTimer);
     resetGame();
     show('lobby');
   },
 
   waiting() {
     stopReadyLoop();
+    clearTimeout(stallTimer);
     show('queue');
   },
 
   matched(d) {
     stopReadyLoop();
+    clearTimeout(stallTimer);
     show('game');
     randomizeBg();
     resetGame();
@@ -221,6 +240,7 @@ const enter = {
   },
 
   countdown(d, from) {
+    clearTimeout(stallTimer);
     show('game');
     if (from === 'matched') {
       stopReadyLoop();
@@ -240,6 +260,7 @@ const enter = {
     stopReadyLoop();
     const elapsed = d.shootAt ? Date.now() - d.shootAt : 0;
     const remaining = d.windowMs ? Math.max(0, d.windowMs - elapsed) : punWindowMs;
+    armStallWatchdog();
     show('game');
     if (!GAME_STATES.includes(from)) {
       randomizeBg();
@@ -279,6 +300,7 @@ const enter = {
   result(d) {
     stopReadyLoop();
     clearTimeout(shootTimer);
+    clearTimeout(stallTimer);
     lockMoves();
     lastMode = d.mode || 'online';
     const s = getStats();
@@ -309,7 +331,14 @@ function connect() {
     post('/character', { character: loadCharacter() });
     if (d.state === 'waiting') transition('snapshot:waiting', d);
     else if (d.state === 'ingame') {
-      if (d.phase === 'countdown' && d.pending) transition('snapshot:matched', d);
+      if (d.phase === 'done') {
+        // Match already finished; there is no result to catch up on.
+        transition('snapshot:idle', d);
+      } else if (d.phase === 'countdown' && d.pending) transition('snapshot:matched', d);
+      else if (d.phase === 'shoot' && d.shootAt && d.windowMs && Date.now() - d.shootAt >= d.windowMs) {
+        // PUN window already closed; nothing playable to rejoin.
+        transition('snapshot:idle', d);
+      }
       else transition(d.phase === 'shoot' ? 'snapshot:shoot' : 'snapshot:countdown', d);
     }
     else transition('snapshot:idle', d);

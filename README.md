@@ -109,7 +109,13 @@ Anonymous clients receive server-issued random IDs on first SSE connection.
 **SSE lifecycle** — connections are guarded by a `connID` freshness check so a
 newer connection survives an overlapping reconnection. A 20-second keepalive
 comment frame prevents idle-proxy disconnection. Disconnect cancels the client's
-`alive` context, which triggers match abandonment and notifies the opponent.
+`alive` context, which triggers match abandonment and notifies the opponent. If
+a client's event backlog ever overflows its send buffer, the server logs the
+dropped push (`send backlog full`) instead of dropping it silently. The client
+arms a stall watchdog while a round is live and, if no result arrives within a
+few seconds, forces a reconnect so the `connected` snapshot reconciles it back
+out; snapshots for a finished (`done`) or already-expired (`shoot`) match route
+straight to the lobby rather than a dead end.
 
 **Testing** — `go test ./...`; client state machine: `node --test web/machine.test.cjs`
 

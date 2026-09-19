@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -21,6 +22,23 @@ type sseEv struct {
 
 func evt(t string, data any) sseEv {
 	return sseEv{Type: t, Data: data}
+}
+
+var (
+	dropLogMu     sync.Mutex
+	lastDropLogAt time.Time
+)
+
+// logDroppedEvent logs a silently dropped push at most once per two seconds so
+// a wedged SSE connection shows up in the server log instead of vanishing.
+func logDroppedEvent(typ string, c *Client) {
+	dropLogMu.Lock()
+	defer dropLogMu.Unlock()
+	if time.Since(lastDropLogAt) < 2*time.Second {
+		return
+	}
+	lastDropLogAt = time.Now()
+	log.Printf("kxp: dropped %q event for client %s (send backlog full)", typ, c.id)
 }
 
 func encodeEv(ev sseEv) []byte {
@@ -61,6 +79,7 @@ func (c *Client) sendEv(ev sseEv) {
 	select {
 	case c.send <- b:
 	default:
+		logDroppedEvent(ev.Type, c)
 	}
 }
 
@@ -302,6 +321,7 @@ func (c *Client) sendEvRaw(b []byte) {
 	select {
 	case c.send <- b:
 	default:
+		logDroppedEvent("raw", c)
 	}
 }
 
