@@ -10,8 +10,8 @@ original terminal game.
 - **Play Online** — matchmaking pairs you with another player, synced countdown
   and a shared **PUN!** instant.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay.
-- **Timing rules** — picks outside the shoot window are rejected with `400`; no
-  pick within 2s of PUN is a timeout loss.
+- **Timing rules** — picks outside the shoot window are rejected with `400`
+  (a second pick with `409`); no pick within 2s of PUN is a timeout loss.
 - Server-sent events (SSE) for push, plain `POST` for player actions — no
   WebSocket dependency.
 
@@ -100,7 +100,8 @@ stale goroutine can never clobber a newer phase.
 phase begins. Reaction time is calculated as `arrival.Sub(shootAt)` where
 `arrival` is `time.Now()` captured at POST receipt. Picks outside the 2s shoot
 window are rejected with `400`; failing to pick within it is a timeout loss.
-Displayed reaction times include network round-trip latency.
+Displayed reaction times use the client's own click timestamps when provided
+(network-neutral); win/loss remains server-authoritative on arrival time.
 
 **Matchmaking** — a single global FIFO queue pairs players under the hub mutex.
 Anonymous clients receive server-issued random IDs on first SSE connection.
@@ -177,9 +178,11 @@ Fix correctness and safety issues that affect reliability on a public server.
       "match found" state instead of an already-expired window. If a pair
       never acks (timeout or disconnect), the pending match is cancelled and
       the surviving side(s) re-queued. CPU matches skip the handshake. A
-      `shootAt` field in the `shoot` event lets the client skip showing a PUN
-      whose window already closed before delivery, waiting instead for the
-      authoritative result.
+      `shootAt` field in the `shoot` event lets the client measure how much of
+      the PUN window actually remains: it still lets the player act for that
+      remaining time whenever any is left (only a fully closed window shows
+      "Waiting for result…"), so client clock skew or delivery lag can never
+      rob a player of a still-open server window.
 - [ ] **Latency compensation** — the ready handshake removes the stale/remote
       burst, but one-way delivery latency can still shrink the *effective*
       window for high-latency players: an on-time reaction can be dropped as
