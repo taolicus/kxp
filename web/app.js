@@ -238,12 +238,8 @@ const enter = {
 
   shoot(d, from) {
     stopReadyLoop();
-    if (d.shootAt && d.windowMs && Date.now() - d.shootAt >= d.windowMs) {
-      // The server already closed this window before it reached us; show no
-      // doomed PUN, just wait for the authoritative result.
-      setCount('Waiting for result\u2026');
-      return;
-    }
+    const elapsed = d.shootAt ? Date.now() - d.shootAt : 0;
+    const remaining = d.windowMs ? Math.max(0, d.windowMs - elapsed) : punWindowMs;
     show('game');
     if (!GAME_STATES.includes(from)) {
       randomizeBg();
@@ -251,13 +247,20 @@ const enter = {
       setYouSlot();
       setOppSlot(null, 'Opponent');
     }
-    sawPunAt = Date.now();
-    if (d.windowMs) punWindowMs = d.windowMs;
-    setCount('PUN!');
-    $('#stage').classList.add('go');
-    enableMoves();
     clearTimeout(shootTimer);
-    shootTimer = setTimeout(() => transition('lock'), punWindowMs);
+    if (remaining > 0) {
+      sawPunAt = Date.now();
+      punWindowMs = remaining;
+      setCount('PUN!');
+      $('#stage').classList.add('go');
+      enableMoves();
+      shootTimer = setTimeout(() => transition('lock'), remaining);
+    } else {
+      // The window is already past (delivery lag or client clock skew); show
+      // no doomed PUN, just wait for the authoritative result.
+      setCount('Waiting for result\u2026');
+      shootTimer = setTimeout(() => transition('lock'), 50);
+    }
   },
 
   locked(d) {
