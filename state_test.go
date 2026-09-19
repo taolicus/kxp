@@ -70,6 +70,8 @@ func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
 	waitForEvent(t, a, "shoot")
 	waitForEvent(t, b, "shoot")
 

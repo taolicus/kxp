@@ -48,6 +48,8 @@ func TestRoundCarriesCharacters(t *testing.T) {
 	if opp != "subzero" {
 		t.Errorf("a matched opponentCharacter = %q, want subzero", opp)
 	}
+	m.ackReady(0)
+	m.ackReady(1)
 
 	waitForEvent(t, a, "shoot")
 	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}

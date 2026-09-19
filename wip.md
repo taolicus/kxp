@@ -81,3 +81,15 @@ animation as a game-screen background, commit only lightweight artifacts.
   README: ticked Deterministic deadline enforcement, Game-state transition
   tests, Random fight backgrounds; added unchecked "Latency compensation"
   Phase 1 item for a future server-side grace window.
+- Ready-handshake countdown (slow-network "You lost" on Play Again):
+  PvP matches wait for both clients' POST /ready (re-sent every 2s while in
+  the new machine 'matched' state) before KA/CHI; stale matched-in-result
+  routes to 'matched' instead of a doomed window; pending timeouts/disconnects
+  cancel and re-queue (readyTimeout var, 8s). CPU skips the handshake. shoot
+  event now carries shootAt; the client skips a PUN whose window already
+  closed and waits for the result. Server: ackReady/bothReady/needsReady/
+  waitReady/readyTimeout/readyAbandon in round.go, handleReady + snapshot
+  pending in server.go, /ready route in main.go. Tests: TestPvPReadyGate,
+  TestCPUStartsWithoutReady, TestReadyAbandonOnLeaveRequeuesSurvivor,
+  TestReadyTimeoutRequeuesBoth; ack injection in all PvP tests;
+  machine.test.cjs 'matched' gate cases.

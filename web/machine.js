@@ -4,7 +4,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const STATES = ['lobby', 'waiting', 'countdown', 'shoot', 'locked', 'result'];
+  const STATES = ['lobby', 'waiting', 'matched', 'countdown', 'shoot', 'locked', 'result'];
 
   const EVENTS = [
     'queue', 'cancel',
@@ -12,22 +12,24 @@
     'move', 'lock', 'reject',
     'result', 'opponentLeft',
     'stateIdle',
-    'snapshot:idle', 'snapshot:waiting', 'snapshot:countdown', 'snapshot:shoot',
+    'snapshot:idle', 'snapshot:waiting', 'snapshot:matched', 'snapshot:countdown', 'snapshot:shoot',
     'rematch:online', 'mode',
   ];
 
   const transitions = {
-    lobby: { queue: 'waiting', waiting: 'waiting', matched: 'countdown' },
-    waiting: { cancel: 'lobby', matched: 'countdown', waiting: 'waiting', stateIdle: 'lobby' },
+    lobby: { queue: 'waiting', waiting: 'waiting', matched: 'matched' },
+    waiting: { cancel: 'lobby', matched: 'matched', waiting: 'waiting', stateIdle: 'lobby' },
+    matched: { cancel: 'lobby', matched: 'matched', countdown: 'countdown', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     countdown: { countdown: 'countdown', matched: 'countdown', shoot: 'shoot', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     shoot: { move: 'locked', lock: 'locked', reject: 'locked', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     locked: { move: 'locked', reject: 'locked', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
-    result: { matched: 'countdown', 'rematch:online': 'waiting', mode: 'lobby' },
+    result: { matched: 'matched', 'rematch:online': 'waiting', mode: 'lobby' },
   };
 
   STATES.forEach((s) => {
     transitions[s]['snapshot:idle'] = 'lobby';
     transitions[s]['snapshot:waiting'] = 'waiting';
+    transitions[s]['snapshot:matched'] = 'matched';
     transitions[s]['snapshot:countdown'] = 'countdown';
     transitions[s]['snapshot:shoot'] = 'shoot';
   });

@@ -20,9 +20,9 @@ test('unknown pairs return null (silent no-op)', () => {
 test('preserved gameplay transitions', () => {
   assert.strictEqual(next('lobby', 'queue'), 'waiting');
   assert.strictEqual(next('lobby', 'waiting'), 'waiting');
-  assert.strictEqual(next('lobby', 'matched'), 'countdown');
+  assert.strictEqual(next('lobby', 'matched'), 'matched');
   assert.strictEqual(next('waiting', 'cancel'), 'lobby');
-  assert.strictEqual(next('waiting', 'matched'), 'countdown');
+  assert.strictEqual(next('waiting', 'matched'), 'matched');
   assert.strictEqual(next('waiting', 'stateIdle'), 'lobby');
   assert.strictEqual(next('countdown', 'shoot'), 'shoot');
   assert.strictEqual(next('countdown', 'result'), 'result');
@@ -32,8 +32,18 @@ test('preserved gameplay transitions', () => {
   assert.strictEqual(next('locked', 'result'), 'result');
 });
 
+test('matched = ready-handshake gate before the countdown', () => {
+  assert.strictEqual(next('matched', 'countdown'), 'countdown');
+  assert.strictEqual(next('matched', 'matched'), 'matched');
+  assert.strictEqual(next('matched', 'result'), 'result');
+  assert.strictEqual(next('matched', 'opponentLeft'), 'result');
+  assert.strictEqual(next('matched', 'cancel'), 'lobby');
+  assert.strictEqual(next('matched', 'stateIdle'), 'lobby');
+  assert.strictEqual(next('matched', 'shoot'), null);
+});
+
 test('rematch routing after a result', () => {
-  assert.strictEqual(next('result', 'matched'), 'countdown');
+  assert.strictEqual(next('result', 'matched'), 'matched');
   assert.strictEqual(next('result', 'rematch:online'), 'waiting');
   assert.strictEqual(next('result', 'mode'), 'lobby');
   assert.strictEqual(next('result', 'shoot'), null);
@@ -42,7 +52,7 @@ test('rematch routing after a result', () => {
 });
 
 test('snapshot reconcile is total for every state', () => {
-  const targets = { 'snapshot:idle': 'lobby', 'snapshot:waiting': 'waiting', 'snapshot:countdown': 'countdown', 'snapshot:shoot': 'shoot' };
+  const targets = { 'snapshot:idle': 'lobby', 'snapshot:waiting': 'waiting', 'snapshot:matched': 'matched', 'snapshot:countdown': 'countdown', 'snapshot:shoot': 'shoot' };
   for (const ev of Object.keys(targets)) {
     for (const s of STATES) {
       assert.strictEqual(next(s, ev), targets[ev], `${s} + ${ev}`);

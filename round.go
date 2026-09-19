@@ -12,6 +12,10 @@ const (
 	shootWindow = 2 * time.Second
 )
 
+// readyTimeout bounds how long a matched pair may take to both advertise that
+// they are ready to receive the countdown. A package var so tests can shrink it.
+var readyTimeout = 8 * time.Second
+
 const (
 	phaseIdle int32 = iota
 	phaseCountdown
@@ -94,14 +98,103 @@ type match struct {
 	phase   atomic.Int32
 	shootAt time.Time
 	moves   [2]*moveMsg
+	ready   atomic.Int32 // bitmask: bit i set once side i acked readiness
+	readyCh chan struct{}
 }
 
 func (h *Hub) makeMatch(id string, s0, s1 side) *match {
-	m := &match{hub: h, id: id, sides: [2]side{s0, s1}}
+	m := &match{hub: h, id: id, sides: [2]side{s0, s1}, readyCh: make(chan struct{})}
 	if s1.bot {
 		m.botMove = make(chan moveMsg, 1)
 	}
 	return m
+}
+
+// ackReady marks side i as ready to receive the countdown. Idempotent; closes
+// readyCh once every human side has acked.
+func (m *match) ackReady(i int) {
+	const both = int32(3)
+	for {
+		cur := m.ready.Load()
+		if cur&(1<<i) != 0 {
+			return
+		}
+		if !m.ready.CompareAndSwap(cur, cur|(1<<i)) {
+			continue
+		}
+		if cur|(1<<i) == both {
+			close(m.readyCh)
+		}
+		return
+	}
+}
+
+// needsReady reports whether this match waits for a ready handshake. Only
+// two-player (PVP) matches gate on readiness; CPU matches have one human who
+// just clicked, so they start immediately.
+func (m *match) needsReady() bool {
+	return !m.sides[0].bot && !m.sides[1].bot
+}
+
+// bothReady reports whether every side has acked readiness.
+func (m *match) bothReady() bool {
+	return m.ready.Load() == 3
+}
+
+// waitReady blocks until the countdown may begin. Returns false when the
+// pending match should be abandoned (timeout / disconnect).
+func (m *match) waitReady() bool {
+	if !m.needsReady() || m.bothReady() {
+		return true
+	}
+	timer := time.NewTimer(readyTimeout)
+	defer timer.Stop()
+	select {
+	case <-m.readyCh:
+		return true
+	case <-timer.C:
+		m.readyTimeout()
+		return false
+	case <-m.leftCh(0):
+		m.readyAbandon(0)
+		return false
+	case <-m.leftCh(1):
+		m.readyAbandon(1)
+		return false
+	}
+}
+
+// readyTimeout cancels a match whose pair never acked and re-queues them.
+func (m *match) readyTimeout() {
+	m.advance(phaseCountdown, phaseDone)
+	h := m.hub
+	h.mu.Lock()
+	for _, s := range m.sides {
+		if s.client != nil && s.client.alive.Err() == nil && !s.client.queueing {
+			s.client.queueing = true
+			h.queue = append(h.queue, s.client)
+		}
+	}
+	h.mu.Unlock()
+	go h.tryMatch()
+}
+
+// readyAbandon cancels a pending match when side i left before the countdown;
+// the survivor is re-queued rather than awarded any result.
+func (m *match) readyAbandon(i int) {
+	m.advance(phaseCountdown, phaseDone)
+	other := m.sides[1-i]
+	if other.client == nil || other.client.alive.Err() != nil {
+		return
+	}
+	h := m.hub
+	h.mu.Lock()
+	if !other.client.queueing {
+		other.client.queueing = true
+		h.queue = append(h.queue, other.client)
+	}
+	h.mu.Unlock()
+	go h.tryMatch()
 }
 
 func (m *match) start() {
@@ -130,6 +223,10 @@ func (m *match) run() {
 		}))
 	}
 
+	if !m.waitReady() {
+		return
+	}
+
 	for _, w := range []string{"KA", "CHI"} {
 		for i := range m.sides {
 			m.send(i, evt("countdown", map[string]any{"n": w}))
@@ -148,7 +245,10 @@ func (m *match) run() {
 	m.advance(phaseCountdown, phaseShoot)
 	m.shootAt = time.Now()
 	for i := range m.sides {
-		m.send(i, evt("shoot", map[string]any{"windowMs": shootWindow.Milliseconds()}))
+		m.send(i, evt("shoot", map[string]any{
+			"windowMs": shootWindow.Milliseconds(),
+			"shootAt":  m.shootAt.UnixMilli(),
+		}))
 	}
 
 	if m.sides[1].bot {

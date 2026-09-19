@@ -53,6 +53,8 @@ func TestStartDoesNotEatValidPickDuringShoot(t *testing.T) {
 	m.start()
 
 	waitForEvent(t, a, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
 	waitForEvent(t, b, "shoot")
 	waitForEvent(t, a, "shoot")
 	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}

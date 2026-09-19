@@ -170,12 +170,23 @@ Fix correctness and safety issues that affect reliability on a public server.
       timer. Moves that arrive after the deadline are still rejected by
       `handleMove` (`400 too late`), so an on-time tap never silently drops as
       a timeout.
-- [ ] **Latency compensation** — network latency still shrinks the *effective*
-      window for high-latency players while the advertised window stays 2s: an
-      on-time reaction can be dropped as `400 too late` if its HTTP request
-      lands just after the deadline. Revisit a small server-side acceptance
-      grace and/or a `clickedAt`-based cutoff once real pings are known
-      (win/loss must stay arrival-time-authoritative; see Phase 4 anti-cheat).
+- [x] **Ready-handshake countdown** — after pairing, a two-player match does
+      not start KA/CHI until **both** clients advertise readiness (`POST
+      /ready`, re-sent every 2s while in the `matched` state); a `matched`
+      that reaches a client still on the result screen now routes to a healthy
+      "match found" state instead of an already-expired window. If a pair
+      never acks (timeout or disconnect), the pending match is cancelled and
+      the surviving side(s) re-queued. CPU matches skip the handshake. A
+      `shootAt` field in the `shoot` event lets the client skip showing a PUN
+      whose window already closed before delivery, waiting instead for the
+      authoritative result.
+- [ ] **Latency compensation** — the ready handshake removes the stale/remote
+      burst, but one-way delivery latency can still shrink the *effective*
+      window for high-latency players: an on-time reaction can be dropped as
+      `400 too late` if its HTTP request lands just after the server deadline.
+      Revisit a small server-side acceptance grace and/or a `clickedAt`-based
+      cutoff once real pings are known (win/loss must stay
+      arrival-time-authoritative; see Phase 4 anti-cheat).
 
 ### Phase 2 — Testing & observability
 

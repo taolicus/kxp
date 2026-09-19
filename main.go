@@ -36,6 +36,7 @@ func main() {
 	mux.HandleFunc("POST /queue", hub.handleQueue)
 	mux.HandleFunc("POST /cancel", hub.handleCancel)
 	mux.HandleFunc("POST /cpu", hub.handleCPU)
+	mux.HandleFunc("POST /ready", hub.handleReady)
 	mux.HandleFunc("POST /move", hub.handleMove)
 	mux.HandleFunc("POST /character", hub.handleCharacter)
 

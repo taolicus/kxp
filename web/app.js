@@ -22,6 +22,26 @@ function randomizeBg() {
   r.setProperty('--bg-static', `url('/img/bg/${bg}-static.webp')`);
 }
 
+let readyTimer = null;
+
+function stopReadyLoop() {
+  clearInterval(readyTimer);
+  readyTimer = null;
+}
+
+// Advertise to the server that we're ready to receive the countdown; the
+// server waits for both sides before the round begins, so a slow network can
+// never drop us straight into an expired window. Re-posts while matched so a
+// lost ack on a flaky link self-heals.
+function readyLoop() {
+  post('/ready');
+  clearInterval(readyTimer);
+  readyTimer = setInterval(() => {
+    if (state !== 'matched') { stopReadyLoop(); return; }
+    post('/ready');
+  }, 2000);
+}
+
 function show(view) {
   document.querySelectorAll('.view').forEach((v) => {
     v.classList.toggle('hidden', v.id !== view);
@@ -179,17 +199,32 @@ function transition(ev, data) {
 
 const enter = {
   lobby() {
+    stopReadyLoop();
     resetGame();
     show('lobby');
   },
 
   waiting() {
+    stopReadyLoop();
     show('queue');
+  },
+
+  matched(d) {
+    stopReadyLoop();
+    show('game');
+    randomizeBg();
+    resetGame();
+    setYouSlot();
+    setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
+    setCount('MATCH FOUND');
+    readyLoop();
   },
 
   countdown(d, from) {
     show('game');
-    if (!GAME_STATES.includes(from)) {
+    if (from === 'matched') {
+      stopReadyLoop();
+    } else if (!GAME_STATES.includes(from)) {
       randomizeBg();
       resetGame();
       setYouSlot();
@@ -202,6 +237,13 @@ const enter = {
   },
 
   shoot(d, from) {
+    stopReadyLoop();
+    if (d.shootAt && d.windowMs && Date.now() - d.shootAt >= d.windowMs) {
+      // The server already closed this window before it reached us; show no
+      // doomed PUN, just wait for the authoritative result.
+      setCount('Waiting for result\u2026');
+      return;
+    }
     show('game');
     if (!GAME_STATES.includes(from)) {
       randomizeBg();
@@ -232,6 +274,7 @@ const enter = {
   },
 
   result(d) {
+    stopReadyLoop();
     clearTimeout(shootTimer);
     lockMoves();
     lastMode = d.mode || 'online';
@@ -262,7 +305,10 @@ function connect() {
     setOnline(d.online);
     post('/character', { character: loadCharacter() });
     if (d.state === 'waiting') transition('snapshot:waiting', d);
-    else if (d.state === 'ingame') transition(d.phase === 'shoot' ? 'snapshot:shoot' : 'snapshot:countdown', d);
+    else if (d.state === 'ingame') {
+      if (d.phase === 'countdown' && d.pending) transition('snapshot:matched', d);
+      else transition(d.phase === 'shoot' ? 'snapshot:shoot' : 'snapshot:countdown', d);
+    }
     else transition('snapshot:idle', d);
   });
 

@@ -254,10 +254,22 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 	defer h.mu.Unlock()
 	out := map[string]any{"id": c.id, "state": "idle", "online": h.othersOnlineLocked()}
 	if c.match != nil {
+		m := c.match
 		out["state"] = "ingame"
-		out["phase"] = c.match.phaseName()
+		out["phase"] = m.phaseName()
 		if out["phase"] == "shoot" {
 			out["windowMs"] = shootWindow.Milliseconds()
+			out["shootAt"] = m.shootAt.UnixMilli()
+		}
+		for i, s := range m.sides {
+			if s.client == c {
+				out["opponentName"] = m.opponentName(i)
+				out["opponentCharacter"] = m.opponentCharacter(i)
+				break
+			}
+		}
+		if out["phase"] == "countdown" && c.match.needsReady() && !c.match.bothReady() {
+			out["pending"] = true
 		}
 	} else if c.queueing {
 		out["state"] = "waiting"
@@ -385,6 +397,32 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 	h.mu.Unlock()
 	if cancelled {
 		c.sendEv(evt("state", map[string]any{"state": "idle"}))
+	}
+	w.Write([]byte("{}"))
+}
+
+func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
+	var req struct{ ID string }
+	if err := h.decode(w, r, &req); err != nil {
+		return
+	}
+	c := h.client(req.ID)
+	if c == nil {
+		h.handlerError(w, http.StatusBadRequest, "not connected")
+		return
+	}
+	h.mu.Lock()
+	m := c.match
+	h.mu.Unlock()
+	if m == nil {
+		h.handlerError(w, http.StatusBadRequest, "no active match")
+		return
+	}
+	for i, s := range m.sides {
+		if s.client == c {
+			m.ackReady(i)
+			break
+		}
 	}
 	w.Write([]byte("{}"))
 }

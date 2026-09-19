@@ -59,6 +59,8 @@ func TestPVPRound(t *testing.T) {
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
 	waitForEvent(t, a, "shoot")
 	waitForEvent(t, b, "shoot")
 
@@ -91,6 +93,8 @@ func TestEarlyPickDisqualifies(t *testing.T) {
 	m.start()
 
 	waitForEvent(t, a, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
 	// a picks well before SHOOT
 	a.moves <- moveMsg{move: MovePaper, arrive: time.Now()}
 
@@ -114,6 +118,8 @@ func TestTimeoutLoses(t *testing.T) {
 	m.start()
 
 	waitForEvent(t, a, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
 	waitForEvent(t, a, "shoot")
 	// only a picks; b never does
 	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}
