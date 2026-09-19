@@ -44,12 +44,14 @@
 
 html {
   height: 100%;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   min-height: 100dvh; /* mobile URL bar: fit the visible viewport */
+  overflow-x: hidden;
   display: flex;
   background-color: var(--bg);
   color: var(--text);
@@ -304,10 +306,12 @@ button.primary:hover {
 }
 
 .count {
+  display: inline-block;
   font-family: var(--font-title);
   font-size: 3.5rem;
   font-weight: 800;
   letter-spacing: 0.04em;
+  line-height: 1;
 }
 
 .stage.go .count {
@@ -391,8 +395,8 @@ button.primary:hover {
   .mkx-title { font-size: 1.9rem; margin-bottom: var(--s2); }
   .stage {
     min-height: 4.5rem;
-    padding-top: var(--s1);
-    padding-bottom: var(--s1);
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
   }
   .count { font-size: 2.5rem; }
 }
