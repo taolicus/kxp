@@ -124,7 +124,9 @@ straight to the lobby rather than a dead end.
 **Testing** — `make test` (or `go test ./...`) runs the Go suite, which now
 includes HTTP/SSE integration tests for the full CPU and PvP match flows,
 concurrent-move submissions, mid-match disconnects, and endpoint validation
-alongside the unit tests; client state machine: `node --test web/machine.test.cjs`.
+alongside the unit tests; client pure logic (the PUN-window plan, stats, and
+result lines) is tested with `node --test web/kxp.test.cjs`, and the client
+state machine with `node --test web/machine.test.cjs`.
 (`go test -race` is not supported on the device this is developed on (arm64
 Android); see the Roadmap note under "Automated test workflow" if you add CI.)
 

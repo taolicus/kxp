@@ -1,4 +1,4 @@
-const aliases = { rock: '\u270a\uFE0F', paper: '\u270b\uFE0F', scissors: '\u270c\uFE0F' };
+const KXP = window.KXP;
 const SM = window.StateMachine;
 
 let id = null;
@@ -6,7 +6,7 @@ let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
 let lastMode = 'online'; // online | cpu — mode of the finished match
 let es = null;
 let shootTimer = null;
-let punWindowMs = 2000;
+let remainingWindowMs = 2000; // local portion of the PUN window still open
 let sawPunAt = 0;
 let stallTimer = null;
 
@@ -163,20 +163,7 @@ function renderResult(d) {
   const lbl = d.note || (d.outcome === 'win' ? 'You win!' : d.outcome === 'loss' ? 'You lose' : 'Draw!');
   banner(`<p class="${cls}">${lbl}</p>`);
 
-  const lines = [];
-  if (d.you || d.opponent) {
-    const oppAlias = d.opponent ? aliases[d.opponent] : '\u2014';
-    const oppMs = d.opponentClientMs != null ? d.opponentClientMs : d.opponentTimingMs;
-    if (d.yourNote === 'timeout') lines.push('Timed out \u2014 no pick.');
-    else if (d.yourNote === 'early') lines.push(`Disqualified \u2014 ${-d.youTimingMs}ms early.`);
-    else {
-      const youAlias = d.you ? aliases[d.you] : '\u2014';
-      const youMs = d.youClientMs != null ? d.youClientMs : d.youTimingMs;
-      lines.push(`You picked: ${youAlias}${youMs != null ? ` (${youMs}ms)` : ''}`);
-    }
-    lines.push(`Opponent picked: ${oppAlias}${oppMs != null ? ` (${oppMs}ms)` : ''}`);
-  }
-
+  const lines = KXP.resultLines(d);
   $('#timing').innerHTML = lines.join('<br>');
   $('#timing').classList.toggle('hidden', lines.length === 0);
   $('#game-stats').classList.remove('hidden');
@@ -258,8 +245,7 @@ const enter = {
 
   shoot(d, from) {
     stopReadyLoop();
-    const elapsed = d.shootAt ? Date.now() - d.shootAt : 0;
-    const remaining = d.windowMs ? Math.max(0, d.windowMs - elapsed) : punWindowMs;
+    const plan = KXP.shootWindow(Date.now(), d.shootAt, d.windowMs, remainingWindowMs);
     armStallWatchdog();
     show('game');
     if (!GAME_STATES.includes(from)) {
@@ -269,13 +255,13 @@ const enter = {
       setOppSlot(null, 'Opponent');
     }
     clearTimeout(shootTimer);
-    if (remaining > 0) {
+    if (plan.actionable) {
       sawPunAt = Date.now();
-      punWindowMs = remaining;
+      remainingWindowMs = plan.remainingMs;
       setCount('PUN!');
       $('#stage').classList.add('go');
       enableMoves();
-      shootTimer = setTimeout(() => transition('lock'), remaining);
+      shootTimer = setTimeout(() => transition('lock'), plan.remainingMs);
     } else {
       // The window is already past (delivery lag or client clock skew); show
       // no doomed PUN, just wait for the authoritative result.
@@ -288,11 +274,7 @@ const enter = {
     lockMoves();
     if (d.move) flashPick(d.move);
     if (d.error) {
-      const label = d.error === 'too early' ? 'TOO EARLY!'
-        : d.error === 'too late' ? 'TOO LATE!'
-        : d.error === 'move already submitted' ? 'ALREADY PICKED'
-        : 'NOT ACCEPTED';
-      setCount(label);
+      setCount(KXP.rejectLabel(d.error));
       $('#stage').classList.add('go');
     }
   },
@@ -303,12 +285,7 @@ const enter = {
     clearTimeout(stallTimer);
     lockMoves();
     lastMode = d.mode || 'online';
-    const s = getStats();
-    if (d.outcome === 'win') {
-      s.wins++;
-      s.streak++;
-      if (s.streak > s.best) s.best = s.streak;
-    } else if (d.outcome === 'loss') { s.streak = 0; }
+    const s = KXP.applyResult(getStats(), d.outcome);
     saveStats(s);
     setStats();
     renderResult(d);
