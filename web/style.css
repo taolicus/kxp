@@ -70,7 +70,14 @@ body {
 body::before {
   content: '';
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Height anchored to the LARGE viewport (toolbar hidden): the backdrop must
+     not resize while the mobile URL bar animates, or background-size:cover
+     re-fits and the image visibly shifts. 100vh is the pre-lvh fallback. */
+  height: 100vh;
+  height: 100lvh;
   z-index: -1;
   background: radial-gradient(1200px 600px at 70% -10%, var(--bg-glow), var(--bg));
 }
