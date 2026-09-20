@@ -285,7 +285,7 @@ func (h *Hub) dequeueLocked(c *Client) {
 func (h *Hub) snapshot(c *Client) map[string]any {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	out := map[string]any{"id": c.id, "state": "idle", "online": h.othersOnlineLocked()}
+	out := map[string]any{"id": c.id, "state": "idle", "online": h.othersOnlineLocked(), "now": time.Now().UnixMilli()}
 	if c.match != nil {
 		m := c.match
 		out["state"] = "ingame"

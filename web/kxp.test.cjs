@@ -22,6 +22,24 @@ test('shootWindow: past the deadline (lag/skew) is not actionable', () => {
   assert.deepEqual(KXP.shootWindow(at + 2530, at, 2000, 2000), { actionable: false, remainingMs: 0 });
 });
 
+test('shootWindow: phone clock ahead of server by ~2s no longer collapses the window', () => {
+  const at = 1700000000000;
+  const skew = -2000; // serverNow = clientNow - 2000
+  assert.deepEqual(KXP.shootWindow(at + 2000, at, 2000, 2000, skew), { actionable: true, remainingMs: 2000 });
+});
+
+test('shootWindow: near-window skew still grants the full window', () => {
+  const at = 1700000000000;
+  assert.deepEqual(KXP.shootWindow(at + 1900, at, 2000, 2000, -1900), { actionable: true, remainingMs: 2000 });
+});
+
+test('shootWindow: skew cancels out, only genuine lag shrinks', () => {
+  const at = 1700000000000;
+  const skew = -2000;
+  assert.deepEqual(KXP.shootWindow(at + 2300, at, 2000, 2000, skew), { actionable: true, remainingMs: 1700 });
+  assert.deepEqual(KXP.shootWindow(at + 4000, at, 2000, 2000, skew), { actionable: false, remainingMs: 0 });
+});
+
 test('shootWindow: aggressive skew beyond the window clamps to zero', () => {
   const at = 1700000000000;
   assert.deepEqual(KXP.shootWindow(at + 999999, at, 2000, 2000), { actionable: false, remainingMs: 0 });

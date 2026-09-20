@@ -8,6 +8,7 @@ let es = null;
 let shootTimer = null;
 let remainingWindowMs = 2000; // local portion of the PUN window still open
 let sawPunAt = 0;
+let clockSkew = 0; // serverNow - clientNow, estimated from the connected snapshot
 let stallTimer = null;
 
 // Last-resort recovery: if a PUN result never arrives (dropped SSE event,
@@ -245,7 +246,7 @@ const enter = {
 
   shoot(d, from) {
     stopReadyLoop();
-    const plan = KXP.shootWindow(Date.now(), d.shootAt, d.windowMs, remainingWindowMs);
+    const plan = KXP.shootWindow(Date.now(), d.shootAt, d.windowMs, remainingWindowMs, clockSkew);
     armStallWatchdog();
     show('game');
     if (!GAME_STATES.includes(from)) {
@@ -305,6 +306,7 @@ function connect() {
     }
     id = d.id;
     setOnline(d.online);
+    if (d.now) clockSkew = d.now - Date.now();
     post('/character', { character: loadCharacter() });
     if (d.state === 'waiting') transition('snapshot:waiting', d);
     else if (d.state === 'ingame') {
@@ -312,7 +314,7 @@ function connect() {
         // Match already finished; there is no result to catch up on.
         transition('snapshot:idle', d);
       } else if (d.phase === 'countdown' && d.pending) transition('snapshot:matched', d);
-      else if (d.phase === 'shoot' && d.shootAt && d.windowMs && Date.now() - d.shootAt >= d.windowMs) {
+      else if (d.phase === 'shoot' && d.shootAt && d.windowMs && Date.now() + clockSkew - d.shootAt >= d.windowMs) {
         // PUN window already closed; nothing playable to rejoin.
         transition('snapshot:idle', d);
       }

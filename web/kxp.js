@@ -6,15 +6,17 @@
 
   const aliases = { rock: '\u270a\uFE0F', paper: '\u270b\uFE0F', scissors: '\u270c\uFE0F' };
 
-  // Plan the local PUN window for the client clock. elapsed = delivery lag +
-  // (clientClock - serverClock); remaining is the portion of the server's
-  // window that is still open *for this client*. When the whole window has
-  // already elapsed (lag/skew exceeded windowMs) nothing is actionable
-  // locally: show no doomed PUN and wait for the authoritative result.
-  // fallbackMs is used when the server doesn't send a windowMs (reconnect
-  // snapshots).
-  function shootWindow(now, shootAt, windowMs, fallbackMs) {
-    const elapsed = shootAt ? now - shootAt : 0;
+  // Plan the local PUN window for the client clock. elapsed is the time since
+  // the server opened the window, measured in the server clock: the client
+  // supplies skew = serverNow - clientNow (estimated from the `now` field in
+  // the connected snapshot) so delivery lag is separated from phone/server
+  // clock mismatch. remaining is the portion of the server's window that is
+  // still open *for this client*. When the whole window has already elapsed
+  // (lag exceeded windowMs) nothing is actionable locally: show no doomed PUN
+  // and wait for the authoritative result. fallbackMs is used when the server
+  // doesn't send a windowMs (reconnect snapshots).
+  function shootWindow(clientNow, shootAt, windowMs, fallbackMs, skew) {
+    const elapsed = shootAt ? clientNow + (skew || 0) - shootAt : 0;
     const total = windowMs || fallbackMs;
     const remaining = Math.max(0, total - elapsed);
     return { actionable: remaining > 0, remainingMs: remaining };

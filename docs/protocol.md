@@ -44,7 +44,7 @@ snapshot.
 
 | event | payload | meaning |
 | --- | --- | --- |
-| `connected` | `{id, state, online, phase?, opponentName?, opponentCharacter?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `phase` (`countdown`/`shoot`/`done`) and opponent fields only when `ingame`; `shootAt`+`windowMs` only when `phase=shoot` (epoch-ms); `pending=true` only while a PvP handshake is still open. Used to reconcile on reconnect. |
+| `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`countdown`/`shoot`/`done`) and opponent fields only when `ingame`; `shootAt`+`windowMs` only when `phase=shoot` (epoch-ms); `pending=true` only while a PvP handshake is still open. Used to reconcile on reconnect. |
 | `online` | `{count}` | Number of other clients currently connected. |
 | `waiting` | `{}` | Entered the queue. |
 | `matched` | `{opponentName, opponentCharacter}` | Opponent found; PvP clients should start `POST /ready`. |
@@ -110,6 +110,10 @@ Notes:
 ## Clock handling
 
 `shootAt` and the move timestamps are wall-clock epoch ms. The client
-compensates for skew: on `shoot` it plays out only the remaining
-`windowMs − (now − shootAt)` and never shows an unwinnable PUN. Win/loss is
-decided exclusively by server arrival time; client times are cosmetic.
+estimates the phone/server clock offset once per connection from the
+`connected` frame's `now` field (`skew = now − Date.now()`) and applies it
+when computing how much of the PUN window remains, so a skew-delayed delivery
+still shows the true server-side remaining time instead of a collapsed one. On
+`shoot` it plays out only the remaining `windowMs − ((now + skew) − shootAt)`
+and never shows an unwinnable PUN. Win/loss is decided exclusively by server
+arrival time; client times are cosmetic.
