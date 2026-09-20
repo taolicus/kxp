@@ -51,7 +51,6 @@ two players share. See [architecture](docs/architecture.md) for the internals.
   SSE lifecycle, testing.
 - [protocol.md](docs/protocol.md) — the full wire format: events, endpoints,
   the client state table, and clock handling.
-- [deploy.md](docs/deploy.md) — makefile deploy, systemd, nginx.
 - [roadmap.md](docs/roadmap.md) — planned work by phase.
 
 ## Testing
