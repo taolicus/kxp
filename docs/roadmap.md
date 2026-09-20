@@ -106,7 +106,7 @@ Make the system testable and debuggable in production.
       for automated tests.
 - [ ] **Request/response logging** — structured logs for connection,
       matchmaking, match lifecycle, and errors.
-- [x] **Automated test workflow** — `make test` target; `go test -race` is not
+- [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
       available.

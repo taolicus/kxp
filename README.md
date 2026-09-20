@@ -56,7 +56,7 @@ two players share. See [architecture](docs/architecture.md) for the internals.
 ## Testing
 
 ```sh
-make test                 # or: go test ./...
+go test ./...              # Go suite
 node --test web/kxp.test.cjs web/machine.test.cjs
 ```
 

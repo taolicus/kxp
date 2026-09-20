@@ -80,7 +80,7 @@ testable and reusable without a hub or a wire.
 
 ## Testing
 
-- `make test` (or `go test ./...`) runs the Go suite: HTTP/SSE integration
+- `go test ./...` runs the Go suite: HTTP/SSE integration
   tests for the full CPU and PvP match flows, concurrent-move submissions,
   mid-match disconnects, and endpoint validation, alongside the unit tests.
 - Client pure logic (the PUN-window plan, stats, and result lines) is tested
