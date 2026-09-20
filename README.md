@@ -51,6 +51,7 @@ two players share. See [architecture](docs/architecture.md) for the internals.
   SSE lifecycle, testing.
 - [protocol.md](docs/protocol.md) — the full wire format: events, endpoints,
   the client state table, and clock handling.
+- [backgrounds.md](docs/backgrounds.md) — match background asset pipeline.
 - [roadmap.md](docs/roadmap.md) — planned work by phase.
 
 ## Testing

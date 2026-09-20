@@ -1,7 +1,8 @@
 # Architecture
 
 How KACHIPUN TOURNAMENT works internally. The wire contract (events,
-endpoints, and the client state table) is in [protocol.md](protocol.md).
+endpoints, and the client state table) is in [protocol.md](protocol.md); the
+match background assets in [backgrounds.md](backgrounds.md).
 
 The server is a single Go binary with zero external dependencies. It serves an
 embedded web UI, uses SSE for server→client push and plain JSON POSTs for
