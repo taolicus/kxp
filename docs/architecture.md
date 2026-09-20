@@ -71,6 +71,16 @@ disconnect. Keying uses `RemoteAddr` because the server is directly exposed;
 if an nginx proxy is ever added in front, key the first `X-Forwarded-For` hop
 instead (only trustworthy because nginx overwrites it).
 
+## Resource limits
+
+The hub also caps the state a flood can grow: `getOrCreate` refuses to mint
+new clients once `maxClients` are live (`GET /events` answers `503`), `POST
+/queue` answers `503` once `maxQueue` players are waiting, and `POST /cpu`
+answers `503` once `maxMatches` engines are running. Existing clients are
+always re-admitted, so the caps only bound new growth, never legitimate
+reconnects. These sit beside the rate limiter: the limiter bounds request
+floods, the caps bound the resulting memory/goroutine footprint.
+
 ## Pure game engine
 
 `round.go`'s `match` doesn't touch `Hub`, `Client`, or SSE. Each side is a

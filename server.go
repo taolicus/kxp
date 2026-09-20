@@ -10,10 +10,21 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const maxBodyBytes = 1 << 10
+
+// Resource caps. Deliberately conservative yet unreachable in normal play:
+// each live client holds a 64-slot send channel plus a goroutine on its
+// /events stream, so capping the clients map bounds worst-case memory growth;
+// the queue and match caps bound the same pressure from join spam.
+const (
+	maxClients = 256
+	maxQueue   = 128
+	maxMatches = 64
+)
 
 // side is the hub-level view of one side of a match: the concrete client plus
 // match-time facts. Hub.makeMatch turns it into an engine matchParty.
@@ -94,6 +105,7 @@ type Hub struct {
 	mu      sync.Mutex
 	clients map[string]*Client
 	queue   []*Client
+	active  atomic.Int32
 	down    context.Context
 	stop    context.CancelFunc
 	limiter *rateLimiter
@@ -128,28 +140,37 @@ func (h *Hub) Shutdown() {
 	h.stop()
 }
 
-func (h *Hub) getOrCreate(id string) *Client {
+// getOrCreate returns the client for id, minting a fresh anonymous one when
+// id is empty or unknown. The second return is false when the hub is at
+// capacity (len(clients) >= maxClients) and a new client would have to be
+// created; existing clients are always returned so legit reconnects aren't
+// blocked by the cap.
+func (h *Hub) getOrCreate(id string) (*Client, bool) {
 	h.mu.Lock()
 	if id != "" {
 		if c, ok := h.clients[id]; ok {
 			h.mu.Unlock()
-			return c
+			return c, true
 		}
-		if validID(id) {
-			c := newClient()
-			c.id = id
-			h.clients[id] = c
-			h.mu.Unlock()
-			h.broadcastOnline()
-			return c
-		}
+	}
+	if len(h.clients) >= maxClients {
+		h.mu.Unlock()
+		return nil, false
+	}
+	if id != "" && validID(id) {
+		c := newClient()
+		c.id = id
+		h.clients[id] = c
+		h.mu.Unlock()
+		h.broadcastOnline()
+		return c, true
 	}
 	c := newClient()
 	c.id = newID(6)
 	h.clients[c.id] = c
 	h.mu.Unlock()
 	h.broadcastOnline()
-	return c
+	return c, true
 }
 
 func validID(id string) bool {
@@ -196,7 +217,11 @@ func (h *Hub) decode(w http.ResponseWriter, r *http.Request, v any) error {
 }
 
 func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
-	c := h.getOrCreate(r.URL.Query().Get("id"))
+	c, ok := h.getOrCreate(r.URL.Query().Get("id"))
+	if !ok {
+		h.handlerError(w, http.StatusServiceUnavailable, "too many clients")
+		return
+	}
 
 	fl, ok := w.(http.Flusher)
 	if !ok {
@@ -411,12 +436,14 @@ func (h *Hub) makeMatch(id string, a, b side) *match {
 }
 
 func (h *Hub) startMatchLocked(m *match) {
+	h.active.Add(1)
 	m.start()
 }
 
 // finishMatch tears down a finished or abandoned match: clears each client's
 // match pointer, drains stale moves, and tells both sides to return to idle.
 func (h *Hub) finishMatch(m *match, sides [2]side) {
+	h.active.Add(-1)
 	m.advance(phaseShoot, phaseDone)
 	m.advance(phaseCountdown, phaseDone)
 	h.mu.Lock()
@@ -445,6 +472,11 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
+	if len(h.queue) >= maxQueue {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusServiceUnavailable, "queue full")
+		return
+	}
 	if !c.queueing {
 		c.queueing = true
 		h.queue = append(h.queue, c)
@@ -514,6 +546,11 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
+	if h.active.Load() >= maxMatches {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusServiceUnavailable, "too many active matches")
+		return
+	}
 	if c.queueing {
 		h.dequeueLocked(c)
 		c.queueing = false

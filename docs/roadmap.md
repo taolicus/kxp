@@ -5,11 +5,11 @@ unchecked items are open.
 
 ## Current priorities
 
-Ordered active work. Items outside this list — currently the unchecked Phase 1
-hardening (resource limits, anonymous abuse prevention) — are
+Ordered active work. Items outside this list — the remaining Phase 1
+hardening (anonymous abuse prevention) and latency compensation — are
 deliberately postponed until the feature set settles; the risk is accepted
-while the game is small-scale. Per-IP rate limiting has been landed in the
-background (see Phase 1).
+while the game is small-scale. Per-IP rate limiting and resource limits have
+been landed in the background (see Phase 1).
 
 1. **Character roster & portraits** (Phase 3) — expand the cosmetic fighter
    roster with user-supplied art and an emoji fallback; select-screen polish.
@@ -61,8 +61,11 @@ Note: the unchecked items below are postponed to keep feature work moving
       over-limit requests get `429` + `Retry-After`. Thresholds sit far above
       any legitimate session (incl. best-of-5 and arcade-ladder bursts);
       `GET /events` exempt.
-- [ ] **Resource limits** — cap concurrent clients, active matches, and queue
-      length; reject with `503` when full.
+- [x] **Resource limits** — caps on live clients (`maxClients`, hit in
+      `getOrCreate`/`GET /events`), queue length (`maxQueue`, hit on
+      `/queue`), and active matches (`maxMatches`, hit on `/cpu`); over-cap
+      requests get `503`. Existing clients are never rejected, so the caps
+      only bite new growth.
 - [ ] **Anonymous abuse prevention** — enforce a max number of anonymous
       clients per IP or time window.
 - [x] **Deterministic deadline enforcement** — the run loop drains each side's
