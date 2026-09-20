@@ -59,6 +59,18 @@ few seconds, forces a reconnect so the `connected` snapshot reconciles it back
 out. Snapshots for a finished (`done`) or already-expired (`shoot`) match route
 straight to the lobby rather than a dead end.
 
+## Request limiting
+
+The six state-mutating POST endpoints (`queue`, `cancel`, `cpu`, `ready`,
+`move`, `character`) sit behind a per-IP token bucket (`ratelimit.go`) keyed on
+the peer address in `RemoteAddr`; over-limit requests get `429` with
+`Retry-After`. Thresholds (~200-burst, ~120/min sustained) are sized far above
+any legitimate session, including best-of-5 series and arcade-ladder chains.
+`GET /events` is exempt — it's one long-lived connection, torn down on
+disconnect. Keying uses `RemoteAddr` because the server is directly exposed;
+if an nginx proxy is ever added in front, key the first `X-Forwarded-For` hop
+instead (only trustworthy because nginx overwrites it).
+
 ## Pure game engine
 
 `round.go`'s `match` doesn't touch `Hub`, `Client`, or SSE. Each side is a

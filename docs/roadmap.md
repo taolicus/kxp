@@ -5,10 +5,11 @@ unchecked items are open.
 
 ## Current priorities
 
-Ordered active work. Items outside this list — notably the unchecked Phase 1
-hardening (rate limiting, resource limits, anonymous abuse prevention) — are
+Ordered active work. Items outside this list — currently the unchecked Phase 1
+hardening (resource limits, anonymous abuse prevention) — are
 deliberately postponed until the feature set settles; the risk is accepted
-while the game is small-scale.
+while the game is small-scale. Per-IP rate limiting has been landed in the
+background (see Phase 1).
 
 1. **Character roster & portraits** (Phase 3) — expand the cosmetic fighter
    roster with user-supplied art and an emoji fallback; select-screen polish.
@@ -55,8 +56,11 @@ Note: the unchecked items below are postponed to keep feature work moving
       clean SSE drain.
 - [x] **Request timeouts** — `ReadTimeout`/`WriteTimeout`; body size limits via
       `http.MaxBytesReader`.
-- [ ] **Rate limiting** — basic per-IP token-bucket or fixed-window limiter on
-      POST endpoints.
+- [x] **Rate limiting** — per-IP token bucket on the six POST endpoints
+      (queue, cancel, cpu, ready, move, character), keyed on `RemoteAddr`;
+      over-limit requests get `429` + `Retry-After`. Thresholds sit far above
+      any legitimate session (incl. best-of-5 and arcade-ladder bursts);
+      `GET /events` exempt.
 - [ ] **Resource limits** — cap concurrent clients, active matches, and queue
       length; reject with `503` when full.
 - [ ] **Anonymous abuse prevention** — enforce a max number of anonymous

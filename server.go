@@ -96,11 +96,17 @@ type Hub struct {
 	queue   []*Client
 	down    context.Context
 	stop    context.CancelFunc
+	limiter *rateLimiter
 }
 
 func NewHub() *Hub {
 	down, stop := context.WithCancel(context.Background())
-	return &Hub{clients: make(map[string]*Client), down: down, stop: stop}
+	return &Hub{
+		clients: make(map[string]*Client),
+		down:    down,
+		stop:    stop,
+		limiter: newRateLimiter(rlCapacity, rlRefillPerSec, rlMaxEntries, nil),
+	}
 }
 
 // routes wires every HTTP endpoint to the hub. The static file server for the
@@ -109,12 +115,12 @@ func NewHub() *Hub {
 func (h *Hub) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /events", h.handleEvents)
-	mux.HandleFunc("POST /queue", h.handleQueue)
-	mux.HandleFunc("POST /cancel", h.handleCancel)
-	mux.HandleFunc("POST /cpu", h.handleCPU)
-	mux.HandleFunc("POST /ready", h.handleReady)
-	mux.HandleFunc("POST /move", h.handleMove)
-	mux.HandleFunc("POST /character", h.handleCharacter)
+	mux.HandleFunc("POST /queue", h.rateLimit(h.handleQueue))
+	mux.HandleFunc("POST /cancel", h.rateLimit(h.handleCancel))
+	mux.HandleFunc("POST /cpu", h.rateLimit(h.handleCPU))
+	mux.HandleFunc("POST /ready", h.rateLimit(h.handleReady))
+	mux.HandleFunc("POST /move", h.rateLimit(h.handleMove))
+	mux.HandleFunc("POST /character", h.rateLimit(h.handleCharacter))
 	return mux
 }
 
