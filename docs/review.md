@@ -88,7 +88,7 @@
 30. CPU determinism in tests — CPU reaction delays and moves should be controllable or deterministic during automated tests.
 
 
-31. CPU timeout behavior — CPU behavior should correctly handle its reaction delay and the 1.2-second deadline.
+31. CPU timeout behavior — CPU behavior should correctly handle its reaction delay and the server-defined PUN deadline.
 
 
 32. Client/server timing UX — The UI should clearly communicate countdown, PUN, reaction timing, and timeout states.
