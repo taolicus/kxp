@@ -3,9 +3,29 @@
 Planned work for KACHIPUN TOURNAMENT, by phase. Checked items are implemented;
 unchecked items are open.
 
+## Current priorities
+
+Ordered active work. Items outside this list — notably the unchecked Phase 1
+hardening (rate limiting, resource limits, anonymous abuse prevention) — are
+deliberately postponed until the feature set settles; the risk is accepted
+while the game is small-scale.
+
+1. **Character roster & portraits** (Phase 3) — expand the cosmetic fighter
+   roster with user-supplied art and an emoji fallback; select-screen polish.
+2. **Best-of-5 game mode** (Phase 3) — first to 3 decisive rounds, draws
+   replayed; best-of-1 stays the default. Ships for CPU matches first, then
+   PvP (Stage 4 below).
+3. **Solo campaign / arcade ladder** (Phase 4) — climb a 5-floor tower against
+   roster fighters (boss on the final floor), loss restarts, best floor
+   persisted locally; fights run under the mode selector (best-of-5 default).
+4. **Best-of-5 for PvP** — re-open the ready handshake per round once the
+   client machine is proven against the CPU.
+
 ## Phase 1 — Core hardening
 
 Correctness and safety issues that affect reliability on a public server.
+Note: the unchecked items below are postponed to keep feature work moving
+(see Current priorities).
 
 - [x] **Latency-fair reaction timing** — the *displayed* reaction is
       network-neutral (client click timestamps); win/loss stays
@@ -94,8 +114,19 @@ Build on a stable foundation without rewriting the core.
 - [x] **Pure game engine** — `round.go`'s `match` no longer touches `Hub`,
       `Client`, or SSE; sides are neutral `matchParty` and the hub wires
       `finish`/`requeue` callbacks back to real clients.
-- [ ] **Game-mode architecture** — refactor `run()`/`resolve()` to support
-      best-of-N and multi-round modes.
+- [ ] **Game-mode architecture** — series-aware `run()`/`resolve()`: a match
+      becomes a sequence of rounds, first to 3 decisive wins, draws replayed.
+      `result` gains round/series fields (`round`, `youRoundWins`,
+      `oppRoundWins`, `roundsTarget`, `seriesOver`); a round result advances
+      the client scoreboard and re-enters countdown, a final result ends the
+      series. Ships for CPU matches first (ready stays once-per-series); PvP
+      re-opens the ready handshake per round afterward.
+- [ ] **Character roster & portraits** — cosmetic expansion of the fighter
+      roster (data in `characters.go` + `web/characters.js`; no wire change,
+      no gameplay effect). Real art lives at `/img/char/<id>.webp` with an
+      emoji fallback (`img.art.missing`); `tools/gen-char.sh` converts
+      user-supplied sources from `web/img/sources/char/`. Select-screen polish
+      (thumbnails, selected ring, hover).
 - [ ] **Player names** — defined model for assignment, validation, and display.
 - [ ] **Multiple-tab handling** — deduplicate or isolate sessions from the same
       browser.
@@ -117,6 +148,10 @@ Features that depend on identity, persistence, or ranking.
 - [ ] **Tournament model** — bracket/round structure for multi-match
       competition.
 - [ ] **Solo campaign** — Mortal Kombat–style tower climbing with progression.
+      Client-side only: 5-floor ladder against roster fighters, stock bot on
+      every floor, boss on the final floor, loss restarts the tower, best
+      floor persisted in `localStorage`. Fights run under the mode selector
+      (best-of-5 default; draws replayed).
 - [ ] **Reconnection (re-evaluate later)** — a match lasts ~3.2s and today a
       TCP drop instantly forfeits via `opponent-left`, with the dropped player
       seeing no result. Options for later: resume a live match plus a short
