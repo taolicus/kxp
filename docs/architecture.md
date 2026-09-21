@@ -59,6 +59,11 @@ few seconds, forces a reconnect so the `connected` snapshot reconciles it back
 out. Snapshots for a finished (`done`) or already-expired (`shoot`) match route
 straight to the lobby rather than a dead end.
 
+If a reverse proxy fronts the server, streaming must not be buffered: the
+server always sends `X-Accel-Buffering: no`, and the proxy should set
+`proxy_buffering off` / `proxy_cache off` for `/events`, otherwise the whole
+countdown arrives in a single blob.
+
 ## Request limiting
 
 The six state-mutating POST endpoints (`queue`, `cancel`, `cpu`, `ready`,

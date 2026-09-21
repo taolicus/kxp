@@ -9,7 +9,9 @@ Ordered active work. Items outside this list — the remaining Phase 1
 hardening (anonymous abuse prevention) and latency compensation — are
 deliberately postponed until the feature set settles; the risk is accepted
 while the game is small-scale. Per-IP rate limiting and resource limits have
-been landed in the background (see Phase 1).
+been landed in the background (see Phase 1) and are live: the public server is
+kept at the current build by an ops script kept outside this repo (`git pull`
++ build + `systemctl restart`).
 
 1. **Character roster & portraits** (Phase 3) — expand the cosmetic fighter
    roster with user-supplied art and an emoji fallback; select-screen polish.
@@ -21,6 +23,9 @@ been landed in the background (see Phase 1).
    persisted locally; fights run under the mode selector (best-of-5 default).
 4. **Best-of-5 for PvP** — re-open the ready handshake per round once the
    client machine is proven against the CPU.
+5. **Observability** (Phase 2) — structured request/response logging
+   (connections, matchmaking, match lifecycle, errors) so the live box is
+   diagnosable; small background sweep, same pattern as the hardening slices.
 
 ## Phase 1 — Core hardening
 
@@ -142,6 +147,10 @@ Build on a stable foundation without rewriting the core.
 
 Features that depend on identity, persistence, or ranking.
 
+- [ ] **Identity primitive** — decide the player-identity model (a persistent
+      anonymous ID is the natural fit) before lobby, leaderboard, challenge
+      links, and tournament, since they all share it; the arcade ladder's
+      `localStorage` persistence will need retrofit onto it later.
 - [ ] **Leaderboard** — server-authoritative with anti-cheat (ignore
       client-submitted timestamps for ranking, cap CPU streaks).
 - [ ] **Leaderboard identity** — persistent player identity model (account,
