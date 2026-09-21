@@ -25,7 +25,7 @@ func resolveTimed(t *testing.T, aOff, bOff time.Duration) (map[string]any, map[s
 	m := newPartiedMatch(a, b)
 	a.match, b.match = m, m
 	shootAt := time.Now()
-	m.shootAt = shootAt
+	m.shootAt.Store(shootAt.UnixNano())
 	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(aOff)}
 	m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(bOff)}
 	m.resolve()
@@ -100,7 +100,7 @@ func resolveTimedClient(t *testing.T, aArrive time.Duration, aReaction time.Dura
 	m := newPartiedMatch(a, b)
 	a.match, b.match = m, m
 	shootAt := time.Now()
-	m.shootAt = shootAt
+	m.shootAt.Store(shootAt.UnixNano())
 	const sawPunAt = int64(1_000_000_000)
 	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(aArrive), sawPunAt: sawPunAt, clickedAt: sawPunAt + aReaction.Milliseconds()}
 	m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(time.Millisecond)}
@@ -150,7 +150,7 @@ func TestClientReactionSpoofedIgnored(t *testing.T) {
 			m := newPartiedMatch(a, b)
 			a.match, b.match = m, m
 			shootAt := time.Now()
-			m.shootAt = shootAt
+			m.shootAt.Store(shootAt.UnixNano())
 			m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(time.Millisecond), sawPunAt: tc.sawPunAt, clickedAt: tc.clickedAt}
 			m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(2 * time.Millisecond)}
 			m.resolve()

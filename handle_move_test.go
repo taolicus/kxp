@@ -22,7 +22,7 @@ func newMoveMatch(c *Client, phase int32, shootAt time.Time) *match {
 	m := &match{id: "mvt"}
 	c.match = m
 	m.phase.Store(phase)
-	m.shootAt = shootAt
+	m.shootAt.Store(shootAt.UnixNano())
 	return m
 }
 

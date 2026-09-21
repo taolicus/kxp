@@ -10,6 +10,9 @@ let remainingWindowMs = 2000; // local portion of the PUN window still open
 let sawPunAt = 0;
 let clockSkew = 0; // serverNow - clientNow, estimated from the connected snapshot
 let stallTimer = null;
+let chiTimer = null; // local CHI knockback for a dropped countdown frame
+let punTimer = null; // local PUN entry scheduled from the announced round plan
+let plannedShootAt = 0; // announced deadline (epoch-ms) this punTimer belongs to
 
 // Last-resort recovery: if a PUN result never arrives (dropped SSE event,
 // wedged connection) we're stuck in a game state with nothing left to do.
@@ -144,6 +147,11 @@ function flashPick(move) {
 
 function resetGame() {
   clearTimeout(shootTimer);
+  clearTimeout(chiTimer);
+  clearTimeout(punTimer);
+  chiTimer = null;
+  punTimer = null;
+  plannedShootAt = 0;
   sawPunAt = 0;
   $('#banner').classList.add('hidden');
   $('#timing').classList.add('hidden');
@@ -152,6 +160,33 @@ function resetGame() {
   $('#btn-mode').classList.add('hidden');
   flashPick(null);
   setCount('\u200b');
+}
+
+// v1.1: the server pre-announces the PUN deadline (shootAt) on the countdown
+// frame, so KA/CHI/PUN can be scheduled on the client clock. A dropped or
+// stalled `shoot` frame can then no longer cost the round — the countdown
+// itself ends at the announced time via a local timer. A `shoot` frame that
+// arrives anyway just enters a window we already opened (the machine ignores
+// it in the shoot state).
+function planFromCountdown(d) {
+  if (!d.shootAt) return; // pre-announce unseen — fall back to frame-driven play
+  if (d.shootAt === plannedShootAt) return; // duplicate countdown for this round
+  clearTimeout(chiTimer);
+  clearTimeout(punTimer);
+  plannedShootAt = d.shootAt;
+  const plan = KXP.planRound(Date.now(), d.shootAt, d.windowMs, clockSkew);
+  if (!plan) return;
+  if (plan.msUntilChi > 0) {
+    chiTimer = setTimeout(() => {
+      if (state === 'countdown') setCount('CHI');
+    }, plan.msUntilChi);
+  }
+  if (plan.actionable) {
+    punTimer = setTimeout(() => {
+      if (state !== 'countdown') return;
+      transition('shoot', { shootAt: d.shootAt, windowMs: d.windowMs || remainingWindowMs });
+    }, Math.max(0, plan.msUntilPun));
+  }
 }
 
 function banner(html) {
@@ -242,6 +277,7 @@ const enter = {
     }
     setCount(d.n ?? 'Get ready');
     $('#stage').classList.remove('go');
+    planFromCountdown(d);
   },
 
   shoot(d, from) {

@@ -1,8 +1,9 @@
 # KACHIPUN game protocol
 
-Version: 1. All payloads are JSON. Numbers are seconds unless stated.
-(A protocol rework v1.1–v1.3 is planned; see "Planned rework" at the end of
-this document — not yet implemented.)
+Version: 1.1. All payloads are JSON. Numbers are seconds unless stated.
+(Timed frames carry `ts`, server epoch-ms at construction. v1.1 shipped the
+announced-deadline schedule; v1.2–v1.3 are still planned — see "Rework" near
+the end.)
 
 The server speaks two things: a single persistent Server-Sent Events (SSE)
 stream per client (`GET /events`, pull-only) and plain `POST` endpoints for
@@ -120,16 +121,16 @@ still shows the true server-side remaining time instead of a collapsed one. On
 and never shows an unwinnable PUN. Win/loss is decided exclusively by server
 arrival time; client times are cosmetic.
 
-## Planned rework: v1.1–v1.3 (not yet implemented)
+## Rework
 
-The current protocol makes the player's ability to act depend on burst delivery
-of the `shoot` frame over a single unacknowledged SSE stream: a ~2s stall at
-that moment (or a lost frame, unrecoverable faster than a reconnect) produces
-"skip PUN → Waiting for result → You lose" with no chance to act. The planned
-rework removes that dependency. Slices ship one at a time (see the roadmap,
-"Protocol rework").
+Implemented and planned slices of the protocol rework. The original protocol
+made the player's ability to act depend on burst delivery of the `shoot` frame
+over a single unacknowledged SSE stream: a ~2s stall at that moment (or a lost
+frame, unrecoverable faster than a reconnect) produced "skip PUN → Waiting for
+result → You lose" with no chance to act. The rework removes that dependency;
+slices ship one at a time (see the roadmap, "Protocol rework").
 
-### v1.1 — announced deadline + per-frame `ts`
+### v1.1 — announced deadline + per-frame `ts` (implemented)
 
 - The server pre-announces the round schedule at countdown start. The `KA`
   frame (and the `CHI` frame, idempotently) carries `{n, shootAt, windowMs, ts}`
@@ -139,13 +140,17 @@ rework removes that dependency. Slices ship one at a time (see the roadmap,
 - The client schedules KA/CHI/PUN locally against the announced `shootAt`; a
   late or dropped `shoot`/`countdown` frame is harmless (already acted upon), so
   `shoot` demotes to advisory. `connected` snapshots carry the plan
-  (`shootAt`+`windowMs`) when `phase=countdown` so a mid-countdown reconnect
-  rebuilds the schedule.
+  (`shootAt`+`windowMs`) when `phase=countdown` — only once announced, so a
+  mid-handshake snapshot cannot leak a deadline — and keep the existing
+  `shootAt`/`windowMs` on `phase=shoot` for rejoin.
 - `countdown`, `shoot`, `matched`, `result`, and `waiting` all gain a `ts`
   field (server epoch-ms at construction), making delivery lag vs clock skew
   measurable at the client for the first time.
+- Server plumbing: `shootAt` moved from a plain `time.Time` to an `atomic.Int64`
+  (UnixNano) so snapshots can read it during countdown without racing the run
+  goroutine; `handleMove` judges lateness against the announced `deadline()`.
 
-### v1.2 — stream sequence numbers + replay
+### v1.2 — stream sequence numbers + replay (planned)
 
 - Every frame is written with its SSE `id:` (a per-stream monotonic seq); a
   reconnecting client presents the browser's `Last-Event-ID` (or a `?seq=`
@@ -154,7 +159,7 @@ rework removes that dependency. Slices ship one at a time (see the roadmap,
   snapshot reconciliation applies. Replaces the reconnect-then-snapshot
   recovery whose backoff is slower than the 2s window.
 
-### v1.3 — `/ping` health probe
+### v1.3 — `/ping` health probe (planned)
 
 - `POST /ping` → `{clientTs, serverTs}` lets the client probe one-way latency
   while in lobby/matched, surface a weak-connection indicator, and back out of

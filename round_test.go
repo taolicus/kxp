@@ -155,6 +155,50 @@ func TestShootEventCarriesWindow(t *testing.T) {
 	a.cancel()
 }
 
+// TestCountdownCarriesAnnouncedPlan locks v1.1: the countdown frame pre-announces
+// the round deadline (~2s ahead), carries `ts`, and the shoot frame re-uses the
+// same announced deadline — the window can no longer be lost to a stalled or
+// dropped `shoot` frame, and lag vs skew becomes measurable client-side.
+func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
+	h := NewHub()
+	a := newClient()
+	m := h.makeMatch("pl1", side{client: a}, side{bot: true, character: "raiden"})
+	m.start()
+
+	d := waitForEvent(t, a, "countdown")
+	shootAt, ok := d["shootAt"].(float64)
+	if !ok || int64(shootAt) != m.shootAtMs() {
+		t.Fatalf("countdown shootAt = %v, want announced %d", d["shootAt"], m.shootAtMs())
+	}
+	if got := d["windowMs"]; got != float64(shootWindow.Milliseconds()) {
+		t.Errorf("countdown windowMs = %v, want %d", got, shootWindow.Milliseconds())
+	}
+	if ts, ok := d["ts"].(float64); !ok || ts <= 0 {
+		t.Errorf("countdown ts = %v, want a positive server epoch-ms", d["ts"])
+	}
+	if announced := m.shootAtMs(); announced < time.Now().UnixMilli()+1400 || announced > time.Now().UnixMilli()+2600 {
+		t.Errorf("announced shootAt %d not ~2s ahead of now", announced)
+	}
+
+	s := waitForEvent(t, a, "shoot")
+	if got := int64(s["shootAt"].(float64)); got != int64(shootAt) {
+		t.Errorf("shoot shootAt = %d, want the announced %d (no re-mint)", got, int64(shootAt))
+	}
+	if ts, ok := s["ts"].(float64); !ok || ts <= 0 {
+		t.Errorf("shoot ts = %v, want a positive server epoch-ms", s["ts"])
+	}
+
+	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}
+	ra := waitForEvent(t, a, "result")
+	if ts, ok := ra["ts"].(float64); !ok || ts <= 0 {
+		t.Errorf("result ts = %v, want a positive server epoch-ms", ra["ts"])
+	}
+	if got := int64(ra["youTimingMs"].(float64)); got > 5000 {
+		t.Errorf("youTimingMs = %d, want arrival judged against the announced deadline", got)
+	}
+	a.cancel()
+}
+
 func TestCPURound(t *testing.T) {
 	h := NewHub()
 	a := newClient()

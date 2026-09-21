@@ -21,12 +21,16 @@ clobber a newer phase. The engine never prints debug state (no
 
 ## Timing model
 
-The server records `shootAt = time.Now()` when the shoot phase begins. Reaction
-time is calculated as `arrival.Sub(shootAt)` where `arrival` is `time.Now()`
-captured at POST receipt. Picks outside the shoot window (its length is
-server-controlled — see the `windowMs` field in the `shoot` event) are rejected
-with `400`; failing to pick within it is a timeout loss. `handleMove`'s
-phase/deadline check is best-effort and races the deadline timer; a move
+The server fixes the round deadline when the countdown begins: it stores
+`shootAt = now + 2·countStep` and the run loop sleeps to the announced slots
+(first `countdown` frame at S−2s, `CHI` at S−1s, then `shoot` at S). `shootAt`
+is an `atomic.Int64` (UnixNano) because reconnect snapshots read it during the
+countdown. Reaction time is `arrival.Sub(shootAt)` where `arrival` is
+`time.Now()` captured at POST receipt. Picks outside the shoot window (its
+length is server-controlled — see the `windowMs` field in the `countdown`/
+`shoot` frames) are rejected with `400`; failing to pick within it is a timeout
+loss. `handleMove` judges lateness against the announced deadline and its
+phase/deadline check is best-effort (it races the deadline timer); a move
 accepted there is never silently dropped — `drainPending` counts anything
 buffered before the deadline, and a straggler is drained at `finishMatch` (it
 can only lose an already-closed round).
@@ -36,12 +40,11 @@ Displayed reaction times use the client's own click timestamps when provided
 client estimates phone/server clock skew from the `now` field of the
 `connected` snapshot so a skewed clock never shrinks the local PUN window.
 
-Planned (Protocol rework, see the roadmap): `shootAt` is pre-announced at
-countdown start and the run loop sleeps to the announced instant instead of
-minting the deadline on the `shoot` frame; the client then schedules KA/CHI/PUN
-against the plan, so a stalled or dropped `shoot` frame no longer destroys the
-window. Per-frame `ts` makes delivery lag vs clock skew measurable; a per-stream
-seq with reconnect replay and a `/ping` probe follow in later slices.
+The client schedules KA/CHI/PUN against the announced plan, so a stalled or
+dropped `shoot` frame no longer destroys the window; every timed frame carries
+a server `ts` (epoch-ms) making delivery lag vs clock skew measurable
+(protocol v1.1, landed). A per-stream seq with reconnect replay and a `/ping`
+probe follow in later slices (v1.2–v1.3).
 
 ## Matchmaking
 

@@ -325,9 +325,9 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 			out["opponentName"] = m.opponentName(i)
 			out["opponentCharacter"] = m.opponentCharacter(i)
 		}
-		if out["phase"] == "shoot" {
+		if (out["phase"] == "shoot" || out["phase"] == "countdown") && m.shootAt.Load() != 0 {
 			out["windowMs"] = shootWindow.Milliseconds()
-			out["shootAt"] = m.shootAt.UnixMilli()
+			out["shootAt"] = m.shootAtMs()
 		}
 		if out["phase"] == "countdown" && m.needsReady() && !m.bothReady() {
 			out["pending"] = true
@@ -482,7 +482,7 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 		h.queue = append(h.queue, c)
 	}
 	h.mu.Unlock()
-	c.sendEv(evt("waiting", map[string]any{}))
+	c.sendEv(evt("waiting", map[string]any{"ts": time.Now().UnixMilli()}))
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte("{}"))
 	go h.tryMatch()
@@ -626,7 +626,7 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "match over")
 		return
 	case phaseShoot:
-		if time.Now().After(m.shootAt.Add(shootWindow)) {
+		if time.Now().After(m.deadline()) {
 			h.handlerError(w, http.StatusBadRequest, "too late")
 			return
 		}

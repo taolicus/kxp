@@ -22,6 +22,26 @@
     return { actionable: remaining > 0, remainingMs: remaining };
   }
 
+  // planRound lays the announced round schedule onto the client clock. The
+  // server pre-announces the PUN deadline (shootAt, epoch-ms) on the first
+  // countdown frame, fixing KA at S-2000, CHI at S-1000, PUN at S. The client
+  // shows PUN from the schedule even if the `shoot` frame stalls or drops, so
+  // delivery can no longer cost the round. skew = serverNow - clientNow, from
+  // the connected snapshot. Returns null without a plan (pre-announce unseen).
+  // remainingMs is the portion of the window still open measured from `now`.
+  function planRound(now, shootAt, windowMs, skew) {
+    if (!shootAt) return null;
+    const total = windowMs || 2000;
+    const msUntilPun = shootAt - (now + (skew || 0));
+    return {
+      msUntilKa: msUntilPun - 2000,
+      msUntilChi: msUntilPun - 1000,
+      msUntilPun,
+      actionable: msUntilPun + total > 0,
+      remainingMs: Math.max(0, total + msUntilPun),
+    };
+  }
+
   // applyResult folds a match outcome into local statistics without mutating
   // the input. win: wins + streak (+best). loss: streak reset. draw: no change.
   function applyResult(stats, outcome) {
@@ -62,5 +82,5 @@
       : 'NOT ACCEPTED';
   }
 
-  return { aliases, shootWindow, applyResult, resultLines, rejectLabel };
+  return { aliases, shootWindow, planRound, applyResult, resultLines, rejectLabel };
 }));

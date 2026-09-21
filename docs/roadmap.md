@@ -44,15 +44,19 @@ The reaction opportunity must not depend on burst delivery of a single `shoot`
 frame over one unacknowledged SSE stream. Slices ship one at a time; each is a
 commit + deploy. Full spec in protocol.md, "Planned rework".
 
-- [ ] **A. Announced deadline + `ts` (v1.1)** — pre-announce the round's
-      `shootAt` at countdown start and drive the run loop on the announced
-      schedule (sleep-until slots; no re-mint on the shoot frame); the client
-      schedules KA/CHI/PUN locally, so a stalled or dropped `shoot` frame no
-      longer costs the round. `countdown`, `shoot`, `matched`, `result`,
+- [x] **A. Announced deadline + `ts` (v1.1)** — the countdown frame pre-announces
+      the round's `shootAt` and the run loop sleeps to the announced schedule
+      (KA at S-2s, CHI at S-1s, PUN at S; no re-mint on the shoot frame); the
+      client schedules KA/CHI/PUN locally, so a stalled or dropped `shoot` frame
+      no longer costs the round (a late `shoot` is advisory; the machine already
+      ignores it in the shoot state). `countdown`, `shoot`, `matched`, `result`,
       `waiting` carry a server `ts` (epoch-ms) so delivery lag vs clock skew is
-      observable. `shoot` demotes to advisory; `connected` snapshots carry the
-      plan when `phase=countdown`. Done when the reported symptom cannot occur
-      on a link that delivered the countdown plan.
+      observable. `connected` snapshots carry the plan when `phase=countdown`
+      (only once announced, so a mid-handshake snapshot can't leak a deadline),
+      and the `shoot` snapshot keeps `shootAt`/`windowMs` for rejoin. `shootAt`
+      is now an `atomic.Int64`, closing a read/write race opened by snapshots
+      reading it during countdown. Exercised by `TestCountdownCarriesAnnouncedPlan`,
+      `TestSnapshotCarriesCountdownPlan`, and `planRound` unit tests.
 - [ ] **B. Sequence numbers + replay (v1.2)** — SSE `id:` per-stream seq with
       replay of frames after the client's `Last-Event-ID` from a small
       per-client ring; snapshot fallback past the ring or after a match ends.

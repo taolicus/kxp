@@ -101,7 +101,7 @@ type match struct {
 	sides   [2]matchParty
 	botMove chan moveMsg
 	phase   atomic.Int32
-	shootAt time.Time
+	shootAt atomic.Int64 // announced PUN deadline (epoch ns); fixed at countdown start
 	moves   [2]*moveMsg
 	ready   atomic.Int32 // bitmask: bit i set once side i acked readiness
 	readyCh chan struct{}
@@ -117,6 +117,20 @@ type match struct {
 func newMatch(id string) *match {
 	return &match{id: id, readyCh: make(chan struct{})}
 }
+
+// shootAtTime is the announced PUN deadline as a time.Time.
+func (m *match) shootAtTime() time.Time { return time.Unix(0, m.shootAt.Load()) }
+
+// shootAtMs is the announced PUN deadline in server epoch-ms, as carried in
+// outbound frames.
+func (m *match) shootAtMs() int64 { return time.Unix(0, m.shootAt.Load()).UnixMilli() }
+
+// deadline is when the PUN window closes, server-authoritative.
+func (m *match) deadline() time.Time { return m.shootAtTime().Add(shootWindow) }
+
+// tsNow stamps an outbound frame with the server clock (epoch-ms). Clients use
+// it to separate delivery lag from clock skew.
+func tsNow() int64 { return time.Now().UnixMilli() }
 
 // ackReady marks side i as ready to receive the countdown. Idempotent; closes
 // readyCh once every human side has acked.
@@ -214,6 +228,7 @@ func (m *match) run() {
 		m.send(i, evt("matched", map[string]any{
 			"opponentName":      m.opponentName(i),
 			"opponentCharacter": m.opponentCharacter(i),
+			"ts":                tsNow(),
 		}))
 	}
 
@@ -221,27 +236,51 @@ func (m *match) run() {
 		return
 	}
 
-	for _, w := range []string{"KA", "CHI"} {
-		for i := range m.sides {
-			m.send(i, evt("countdown", map[string]any{"n": w}))
-		}
-		if m.wait(countStep) {
-			m.abort()
-			return
-		}
-	}
+	// Announce the round schedule before the countdown starts: the deadline is
+	// fixed here (KA at S-2s, CHI at S-1s, PUN at S) and the loop sleeps to the
+	// announced slots. The client plays the countdown against a deadline it
+	// already knows, so a stalled or dropped `shoot` frame can no longer cost
+	// the round; the shoot frame stays authoritative for the window.
+	m.shootAt.Store(time.Now().Add(2 * countStep).UnixNano())
 
 	if m.left() {
 		m.abort()
 		return
 	}
 
+	planPayload := func(n string) map[string]any {
+		return map[string]any{
+			"n":        n,
+			"shootAt":  m.shootAtMs(),
+			"windowMs": shootWindow.Milliseconds(),
+			"ts":       tsNow(),
+		}
+	}
+	for i := range m.sides {
+		m.send(i, evt("countdown", planPayload("KA")))
+	}
+	if m.waitUntil(m.shootAtTime().Add(-countStep)) {
+		m.abort()
+		return
+	}
+	for i := range m.sides {
+		m.send(i, evt("countdown", planPayload("CHI")))
+	}
+	if m.waitUntil(m.shootAtTime()) {
+		m.abort()
+		return
+	}
+	if m.left() {
+		m.abort()
+		return
+	}
+
 	m.advance(phaseCountdown, phaseShoot)
-	m.shootAt = time.Now()
 	for i := range m.sides {
 		m.send(i, evt("shoot", map[string]any{
 			"windowMs": shootWindow.Milliseconds(),
-			"shootAt":  m.shootAt.UnixMilli(),
+			"shootAt":  m.shootAtMs(),
+			"ts":       tsNow(),
 		}))
 	}
 
@@ -290,6 +329,16 @@ func (m *match) wait(d time.Duration) bool {
 	case <-m.leftCh(1):
 		return true
 	}
+}
+
+// waitUntil sleeps until an announced schedule slot (t), aborting on a side
+// leaving. Returns true when the match should abort. Nobody sleeps when the
+// slot already passed — the announced deadline stays authoritative.
+func (m *match) waitUntil(t time.Time) bool {
+	if d := time.Until(t); d > 0 {
+		return m.wait(d)
+	}
+	return m.left()
 }
 
 func (m *match) botAction() {
@@ -404,7 +453,7 @@ func (m *match) resolve() {
 			continue
 		}
 		ps[i].move = msg.move
-		ps[i].timing = msg.arrive.Sub(m.shootAt)
+		ps[i].timing = msg.arrive.Sub(m.shootAtTime())
 		ps[i].valid = ps[i].timing >= 0
 		ps[i].clientMs = clientReactionMs(msg)
 		if !ps[i].valid {
@@ -452,6 +501,7 @@ func (m *match) resolve() {
 			"outcome":           string(res[i]),
 			"opponentName":      m.opponentName(i),
 			"mode":              mode,
+			"ts":                tsNow(),
 		}
 		m.send(i, evt("result", data))
 	}
