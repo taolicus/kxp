@@ -1,6 +1,8 @@
 # KACHIPUN game protocol
 
 Version: 1. All payloads are JSON. Numbers are seconds unless stated.
+(A protocol rework v1.1–v1.3 is planned; see "Planned rework" at the end of
+this document — not yet implemented.)
 
 The server speaks two things: a single persistent Server-Sent Events (SSE)
 stream per client (`GET /events`, pull-only) and plain `POST` endpoints for
@@ -117,3 +119,43 @@ still shows the true server-side remaining time instead of a collapsed one. On
 `shoot` it plays out only the remaining `windowMs − ((now + skew) − shootAt)`
 and never shows an unwinnable PUN. Win/loss is decided exclusively by server
 arrival time; client times are cosmetic.
+
+## Planned rework: v1.1–v1.3 (not yet implemented)
+
+The current protocol makes the player's ability to act depend on burst delivery
+of the `shoot` frame over a single unacknowledged SSE stream: a ~2s stall at
+that moment (or a lost frame, unrecoverable faster than a reconnect) produces
+"skip PUN → Waiting for result → You lose" with no chance to act. The planned
+rework removes that dependency. Slices ship one at a time (see the roadmap,
+"Protocol rework").
+
+### v1.1 — announced deadline + per-frame `ts`
+
+- The server pre-announces the round schedule at countdown start. The `KA`
+  frame (and the `CHI` frame, idempotently) carries `{n, shootAt, windowMs, ts}`
+  where `shootAt` is the announced, already-fixed deadline; the run loop sleeps
+  to the announced slots (KA at S−2s, CHI at S−1s) and advances to `shoot` at `S`
+  **without re-minting `shootAt`**.
+- The client schedules KA/CHI/PUN locally against the announced `shootAt`; a
+  late or dropped `shoot`/`countdown` frame is harmless (already acted upon), so
+  `shoot` demotes to advisory. `connected` snapshots carry the plan
+  (`shootAt`+`windowMs`) when `phase=countdown` so a mid-countdown reconnect
+  rebuilds the schedule.
+- `countdown`, `shoot`, `matched`, `result`, and `waiting` all gain a `ts`
+  field (server epoch-ms at construction), making delivery lag vs clock skew
+  measurable at the client for the first time.
+
+### v1.2 — stream sequence numbers + replay
+
+- Every frame is written with its SSE `id:` (a per-stream monotonic seq); a
+  reconnecting client presents the browser's `Last-Event-ID` (or a `?seq=`
+  query) and the server replays missed frames from a small per-client ring
+  buffer. Past the ring, or when the match already finished, the existing
+  snapshot reconciliation applies. Replaces the reconnect-then-snapshot
+  recovery whose backoff is slower than the 2s window.
+
+### v1.3 — `/ping` health probe
+
+- `POST /ping` → `{clientTs, serverTs}` lets the client probe one-way latency
+  while in lobby/matched, surface a weak-connection indicator, and back out of
+  a match before it begins on a degrading link.

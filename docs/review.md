@@ -163,3 +163,6 @@
 55. Graceful handling of multiple browser tabs — Multiple tabs or sessions from the same user should behave predictably rather than creating ambiguous player state.
 
 
+56. PUN-frame delivery fragility — A player's ability to act must not depend on burst delivery of the `shoot` frame over a single unacknowledged SSE stream: a ~2s stall or a dropped frame (whose recovery, reconnect + snapshot, exceeds the window) turns into "skip PUN → Waiting for result → You lose". Planned fix (protocol v1.1–v1.3): pre-announce `shootAt` at countdown start, add per-frame `ts`, stream seq + replay on reconnect, and a `/ping` health probe.
+
+

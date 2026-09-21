@@ -68,8 +68,9 @@ roadmap's "Automated test workflow" note if you add CI.)
 
 Core hardening, testability, and the pure-engine refactor are done, including
 per-IP rate limiting and resource caps — live on the public server. Still open
-are latency compensation, best-of-N modes, and the identity/leaderboard
-features. See [roadmap.md](docs/roadmap.md).
+are the protocol rework (announced-deadline connectivity fix), latency
+compensation, best-of-N modes, and the identity/leaderboard features. See
+[roadmap.md](docs/roadmap.md).
 
 The live server is kept at the current build by an ops script kept **outside**
 this repo (`git pull` + build + `systemctl restart`); the repository itself

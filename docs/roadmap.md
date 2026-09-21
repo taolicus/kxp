@@ -13,19 +13,54 @@ been landed in the background (see Phase 1) and are live: the public server is
 kept at the current build by an ops script kept outside this repo (`git pull`
 + build + `systemctl restart`).
 
-1. **Character roster & portraits** (Phase 3) — expand the cosmetic fighter
+The protocol rework (item 1) is the current focus: live reports of "skip PUN →
+Waiting for result → You lose" trace to the reaction window depending on burst
+delivery of a single `shoot` frame over one unacknowledged SSE stream. The
+rework (details below) removes that dependency; Task A ships before best-of-5,
+which builds on the announced-deadline schedule.
+
+1. **Protocol rework (connectivity)** — announced-deadline schedule, per-frame
+   `ts`, stream seq + replay, and a `/ping` health probe (v1.1–v1.3, sliced
+   A/B/C one at a time, each a single-binary deploy). Directly targets the live
+   connectivity symptom.
+2. **Character roster & portraits** (Phase 3) — expand the cosmetic fighter
    roster with user-supplied art and an emoji fallback; select-screen polish.
-2. **Best-of-5 game mode** (Phase 3) — first to 3 decisive rounds, draws
+3. **Best-of-5 game mode** (Phase 3) — first to 3 decisive rounds, draws
    replayed; best-of-1 stays the default. Ships for CPU matches first, then
-   PvP (Stage 4 below).
-3. **Solo campaign / arcade ladder** (Phase 4) — climb a 5-floor tower against
+   PvP (item 5 below). Depends on Protocol rework Task A.
+4. **Solo campaign / arcade ladder** (Phase 4) — climb a 5-floor tower against
    roster fighters (boss on the final floor), loss restarts, best floor
    persisted locally; fights run under the mode selector (best-of-5 default).
-4. **Best-of-5 for PvP** — re-open the ready handshake per round once the
+5. **Best-of-5 for PvP** — re-open the ready handshake per round once the
    client machine is proven against the CPU.
-5. **Observability** (Phase 2) — structured request/response logging
-   (connections, matchmaking, match lifecycle, errors) so the live box is
-   diagnosable; small background sweep, same pattern as the hardening slices.
+6. **Observability** (Phase 2, on hold) — the earlier request/response-logging
+   slice is superseded for now: Protocol rework Task A's `ts` fields make lag
+   vs skew measurable client-side without a log pipeline. An access log /
+   journald-pull returns only if post-rework evidence still calls for it.
+
+## Protocol rework (active)
+
+The reaction opportunity must not depend on burst delivery of a single `shoot`
+frame over one unacknowledged SSE stream. Slices ship one at a time; each is a
+commit + deploy. Full spec in protocol.md, "Planned rework".
+
+- [ ] **A. Announced deadline + `ts` (v1.1)** — pre-announce the round's
+      `shootAt` at countdown start and drive the run loop on the announced
+      schedule (sleep-until slots; no re-mint on the shoot frame); the client
+      schedules KA/CHI/PUN locally, so a stalled or dropped `shoot` frame no
+      longer costs the round. `countdown`, `shoot`, `matched`, `result`,
+      `waiting` carry a server `ts` (epoch-ms) so delivery lag vs clock skew is
+      observable. `shoot` demotes to advisory; `connected` snapshots carry the
+      plan when `phase=countdown`. Done when the reported symptom cannot occur
+      on a link that delivered the countdown plan.
+- [ ] **B. Sequence numbers + replay (v1.2)** — SSE `id:` per-stream seq with
+      replay of frames after the client's `Last-Event-ID` from a small
+      per-client ring; snapshot fallback past the ring or after a match ends.
+      Replaces the reconnect-then-snapshot recovery whose backoff (≥3s) is
+      slower than the 2s window.
+- [ ] **C. `/ping` health probe (v1.3)** — a client-side latency probe while in
+      lobby/matched, a weak-connection indicator, and a way to back out of a
+      match before it starts on a degrading link.
 
 ## Phase 1 — Core hardening
 
@@ -111,9 +146,12 @@ Make the system testable and debuggable in production.
       full valid/invalid edge set, with `TestAdvanceRejectsWrongFrom` and
       `TestAdvanceWinsOnlyOnce` covering rejection and idempotency.
 - [ ] **CPU determinism hooks** — inject a deterministic clock and move picker
-      for automated tests.
+      for automated tests. Protocol rework Task A's schedule-driven run loop
+      (`sleep-until` on an announced `shootAt`) is the hook this needs.
 - [ ] **Request/response logging** — structured logs for connection,
-      matchmaking, match lifecycle, and errors.
+      matchmaking, match lifecycle, and errors. On hold: Protocol rework Task A
+      adds `ts` to the timed frames (lag measurement without a log pipeline);
+      revisit only if evidence after the rework still calls for it.
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
@@ -132,7 +170,8 @@ Build on a stable foundation without rewriting the core.
       `oppRoundWins`, `roundsTarget`, `seriesOver`); a round result advances
       the client scoreboard and re-enters countdown, a final result ends the
       series. Ships for CPU matches first (ready stays once-per-series); PvP
-      re-opens the ready handshake per round afterward.
+      re-opens the ready handshake per round afterward. Builds on the Protocol
+      rework Task A schedule, which ships first.
 - [ ] **Character roster & portraits** — cosmetic expansion of the fighter
       roster (data in `characters.go` + `web/characters.js`; no wire change,
       no gameplay effect). Real art lives at `/img/char/<id>.webp` with an

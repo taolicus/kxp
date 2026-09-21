@@ -36,6 +36,13 @@ Displayed reaction times use the client's own click timestamps when provided
 client estimates phone/server clock skew from the `now` field of the
 `connected` snapshot so a skewed clock never shrinks the local PUN window.
 
+Planned (Protocol rework, see the roadmap): `shootAt` is pre-announced at
+countdown start and the run loop sleeps to the announced instant instead of
+minting the deadline on the `shoot` frame; the client then schedules KA/CHI/PUN
+against the plan, so a stalled or dropped `shoot` frame no longer destroys the
+window. Per-frame `ts` makes delivery lag vs clock skew measurable; a per-stream
+seq with reconnect replay and a `/ping` probe follow in later slices.
+
 ## Matchmaking
 
 A single global FIFO queue pairs players under the hub mutex. Anonymous
