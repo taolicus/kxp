@@ -43,14 +43,22 @@
   }
 
   // applyResult folds a match outcome into local statistics without mutating
-  // the input. win: wins + streak (+best). loss: streak reset. draw: no change.
+  // the input. win: wins + streak (+best). loss: the streak that just ended is
+  // recorded as last before resetting; a 0-run loss doesn't clobber last.
+  // draw/void: no change.
   function applyResult(stats, outcome) {
-    const s = { wins: stats.wins, streak: stats.streak, best: stats.best };
+    const s = {
+      wins: stats.wins,
+      streak: stats.streak,
+      best: stats.best,
+      last: stats.last || 0,
+    };
     if (outcome === 'win') {
       s.wins += 1;
       s.streak += 1;
       if (s.streak > s.best) s.best = s.streak;
     } else if (outcome === 'loss') {
+      if (s.streak > 0) s.last = s.streak;
       s.streak = 0;
     }
     return s;

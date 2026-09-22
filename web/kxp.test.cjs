@@ -104,25 +104,44 @@ test('planRound: defaults the window when windowMs is absent', () => {
 });
 
 test('applyResult: win bumps wins and streak and raises best', () => {
-  assert.deepEqual(KXP.applyResult({ wins: 4, streak: 4, best: 4 }, 'win'), { wins: 5, streak: 5, best: 5 });
+  assert.deepEqual(
+    KXP.applyResult({ wins: 4, streak: 4, best: 4, last: 0 }, 'win'),
+    { wins: 5, streak: 5, best: 5, last: 0 },
+  );
 });
 
 test('applyResult: win does not lower an existing best', () => {
-  assert.deepEqual(KXP.applyResult({ wins: 10, streak: 1, best: 12 }, 'win'), { wins: 11, streak: 2, best: 12 });
+  assert.deepEqual(
+    KXP.applyResult({ wins: 10, streak: 1, best: 12, last: 3 }, 'win'),
+    { wins: 11, streak: 2, best: 12, last: 3 },
+  );
 });
 
-test('applyResult: loss resets streak but keeps wins and best', () => {
-  assert.deepEqual(KXP.applyResult({ wins: 7, streak: 3, best: 8 }, 'loss'), { wins: 7, streak: 0, best: 8 });
+test('applyResult: loss records last streak then resets', () => {
+  assert.deepEqual(
+    KXP.applyResult({ wins: 7, streak: 3, best: 8, last: 2 }, 'loss'),
+    { wins: 7, streak: 0, best: 8, last: 3 },
+  );
 });
 
-test('applyResult: draw is a no-op', () => {
-  assert.deepEqual(KXP.applyResult({ wins: 7, streak: 3, best: 8 }, 'draw'), { wins: 7, streak: 3, best: 8 });
+test('applyResult: loss on a zero streak does not clobber last', () => {
+  assert.deepEqual(
+    KXP.applyResult({ wins: 7, streak: 0, best: 8, last: 4 }, 'loss'),
+    { wins: 7, streak: 0, best: 8, last: 4 },
+  );
+});
+
+test('applyResult: draw is a no-op including last', () => {
+  assert.deepEqual(
+    KXP.applyResult({ wins: 7, streak: 3, best: 8, last: 2 }, 'draw'),
+    { wins: 7, streak: 3, best: 8, last: 2 },
+  );
 });
 
 test('applyResult: does not mutate its input', () => {
-  const input = { wins: 2, streak: 0, best: 1 };
+  const input = { wins: 2, streak: 0, best: 1, last: 0 };
   KXP.applyResult(input, 'win');
-  assert.deepEqual(input, { wins: 2, streak: 0, best: 1 });
+  assert.deepEqual(input, { wins: 2, streak: 0, best: 1, last: 0 });
 });
 
 test('resultLines: timeout note', () => {
