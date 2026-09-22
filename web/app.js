@@ -33,14 +33,45 @@ const DEBUG = /[?&]debug/.test(location.search);
 const GAME_STATES = ['countdown', 'shoot', 'locked'];
 const BGS = ['pool', 'forest', 'tomb', 'arena', 'portal'];
 
-const $ = (sel) => document.querySelector(sel);
+// bgReady resolves once the background for the current match is decoded and
+// applied, so the game view is only shown when its bg can paint in one frame.
+let bgReady = Promise.resolve(true);
+
+// preloadBg returns a promise that resolves when the animated (and, for
+// reduced-motion users, static) webp is decoded. It never rejects: a slow or
+// missing asset must not hang the game screen, only defer it.
+function preloadBg(bg) {
+  const load = (src) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = img.onerror = resolve;
+    img.src = src;
+  });
+  return Promise.all([
+    load(`/img/bg/${bg}.webp`),
+    load(`/img/bg/${bg}-static.webp`),
+  ]);
+}
 
 function randomizeBg() {
   const bg = BGS[Math.floor(Math.random() * BGS.length)];
-  const r = document.documentElement.style;
-  r.setProperty('--bg-anim', `url('/img/bg/${bg}.webp')`);
-  r.setProperty('--bg-static', `url('/img/bg/${bg}-static.webp')`);
+  bgReady = preloadBg(bg).then(() => {
+    const r = document.documentElement.style;
+    r.setProperty('--bg-anim', `url('/img/bg/${bg}.webp')`);
+    r.setProperty('--bg-static', `url('/img/bg/${bg}-static.webp')`);
+    return bg;
+  });
+  return bgReady;
 }
+
+// showGame defers showing the game view until the current bg is loaded. Guarded
+// so a late load never paints the game screen after the player already left.
+function showGame() {
+  bgReady.then(() => {
+    if (state !== 'lobby' && state !== 'waiting') show('game');
+  });
+}
+
+const $ = (sel) => document.querySelector(sel);
 
 let readyTimer = null;
 
@@ -258,8 +289,8 @@ const enter = {
   matched(d) {
     stopReadyLoop();
     clearTimeout(stallTimer);
-    show('game');
     randomizeBg();
+    showGame();
     resetGame();
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
@@ -269,16 +300,20 @@ const enter = {
 
   countdown(d, from) {
     clearTimeout(stallTimer);
-    show('game');
     if (from === 'matched') {
       stopReadyLoop();
+      showGame();
     } else if (!GAME_STATES.includes(from)) {
       randomizeBg();
+      showGame();
       resetGame();
       setYouSlot();
       setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
-    } else if (d.opponentCharacter) {
-      setOppSlot(d.opponentCharacter, d.opponentName);
+    } else {
+      showGame();
+      if (d.opponentCharacter) {
+        setOppSlot(d.opponentCharacter, d.opponentName);
+      }
     }
     setCount(d.n ?? 'Get ready');
     $('#stage').classList.remove('go');
@@ -289,12 +324,14 @@ const enter = {
     stopReadyLoop();
     const plan = KXP.shootWindow(Date.now(), d.shootAt, d.windowMs, remainingWindowMs, clockSkew);
     armStallWatchdog();
-    show('game');
     if (!GAME_STATES.includes(from)) {
       randomizeBg();
+      showGame();
       resetGame();
       setYouSlot();
       setOppSlot(null, 'Opponent');
+    } else {
+      showGame();
     }
     clearTimeout(shootTimer);
     if (plan.actionable) {
