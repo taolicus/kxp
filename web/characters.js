@@ -2,6 +2,12 @@ const CHARACTERS = [
   { id: 'scorpion', name: 'Alakran', emoji: '🦂' },
   { id: 'subzero', name: 'Hielito', emoji: '🧊' },
   { id: 'raiden', name: 'Rayito', emoji: '⚡' },
+  { id: 'liukang', name: 'Fueguito', emoji: '🔥' },
+  { id: 'smoke', name: 'Humito', emoji: '💨' },
+  { id: 'reptile', name: 'Lagartijo', emoji: '🦎' },
+  { id: 'jax', name: 'Bracitos', emoji: '💪' },
+  { id: 'kitana', name: 'Abaniquita', emoji: '🪭' },
+  { id: 'baraka', name: 'Navajita', emoji: '🗡️' },
 ];
 
 function characterByID(id) {

@@ -11,6 +11,12 @@ var characters = []Character{
 	{ID: "scorpion", Name: "Alakran"},
 	{ID: "subzero", Name: "Hielito"},
 	{ID: "raiden", Name: "Rayito"},
+	{ID: "liukang", Name: "Fueguito"},
+	{ID: "smoke", Name: "Humito"},
+	{ID: "reptile", Name: "Lagartijo"},
+	{ID: "jax", Name: "Bracitos"},
+	{ID: "kitana", Name: "Abaniquita"},
+	{ID: "baraka", Name: "Navajita"},
 }
 
 func characterByID(id string) (Character, bool) {

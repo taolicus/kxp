@@ -18,7 +18,8 @@ the opponent slot, and the result line).
   - `web/characters.js` — client-side: rendering (maps `id` → emoji + name).
     Fighter art is placeholder emoji for now; the `emoji` field will be swapped
     for real artwork later. Placeholder roster: Alakran (🦂), Hielito (🧊),
-    Rayito (⚡).
+    Rayito (⚡), Fueguito (🔥), Humito (💨), Lagartijo (🦎), Bracitos (💪),
+    Abaniquita (🪭), Navajita (🗡️).
 
 ## Data flow
 
