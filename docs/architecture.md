@@ -44,7 +44,9 @@ The client schedules KA/CHI/PUN against the announced plan, so a stalled or
 dropped `shoot` frame no longer destroys the window; every timed frame carries
 a server `ts` (epoch-ms) making delivery lag vs clock skew measurable
 (protocol v1.1, landed). A per-stream seq with reconnect replay and a `/ping`
-probe follow in later slices (v1.2–v1.3).
+probe (v1.2–v1.3 drafts) are parked as symptom descriptions in
+docs/issues.md until the cause behind the residual recovery/latency symptoms
+is confirmed.
 
 ## Scoring (planned)
 

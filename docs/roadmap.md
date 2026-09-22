@@ -6,56 +6,61 @@ unchecked items are open.
 ## Current priorities
 
 Ordered active work. Items outside this list — the remaining Phase 1
-hardening (anonymous abuse prevention) and latency compensation — are
-deliberately postponed until the feature set settles; the risk is accepted
-while the game is small-scale. Per-IP rate limiting and resource limits have
-been landed in the background (see Phase 1) and are live: the public server is
-kept at the current build by an ops script kept outside this repo (`git pull`
-+ build + `systemctl restart`).
+hardening (anonymous abuse prevention) — are deliberately postponed until the
+feature set settles; the risk is accepted while the game is small-scale.
+Per-IP rate limiting and resource limits have been landed in the background
+(see Phase 1) and are live: the public server is kept at the current build by
+an ops script kept outside this repo (`git pull` + build + `systemctl
+restart`).
 
-The protocol rework (item 1) is the current focus: live reports of "skip PUN →
-Waiting for result → You lose" trace to the reaction window depending on burst
-delivery of a single `shoot` frame over one unacknowledged SSE stream. The
-rework (details below) removes that dependency; Task A ships before best-of-5,
-which builds on the announced-deadline schedule.
+The protocol rework's Task A (v1.1, announced round deadline + per-frame `ts`)
+has landed and removed the "skip PUN → You lose" burst-delivery dependency.
+The remaining reliability slices (stream seq + replay, `/ping` probe, latency
+compensation, reconnect recovery, ghost online count) were defined from
+unconfirmed connectivity symptoms: they are **parked as symptom descriptions**
+in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
+5) confirms a cause.
 
-1. **Protocol rework (connectivity)** — announced-deadline schedule, per-frame
-   `ts`, stream seq + replay, and a `/ping` health probe (v1.1–v1.3, sliced
-   A/B/C one at a time, each a single-binary deploy). Directly targets the live
-   connectivity symptom.
+1. **Protocol rework (connectivity)** — Task A landed (v1.1). Tasks B (stream
+   seq + replay) and C (`/ping` health probe) are parked in
+   [docs/issues.md](issues.md) pending cause confirmation.
 2. **Character roster & portraits** (Phase 3) — expand the cosmetic fighter
    roster with user-supplied art and an emoji fallback; select-screen polish.
 3. **Best-of-5 game mode** (Phase 3) — first to 3 decisive rounds, draws
-   replayed; best-of-1 stays the default. Ships for CPU matches first, then
-   PvP (item 5 below). Depends on Protocol rework Task A.
-4. **Solo campaign / arcade ladder** (Phase 4) — climb a 5-floor tower against
-   roster fighters (boss on the final floor), loss restarts, best floor
-   persisted locally; fights run under the mode selector (best-of-5 default).
-5. **Best-of-5 for PvP** — re-open the ready handshake per round once the
-   client machine is proven against the CPU.
-6. **Observability** (Phase 2, on hold) — the earlier request/response-logging
-   slice is superseded for now: Protocol rework Task A's `ts` fields make lag
-   vs skew measurable client-side without a log pipeline. An access log /
-   journald-pull returns only if post-rework evidence still calls for it.
-7. **Connectivity-safe scoring** — a round that resolves with a valid move on
-   only one side scores `void` for the no-move side when it timed out: no win,
-   no streak break, "No contest" reported, while the opponent keeps the round
-   win. Early picks stay full losses; a both-way no-move is a draw. Engine and
-   client scorebook adopt it, and the leaderboard applies the same rule
-   server-side so connectivity never reads as a streak-breaking loss.
-8. **Busy affordances** — show loading progress while a user action awaits its
-   reply. Queue/CPU/cancel get inline button spinners (CSS animation) plus a
-   disabled state, kept until the matching SSE transition lands (`waiting`,
-   `state idle`, countdown); move submit and fighter select gain only the
-   pending/disabled state, keeping their existing inline feedback. A failsafe
-   timeout clears any spinner that outlives its request so a hung connection
-   can never leave a stuck spinner.
+      replayed; best-of-1 stays the default. Ships for CPU matches first, then
+      PvP (item 4 below). Depends on Protocol rework Task A.
+4. **Best-of-5 for PvP** — re-open the ready handshake per round once the
+      client machine is proven against the CPU.
+5. **Connectivity diagnostics (decided; ships as observability)** — confirm,
+      then *diagnose*, the reliability symptoms that keep surfacing at
+      the boundary (silent-stuck-in-`matched`, reconnect-looking-like-a-loss,
+      weak-link timing, ghost +1 online, drop-forfeit). Ships **surgical and
+      incremental**, one trace at a time, each independently deployable:
+      client join/leave lifecycle logging with the live count, a bounded SSE
+      connection lifetime that reaps vanished devices, a short SSE frame
+      journal, and — once the rework's `/ping` probe data exists — latency
+      profile visibility. **Causes are deliberately UNCONFIRMED; the slice
+      produces the evidence.** The symptoms themselves are described — not
+      scheduled — in [docs/issues.md](issues.md), and graduate into scheduled
+      work only when the cause is confirmed.
+6. **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
+      (like a draw): no win, no streak break, "No contest" reported, while the
+      opponent keeps the round win. Engine + client + leaderboard adopt it.
+      **Decided and scheduled.**
+7. **Busy affordances** — show a brief pending/disabled affordance on action
+      buttons (Play Online, Instant CPU, rematch, cancel, fighter select, move
+      submit) while their request awaits the SSE reply, so a long wait reads as
+      "working" rather than silent; a failsafe clears it if the reply never
+      comes. Also covers the loading gap while "Waiting for result…".
+      **Decided and scheduled.**
 
 ## Protocol rework (active)
 
 The reaction opportunity must not depend on burst delivery of a single `shoot`
-frame over one unacknowledged SSE stream. Slices ship one at a time; each is a
-commit + deploy. Full spec in protocol.md, "Planned rework".
+frame over one unacknowledged SSE stream. Task A shipped and landed that
+removal. The remaining B/C slices are parked as symptom descriptions in
+[docs/issues.md](issues.md) until the diagnostics slice confirms a cause;
+their draft specs remain in protocol.md, "Rework", marked parked.
 
 - [x] **A. Announced deadline + `ts` (v1.1)** — the countdown frame pre-announces
       the round's `shootAt` and the run loop sleeps to the announced schedule
@@ -70,14 +75,16 @@ commit + deploy. Full spec in protocol.md, "Planned rework".
       is now an `atomic.Int64`, closing a read/write race opened by snapshots
       reading it during countdown. Exercised by `TestCountdownCarriesAnnouncedPlan`,
       `TestSnapshotCarriesCountdownPlan`, and `planRound` unit tests.
-- [ ] **B. Sequence numbers + replay (v1.2)** — SSE `id:` per-stream seq with
-      replay of frames after the client's `Last-Event-ID` from a small
-      per-client ring; snapshot fallback past the ring or after a match ends.
-      Replaces the reconnect-then-snapshot recovery whose backoff (≥3s) is
-      slower than the 2s window.
-- [ ] **C. `/ping` health probe (v1.3)** — a client-side latency probe while in
-      lobby/matched, a weak-connection indicator, and a way to back out of a
-      match before it starts on a degrading link.
+- [ ] **B. Sequence numbers + replay (v1.2) — parked (see issues.md)** — SSE
+      `id:` per-stream seq with replay after `Last-Event-ID`, snapshot
+      fallback past the ring. Draft spec in protocol.md. Speculative fix for
+      the stuck-in-`matched` and reconnect-recovery symptoms; cause
+      **unconfirmed** — parked in [docs/issues.md](issues.md), entries 1–2;
+      graduates only if diagnostics confirm dropped/unrecoverable frames.
+- [ ] **C. `/ping` health probe (v1.3) — parked (see issues.md)** — one-way
+      latency probe + weak-connection indicator + backout. Draft spec in
+      protocol.md. Measurement/fix for the weak-link window shrink; cause
+      **unconfirmed** — parked in [docs/issues.md](issues.md), entry 3.
 
 ## Phase 1 — Core hardening
 
@@ -138,13 +145,12 @@ Note: the unchecked items below are postponed to keep feature work moving
       clock-skew estimate let the player act for the true remaining server
       window whenever any is left (only a fully closed window shows "Waiting
       for result…").
-- [ ] **Latency compensation** — the ready handshake removes the stale/remote
-      burst, but one-way delivery latency can still shrink the *effective*
-      window for high-latency players: an on-time reaction can be dropped as
-      `400 too late` if its HTTP request lands just after the server deadline.
-      Revisit a small server-side acceptance grace and/or a `clickedAt`-based
-      cutoff once real pings are known (win/loss must stay
-      arrival-time-authoritative; see Phase 4 anti-cheat).
+- [ ] **Latency compensation — parked (see issues.md)** — one-way delivery
+      latency can flatten an on-time reaction into a `400 too late` for
+      high-latency players (win/loss stays arrival-time-authoritative; see
+      Phase 4 anti-cheat). Cause **unconfirmed** — parked in
+      [docs/issues.md](issues.md), entry 3; ships only after the connectivity
+      diagnostics slice (item 5) measures real pings.
 
 ## Phase 2 — Testing & observability
 
@@ -169,11 +175,14 @@ Make the system testable and debuggable in production.
       matchmaking, match lifecycle, and errors. On hold: Protocol rework Task A
       adds `ts` to the timed frames (lag measurement without a log pipeline);
       revisit only if evidence after the rework still calls for it.
-- [ ] **Online-count observability & half-open conns** — log client join/leave
-      with the live count so an off-by-one "online now" is diagnosable from the
-      journal, and bound each SSE connection's lifetime (a short rolling
-      per-write deadline plus TCP keepalive) so a vanished device stops counting
-      as online roughly a minute after it drops.
+- [ ] **Online-count observability & half-open conns — diagnostics (issues.md
+      entry 4)** — the +1 ghost is a symptom with an unconfirmed cause, so this
+      ships only as *diagnostics*: client join/leave lifecycle logging with the
+      live count, plus a bounded SSE connection lifetime (a short rolling
+      per-write deadline + TCP keepalive) that reaps vanished devices to test
+      the half-open hypothesis. The symptom is described in
+      [docs/issues.md](issues.md), entry 4; any count-rule change waits for
+      the logs.
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
@@ -188,7 +197,7 @@ Build on a stable foundation without rewriting the core.
       `finish`/`requeue` callbacks back to real clients.
 - [ ] **Game-mode architecture** — series-aware `run()`/`resolve()`: a match
       becomes a sequence of rounds, first to 3 decisive wins, draws replayed; a
-      round that resolves `void` (no valid move, see item 7) counts as a round
+      round that resolves `void` (no valid move, see item 6) counts as a round
       win for the opposing side.
       `result` gains round/series fields (`round`, `youRoundWins`,
       `oppRoundWins`, `roundsTarget`, `seriesOver`); a round result advances
@@ -232,11 +241,12 @@ Features that depend on identity, persistence, or ranking.
       every floor, boss on the final floor, loss restarts the tower, best
       floor persisted in `localStorage`. Fights run under the mode selector
       (best-of-5 default; draws replayed).
-- [ ] **Reconnection (re-evaluate later)** — a match lasts ~3.2s and today a
-      TCP drop instantly forfeits via `opponent-left`, with the dropped player
-      seeing no result. Options for later: resume a live match plus a short
-      (2–3s) forfeit grace, vs. accepting forfeits for such a quick game.
-      Revisit once public play shows how often drops actually occur.
+- [ ] **Reconnection — parked (see issues.md)** — a mid-match TCP drop
+      instantly forfeits via `opponent-left`, with the dropped player seeing no
+      result; resume-vs-grace is undecided and the drop rate is unmeasured.
+      Cause/policy **unconfirmed** — parked in [docs/issues.md](issues.md),
+      entry 5; re-evaluate once diagnostics measure how often drops actually
+      occur.
 - [x] **Random fight backgrounds** — each match picks one of five stages at
       random. Implemented client-side: `app.js` keeps a `BGS` roster and
       `randomizeBg()` sets `--bg-anim`/`--bg-static` on the document (the

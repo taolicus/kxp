@@ -53,6 +53,8 @@ two players share. See [architecture](docs/architecture.md) for the internals.
   the client state table, and clock handling.
 - [backgrounds.md](docs/backgrounds.md) — match background asset pipeline.
 - [roadmap.md](docs/roadmap.md) — planned work by phase.
+- [issues.md](docs/issues.md) — observed reliability symptoms parked until
+  their cause is confirmed.
 
 ## Testing
 
@@ -68,15 +70,18 @@ roadmap's "Automated test workflow" note if you add CI.)
 
 Core hardening, testability, and the pure-engine refactor are done, including
 per-IP rate limiting and resource caps — live on the public server. The
-protocol rework to fix live "skip-PUN" reports is underway: v1.1 (announced
-round deadline + per-frame `ts`) is landed; v1.2–v1.3 (stream seq + replay,
-`/ping` probe) follow. Decided and scheduled next are **connectivity-safe
+protocol rework's Task A (announced round deadline + per-frame `ts`) has
+landed; the remaining reliability slices (stream seq + replay, `/ping` probe,
+latency compensation, reconnect recovery, ghost online count) are **parked as
+symptom descriptions** in [docs/issues.md](docs/issues.md) until their cause
+is confirmed. Decided and scheduled next are **connectivity diagnostics**
+(client join/leave lifecycle logging + a bounded SSE connection lifetime, as a
+surgical incremental slice that produces the evidence), **connectivity-safe
 scoring** — a no-valid-move timeout resolves `void`, scored like a draw (no
-streak break, the opponent still wins, "No contest" shown) — and
-**online-count hardening** — client join/leave logging plus a bounded SSE
-connection lifetime so dropped devices stop lingering as "online". Still open
-are latency compensation, best-of-N modes, and the identity/leaderboard
-features. See [roadmap.md](docs/roadmap.md).
+streak break, the opponent still wins, "No contest" shown) — and **busy
+affordances** (a pending affordance while a request awaits its SSE reply).
+Still open are best-of-N modes and the identity/leaderboard features. See
+[roadmap.md](docs/roadmap.md).
 
 The live server is kept at the current build by an ops script kept **outside**
 this repo (`git pull` + build + `systemctl restart`); the repository itself
