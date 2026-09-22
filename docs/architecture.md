@@ -46,6 +46,16 @@ a server `ts` (epoch-ms) making delivery lag vs clock skew measurable
 (protocol v1.1, landed). A per-stream seq with reconnect replay and a `/ping`
 probe follow in later slices (v1.2–v1.3).
 
+## Scoring (planned)
+
+A round that resolves with a valid move on only one side scores the no-move
+side as `void` when it timed out — no win, no streak break, "No contest" in
+the UI — while the opponent still takes the win. `early` picks (deliberate,
+invalid) remain a full `loss`; a both-way no-move stays a `draw`. The void
+handling lives in `resolve()` and the client scorebook; the leaderboard
+applies the same rule server-side so a connection drop never reads as a
+streak-breaking loss.
+
 ## Matchmaking
 
 A single global FIFO queue pairs players under the hub mutex. Anonymous
@@ -68,6 +78,12 @@ arms a stall watchdog while a round is live and, if no result arrives within a
 few seconds, forces a reconnect so the `connected` snapshot reconciles it back
 out. Snapshots for a finished (`done`) or already-expired (`shoot`) match route
 straight to the lobby rather than a dead end.
+
+Client joins/leaves are logged with the live count (so an off-by-one "online
+now" is diagnosable from the journal), and each stream's writes carry a short
+rolling deadline atop TCP keepalive so a vanished device stops counting as
+online about a minute after the drop instead of lingering as a half-open
+connection.
 
 If a reverse proxy fronts the server, streaming must not be buffered: the
 server always sends `X-Accel-Buffering: no`, and the proxy should set

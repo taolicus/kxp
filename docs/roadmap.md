@@ -37,6 +37,19 @@ which builds on the announced-deadline schedule.
    slice is superseded for now: Protocol rework Task A's `ts` fields make lag
    vs skew measurable client-side without a log pipeline. An access log /
    journald-pull returns only if post-rework evidence still calls for it.
+7. **Connectivity-safe scoring** — a round that resolves with a valid move on
+   only one side scores `void` for the no-move side when it timed out: no win,
+   no streak break, "No contest" reported, while the opponent keeps the round
+   win. Early picks stay full losses; a both-way no-move is a draw. Engine and
+   client scorebook adopt it, and the leaderboard applies the same rule
+   server-side so connectivity never reads as a streak-breaking loss.
+8. **Busy affordances** — show loading progress while a user action awaits its
+   reply. Queue/CPU/cancel get inline button spinners (CSS animation) plus a
+   disabled state, kept until the matching SSE transition lands (`waiting`,
+   `state idle`, countdown); move submit and fighter select gain only the
+   pending/disabled state, keeping their existing inline feedback. A failsafe
+   timeout clears any spinner that outlives its request so a hung connection
+   can never leave a stuck spinner.
 
 ## Protocol rework (active)
 
@@ -156,6 +169,11 @@ Make the system testable and debuggable in production.
       matchmaking, match lifecycle, and errors. On hold: Protocol rework Task A
       adds `ts` to the timed frames (lag measurement without a log pipeline);
       revisit only if evidence after the rework still calls for it.
+- [ ] **Online-count observability & half-open conns** — log client join/leave
+      with the live count so an off-by-one "online now" is diagnosable from the
+      journal, and bound each SSE connection's lifetime (a short rolling
+      per-write deadline plus TCP keepalive) so a vanished device stops counting
+      as online roughly a minute after it drops.
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
@@ -169,7 +187,9 @@ Build on a stable foundation without rewriting the core.
       `Client`, or SSE; sides are neutral `matchParty` and the hub wires
       `finish`/`requeue` callbacks back to real clients.
 - [ ] **Game-mode architecture** — series-aware `run()`/`resolve()`: a match
-      becomes a sequence of rounds, first to 3 decisive wins, draws replayed.
+      becomes a sequence of rounds, first to 3 decisive wins, draws replayed; a
+      round that resolves `void` (no valid move, see item 7) counts as a round
+      win for the opposing side.
       `result` gains round/series fields (`round`, `youRoundWins`,
       `oppRoundWins`, `roundsTarget`, `seriesOver`); a round result advances
       the client scoreboard and re-enters countdown, a final result ends the
@@ -195,7 +215,8 @@ Features that depend on identity, persistence, or ranking.
       links, and tournament, since they all share it; the arcade ladder's
       `localStorage` persistence will need retrofit onto it later.
 - [ ] **Leaderboard** — server-authoritative with anti-cheat (ignore
-      client-submitted timestamps for ranking, cap CPU streaks).
+      client-submitted timestamps for ranking, cap CPU streaks). A `void`
+      connectivity timeout scores like a draw — never a loss.
 - [ ] **Leaderboard identity** — persistent player identity model (account,
       token, or anonymous persistent ID).
 - [ ] **Lobby / room architecture** — private room creation, joining,
