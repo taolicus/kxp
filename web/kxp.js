@@ -76,9 +76,9 @@
       else {
         const youAlias = d.you ? aliases[d.you] : '\u2014';
         const youMs = d.youClientMs != null ? d.youClientMs : d.youTimingMs;
-        lines.push(`You picked: ${youAlias}${youMs != null ? ` (${youMs}ms)` : ''}`);
+        lines.push(`You: ${youAlias}${youMs != null ? ` (${youMs}ms)` : ''}`);
       }
-      lines.push(`Opponent picked: ${oppAlias}${oppMs != null ? ` (${oppMs}ms)` : ''}`);
+      lines.push(`Opponent: ${oppAlias}${oppMs != null ? ` (${oppMs}ms)` : ''}`);
     }
     return lines;
   }

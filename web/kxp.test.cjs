@@ -148,7 +148,7 @@ test('resultLines: timeout note', () => {
   const d = { yourNote: 'timeout', opponent: 'rock' };
   const lines = KXP.resultLines(d);
   assert.equal(lines[0], 'Timed out \u2014 no pick.');
-  assert.ok(lines[1].startsWith('Opponent picked:'));
+  assert.ok(lines[1].startsWith('Opponent:'));
 });
 
 test('resultLines: disqualification from an early pick', () => {
@@ -162,8 +162,8 @@ test('resultLines: normal pick prefers client-side reaction timestamps', () => {
     opponent: 'rock', opponentClientMs: 199, opponentTimingMs: 466,
   };
   const lines = KXP.resultLines(d);
-  assert.equal(lines[0], 'You picked: \u270b\uFE0F (210ms)');
-  assert.equal(lines[1], 'Opponent picked: \u270a\uFE0F (199ms)');
+  assert.equal(lines[0], 'You: \u270b\uFE0F (210ms)');
+  assert.equal(lines[1], 'Opponent: \u270a\uFE0F (199ms)');
 });
 
 test('resultLines: empty result yields no lines', () => {
