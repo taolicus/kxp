@@ -4,6 +4,7 @@ const SM = window.StateMachine;
 let id = null;
 let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
 let lastMode = 'online'; // online | cpu — mode of the finished match
+let pendingMode = null; // online | cpu — mode picked on the lobby, awaiting fighter confirmation
 let es = null;
 let shootTimer = null;
 let remainingWindowMs = 2000; // local portion of the PUN window still open
@@ -146,6 +147,13 @@ function renderFighters() {
       <span>${c.name}</span>
     </button>
   `).join('');
+}
+
+function openChoose(mode) {
+  pendingMode = mode;
+  $('#btn-start').textContent = mode === 'online' ? 'Search for Opponent' : 'Fight!';
+  renderFighters();
+  show('choose');
 }
 
 function fighterHTML(charId, label) {
@@ -452,11 +460,17 @@ document.addEventListener('DOMContentLoaded', () => {
     post('/character', { character: cid });
   });
 
-  $('#btn-online').addEventListener('click', () => {
-    transition('queue');
-    post('/queue');
+  $('#btn-online').addEventListener('click', () => openChoose('online'));
+  $('#btn-cpu').addEventListener('click', () => openChoose('cpu'));
+  $('#btn-start').addEventListener('click', () => {
+    if (pendingMode === 'online') {
+      transition('queue');
+      post('/queue');
+    } else {
+      post('/cpu');
+    }
   });
-  $('#btn-cpu').addEventListener('click', () => post('/cpu'));
+  $('#btn-back').addEventListener('click', () => show('lobby'));
   $('#btn-cancel').addEventListener('click', () => {
     transition('cancel');
     post('/cancel');
