@@ -289,6 +289,13 @@ button.primary:hover {
   line-height: 1;
 }
 
+.slot-name {
+  color: var(--text);
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
+}
+
 .slot-tag {
   display: flex;
   align-items: center;

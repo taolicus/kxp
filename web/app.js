@@ -163,23 +163,24 @@ function openChoose(mode) {
   show('choose');
 }
 
-function fighterHTML(charId, label) {
+function fighterHTML(charId, role) {
   const c = characterByID(charId);
-  if (!c) return `<span class="slot-tag">${label}</span>`;
-  return `<span class="slot-emoji">${c.emoji}</span><span>${label}</span>`;
+  const tag = `<span class="slot-tag">(${role})</span>`;
+  if (!c) return tag;
+  return `<span class="slot-emoji">${c.emoji}</span><span class="slot-name">${c.name}</span>${tag}`;
 }
 
 function setYouSlot() {
-  $('#you-slot').innerHTML = fighterHTML(loadCharacter(), 'YOU');
+  $('#you-slot').innerHTML = fighterHTML(loadCharacter(), 'you');
 }
 
 function setOppSlot(charId, name) {
-  const c = characterByID(charId);
-  const label = name || (c ? c.name : 'Opponent');
+  const role = (name || 'opponent').toLowerCase();
+  const c = charId && characterByID(charId);
   if (c) {
-    $('#opp-slot').innerHTML = fighterHTML(charId, label);
+    $('#opp-slot').innerHTML = fighterHTML(charId, role);
   } else {
-    $('#opp-slot').innerHTML = `<span class="slot-tag">${label}</span>`;
+    $('#opp-slot').innerHTML = `<span class="slot-tag">(${role})</span>`;
   }
 }
 
