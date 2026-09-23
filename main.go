@@ -58,7 +58,7 @@ func main() {
 	defer stopSignals()
 
 	srv := &http.Server{
-		Handler:      accessLog(mux),
+		Handler:      accessLog(hub.metrics, mux),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 20 * time.Second,
 	}

@@ -43,8 +43,11 @@ in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
       produces the evidence.** The symptoms themselves are described — not
       scheduled — in [docs/issues.md](issues.md), and graduate into scheduled
       work only when the cause is confirmed.
-      *Landed so far: the access/reject/join-leave logging half. The bounded
-      SSE connection lifetime and frame journal have not shipped.*
+      *Landed so far: the access/reject/join-leave logging half, plus the
+      `/metrics` counter endpoint (requests, rejects by code/message,
+      joined/left, dropped events, rate-limited, SSE streams) and the
+      `/health` probe. The bounded SSE connection lifetime and frame journal
+      have not shipped.*
 6. **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
       (like a draw): no win, no streak break, "No contest" reported, while the
       opponent keeps the round win. Engine + client + leaderboard adopt it.

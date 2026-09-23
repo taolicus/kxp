@@ -41,7 +41,10 @@ var (
 
 // logDroppedEvent logs a silently dropped push at most once per two seconds so
 // a wedged SSE connection shows up in the server log instead of vanishing.
-func logDroppedEvent(typ string, c *Client) {
+func logDroppedEvent(typ string, c *Client, m *HubMetrics) {
+	if m != nil {
+		m.incDropped()
+	}
 	dropLogMu.Lock()
 	defer dropLogMu.Unlock()
 	if time.Since(lastDropLogAt) < 2*time.Second {
@@ -85,13 +88,17 @@ func (w *statusWriter) Unwrap() http.ResponseWriter {
 
 // accessLog logs one line per request — method, path, status, duration — so a
 // production server's log shows every API hit including the 4xx/5xx outcomes.
-func accessLog(next http.Handler) http.Handler {
+// It also feeds the request counter for /metrics when given a non-nil metrics.
+func accessLog(m *HubMetrics, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w}
 		next.ServeHTTP(sw, r)
 		if sw.status == 0 {
 			sw.status = http.StatusOK
+		}
+		if m != nil {
+			m.incRequest(sw.status)
 		}
 		log.Printf("kxp: access %s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Microsecond))
 	})
@@ -112,6 +119,7 @@ type Client struct {
 	alive     context.Context
 	cancel    context.CancelFunc
 	character string
+	metrics   *HubMetrics
 
 	mu       sync.Mutex
 	connID   string
@@ -135,7 +143,7 @@ func (c *Client) sendEv(ev event) {
 	select {
 	case c.send <- b:
 	default:
-		logDroppedEvent(ev.Type, c)
+		logDroppedEvent(ev.Type, c, c.metrics)
 	}
 }
 
@@ -155,6 +163,8 @@ type Hub struct {
 	down    context.Context
 	stop    context.CancelFunc
 	limiter *rateLimiter
+	metrics *HubMetrics
+	started time.Time
 }
 
 func NewHub() *Hub {
@@ -164,6 +174,8 @@ func NewHub() *Hub {
 		down:    down,
 		stop:    stop,
 		limiter: newRateLimiter(rlCapacity, rlRefillPerSec, rlMaxEntries, nil),
+		metrics: newHubMetrics(),
+		started: time.Now(),
 	}
 }
 
@@ -180,6 +192,8 @@ func (h *Hub) routes() *http.ServeMux {
 	mux.HandleFunc("POST /move", h.rateLimit(h.handleMove))
 	mux.HandleFunc("GET /characters", h.handleCharacters)
 	mux.HandleFunc("POST /character", h.rateLimit(h.handleCharacter))
+	mux.HandleFunc("GET /health", h.handleHealth)
+	mux.HandleFunc("GET /metrics", h.handleMetrics)
 	return mux
 }
 
@@ -207,7 +221,9 @@ func (h *Hub) getOrCreate(id string) (*Client, bool) {
 	if id != "" && validID(id) {
 		c := newClient()
 		c.id = id
+		c.metrics = h.metrics
 		h.clients[id] = c
+		h.metrics.incJoined()
 		log.Printf("kxp: client %s join online=%d", c.id, len(h.clients))
 		h.mu.Unlock()
 		h.broadcastOnline()
@@ -215,7 +231,9 @@ func (h *Hub) getOrCreate(id string) (*Client, bool) {
 	}
 	c := newClient()
 	c.id = newID(6)
+	c.metrics = h.metrics
 	h.clients[c.id] = c
+	h.metrics.incJoined()
 	log.Printf("kxp: client %s join online=%d", c.id, len(h.clients))
 	h.mu.Unlock()
 	h.broadcastOnline()
@@ -246,6 +264,7 @@ func (h *Hub) client(id string) *Client {
 }
 
 func (h *Hub) handlerError(w http.ResponseWriter, code int, msg string) {
+	h.metrics.incReject(code, msg)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	fmt.Fprintf(w, `{"error":%q}`, msg)
@@ -267,6 +286,7 @@ func (h *Hub) decode(w http.ResponseWriter, r *http.Request, v any) error {
 }
 
 func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
+	h.metrics.incStreamOpened()
 	c, ok := h.getOrCreate(r.URL.Query().Get("id"))
 	if !ok {
 		h.handlerError(w, http.StatusServiceUnavailable, "too many clients")
@@ -351,6 +371,7 @@ func (h *Hub) removeClient(c *Client) {
 	h.mu.Unlock()
 	c.cancel()
 	if removed {
+		h.metrics.incLeft()
 		log.Printf("kxp: client %s leave online=%d", c.id, n)
 		h.broadcastOnline()
 	}
@@ -415,7 +436,7 @@ func (c *Client) sendEvRaw(b []byte) {
 	select {
 	case c.send <- b:
 	default:
-		logDroppedEvent("raw", c)
+		logDroppedEvent("raw", c, c.metrics)
 	}
 }
 
@@ -616,6 +637,42 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 func (h *Hub) handleCharacters(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(characters)
+}
+
+// handleHealth reports process liveness plus a few instantaneous gauges. It is
+// deliberately exempt from rate limiting (a read-only probe) so monitors and
+// the e2e readiness gate can always reach it.
+func (h *Hub) handleHealth(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	online := len(h.clients)
+	queue := len(h.queue)
+	h.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":        "ok",
+		"uptime":        time.Since(h.started).Seconds(),
+		"online":        online,
+		"queue":         queue,
+		"activeMatches": h.active.Load(),
+	})
+}
+
+// handleMetrics returns the pollable counter snapshot. Read-only, exempt from
+// rate limiting for the same reason as /health.
+func (h *Hub) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	online := len(h.clients)
+	queue := len(h.queue)
+	h.mu.Unlock()
+	out := h.metrics.Copy()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"uptime":  h.metrics.uptime().Seconds(),
+		"online":  online,
+		"queue":   queue,
+		"matches": h.active.Load(),
+		"counts":  out,
+	})
 }
 
 func (h *Hub) handleCharacter(w http.ResponseWriter, r *http.Request) {

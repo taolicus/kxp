@@ -125,6 +125,7 @@ func clientIP(r *http.Request) string {
 func (h *Hub) rateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !h.limiter.allow(clientIP(r)) {
+			h.metrics.incRateLimited()
 			w.Header().Set("Retry-After", fmtDuration(h.limiter.resetAfter()))
 			h.handlerError(w, http.StatusTooManyRequests, "rate limited")
 			return

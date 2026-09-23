@@ -86,9 +86,11 @@ Decided and scheduled: the engine emits `void` on timeouts, the client
 scorebook treats it like a draw, and the leaderboard applies the same rule
 server-side (see the roadmap).
 
-## POST endpoints
+## HTTP endpoints
 
-Request bodies always start with the client id; content-type JSON.
+`POST` request bodies always start with the client id; content-type JSON.
+`GET /events` is the SSE stream; `GET /characters`, `GET /health`, and
+`GET /metrics` are read-only and exempt from rate limiting.
 
 | endpoint | body | responses |
 | --- | --- | --- |
@@ -99,6 +101,8 @@ Request bodies always start with the client id; content-type JSON.
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
 | `GET /characters` | — | `200 [{id, name, emoji}]` — the full roster; the single source of truth for character data. The client fetches it at startup and no longer bundles its own copy. |
+| `GET /health` | — | `200 {status, uptime, online, queue, activeMatches}` — liveness/readiness probe. Exempt from rate limiting. |
+| `GET /metrics` | — | `200 {uptime, online, queue, matches, counts}` where `counts` carries cumulative request/reject/join/leave/drop/rate-limit streams plus breakdowns `byStatus`, `byCode`, `byMsg`. Read-only; exempt from rate limiting. |
 
 ## Client state machine
 

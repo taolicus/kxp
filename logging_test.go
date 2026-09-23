@@ -25,7 +25,7 @@ func TestLogAccessCapturesStatus(t *testing.T) {
 		http.Error(w, "nope", http.StatusBadRequest)
 	})
 	req := httptest.NewRequest("POST", "/move", nil)
-	accessLog(next).ServeHTTP(httptest.NewRecorder(), req)
+	accessLog(nil, next).ServeHTTP(httptest.NewRecorder(), req)
 
 	out := buf.String()
 	if !strings.Contains(out, "POST /move 400") {
@@ -41,7 +41,7 @@ func TestLogAccessReportsOKWithoutWriteHeader(t *testing.T) {
 		w.Write([]byte("{}"))
 	})
 	req := httptest.NewRequest("GET", "/characters", nil)
-	accessLog(next).ServeHTTP(httptest.NewRecorder(), req)
+	accessLog(nil, next).ServeHTTP(httptest.NewRecorder(), req)
 
 	if !strings.Contains(buf.String(), "GET /characters 200") {
 		t.Errorf("access log missing implicit 200; got: %q", buf.String())
