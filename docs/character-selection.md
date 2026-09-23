@@ -21,10 +21,9 @@ the opponent slot, and the result line).
     placeholder emoji for now; the `emoji` field will be swapped for real
     artwork later. Placeholder roster (ids match display names): Dragon Chino
     (🐉), Sombrero Loco (🎩), Lentes de Sol (🕶️), Lagartijo (🦎), Hielito
-    (🧊), Cambiaformas (🦎), Fabulosa (🪭), Robok (🦾), Rafaela (⚔️),
+    (🧊), Cambiaformas (🎭), Fabulosa (🪭), Robok (🦾), Rafaela (⚔️),
     Bicho Raro (🦗), Alakran (🦂), Rayito (⚡) — the 12 fighters of the
-    original MKII 1992 roster, shown in a 4×3 grid. (No dedicated chameleon
-    emoji exists, so Cambiaformas reuses the lizard one.)
+    original MKII 1992 roster, shown in a 4×3 grid.
 
 ## Data flow
 

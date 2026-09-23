@@ -14,7 +14,7 @@ var characters = []Character{
 	{ID: "lentes-de-sol", Name: "Lentes de Sol", Emoji: "🕶️"},
 	{ID: "lagartijo", Name: "Lagartijo", Emoji: "🦎"},
 	{ID: "hielito", Name: "Hielito", Emoji: "🧊"},
-	{ID: "cambiaformas", Name: "Cambiaformas", Emoji: "🦎"},
+	{ID: "cambiaformas", Name: "Cambiaformas", Emoji: "🎭"},
 	{ID: "fabulosa", Name: "Fabulosa", Emoji: "🪭"},
 	{ID: "robok", Name: "Robok", Emoji: "🦾"},
 	{ID: "rafaela", Name: "Rafaela", Emoji: "⚔️"},
