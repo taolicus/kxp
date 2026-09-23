@@ -43,6 +43,8 @@ in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
       produces the evidence.** The symptoms themselves are described — not
       scheduled — in [docs/issues.md](issues.md), and graduate into scheduled
       work only when the cause is confirmed.
+      *Landed so far: the access/reject/join-leave logging half. The bounded
+      SSE connection lifetime and frame journal have not shipped.*
 6. **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
       (like a draw): no win, no streak break, "No contest" reported, while the
       opponent keeps the round win. Engine + client + leaderboard adopt it.
@@ -53,6 +55,21 @@ in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
       "working" rather than silent; a failsafe clears it if the reply never
       comes. Also covers the loading gap while "Waiting for result…".
       **Decided and scheduled.**
+8. **Core-gameplay e2e (decided; scoped)** — a small Playwright suite that
+      drives the real browser against the real SSE server to surface
+      **game-breaking connectivity failures that resist unit testing**. Scope
+      is deliberately narrow — three flows only, no button/stat/styling
+      assertions: (1) a CPU match completes end-to-end within a hard bound with
+      zero console/page errors; (2) a self-PvP match in two isolated contexts
+      produces a consistent result on both sides with neither left dead in
+      `matched`/`countdown` (asymmetric-SSE class); (3) reloading mid-match
+      reconciles the client to a live, fair, or lobby state — never a dead
+      view stuck on "Waiting for result…". Same tests run locally
+      (`e2e:local`) and against the deployed server (`e2e:prod`; full flows
+      create real matches by design). Browser runtime is host-dependent
+      (Chromium won't run on the arm64-Android dev device); the suite
+      targets a configurable `BASE_URL` so it can run wherever a Chromium
+      build exists.
 
 ## Protocol rework (active)
 
@@ -171,10 +188,15 @@ Make the system testable and debuggable in production.
 - [ ] **CPU determinism hooks** — inject a deterministic clock and move picker
       for automated tests. Protocol rework Task A's schedule-driven run loop
       (`sleep-until` on an announced `shootAt`) is the hook this needs.
-- [ ] **Request/response logging** — structured logs for connection,
+- [x] **Request/response logging** — structured logs for connection,
       matchmaking, match lifecycle, and errors. On hold: Protocol rework Task A
       adds `ts` to the timed frames (lag measurement without a log pipeline);
       revisit only if evidence after the rework still calls for it.
+      *Landed (observability slice): a per-request access log
+      (`accessLog`, method/path/status/duration), an error log at every
+      `handlerError` (`kxp: reject <code> "<msg>"`), and client join/leave
+      lines carrying the live count. Still open: structured (JSON) output.
+      Exercised by `logging_test.go`.*
 - [ ] **Online-count observability & half-open conns — diagnostics (issues.md
       entry 4)** — the +1 ghost is a symptom with an unconfirmed cause, so this
       ships only as *diagnostics*: client join/leave lifecycle logging with the
@@ -183,10 +205,14 @@ Make the system testable and debuggable in production.
       the half-open hypothesis. The symptom is described in
       [docs/issues.md](issues.md), entry 4; any count-rule change waits for
       the logs.
+      *The join/leave logging half has landed (see Request/response logging
+      above); the bounded SSE lifetime reaping has not.*
+- [ ] **Core-gameplay e2e (decided; scoped)** — see Current priorities item 8
+      for the three-flow Playwright scope. Not yet implemented.
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
-      available.
+      available. Node unit tests run under `node --test web/*.test.cjs`.
 
 ## Phase 3 — Architecture & features
 

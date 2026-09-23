@@ -66,6 +66,11 @@ node --test web/kxp.test.cjs web/machine.test.cjs
 (`go test -race` isn't supported on the arm64-Android dev device; see the
 roadmap's "Automated test workflow" note if you add CI.)
 
+A core-gameplay Playwright e2e suite is scoped (see the roadmap, item 8) and
+runs the same three connectivity flows locally (`e2e:local`) and against the
+deployed server (`e2e:prod`), targeting a configurable `BASE_URL`. It has not
+been implemented yet, and its browser runtime is host-dependent.
+
 ## Status
 
 Core hardening, testability, and the pure-engine refactor are done, including
@@ -74,12 +79,15 @@ protocol rework's Task A (announced round deadline + per-frame `ts`) has
 landed; the remaining reliability slices (stream seq + replay, `/ping` probe,
 latency compensation, reconnect recovery, ghost online count) are **parked as
 symptom descriptions** in [docs/issues.md](docs/issues.md) until their cause
-is confirmed. Decided and scheduled next are **connectivity diagnostics**
-(client join/leave lifecycle logging + a bounded SSE connection lifetime, as a
-surgical incremental slice that produces the evidence), **connectivity-safe
+is confirmed. Decided and scheduled next are **connectivity diagnostics** (the first
+half — access/error/join-leave logging — has landed; the bounded SSE
+connection lifetime is still open, all as a surgical incremental slice that
+produces the evidence), **connectivity-safe
 scoring** — a no-valid-move timeout resolves `void`, scored like a draw (no
-streak break, the opponent still wins, "No contest" shown) — and **busy
-affordances** (a pending affordance while a request awaits its SSE reply).
+streak break, the opponent still wins, "No contest" shown) — **busy
+affordances** (a pending affordance while a request awaits its SSE reply), and
+a **core-gameplay e2e suite** (three Playwright flows that surface
+game-breaking connectivity failures against the real server).
 Still open are best-of-N modes and the identity/leaderboard features. See
 [roadmap.md](docs/roadmap.md).
 
