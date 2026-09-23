@@ -156,6 +156,9 @@ function renderFighters() {
 function openChoose(mode) {
   pendingMode = mode;
   $('#btn-start').textContent = mode === 'online' ? 'Search for Opponent' : 'Fight!';
+  if (CHARACTERS.length && !localStorage.getItem('kxp-character')) {
+    saveCharacter(CHARACTERS[0].id);
+  }
   renderFighters();
   show('choose');
 }

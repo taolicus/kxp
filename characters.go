@@ -9,9 +9,9 @@ type Character struct {
 }
 
 var characters = []Character{
-	{ID: "dragon-chino", Name: "Dragon Chino", Emoji: "🐉"},
-	{ID: "sombrero-loco", Name: "Sombrero Filudo", Emoji: "🎩"},
-	{ID: "lentes-de-sol", Name: "Lentes de Sol", Emoji: "🕶️"},
+	{ID: "dragon", Name: "Dragon", Emoji: "🐉"},
+	{ID: "sombrero", Name: "Sombrero", Emoji: "🎩"},
+	{ID: "lentes", Name: "Lentes", Emoji: "🕶️"},
 	{ID: "lagartijo", Name: "Lagartijo", Emoji: "🦎"},
 	{ID: "hielito", Name: "Hielito", Emoji: "🧊"},
 	{ID: "cambiaformas", Name: "Cambiaformas", Emoji: "🎭"},

@@ -21,7 +21,7 @@ func TestRosterDefaults(t *testing.T) {
 }
 
 func TestValidCharacterRejectsUnknown(t *testing.T) {
-	for _, id := range []string{"", "goku", "dragon-chino\x00", strings.Repeat("x", 100)} {
+	for _, id := range []string{"", "goku", "dragon\x00", strings.Repeat("x", 100)} {
 		if validCharacter(id) {
 			t.Errorf("expected %q to be rejected", id)
 		}
@@ -56,8 +56,8 @@ func TestRoundCarriesCharacters(t *testing.T) {
 	b.moves <- moveMsg{move: MovePaper, arrive: time.Now()}
 
 	ra := waitForEvent(t, a, "result")
-	if ra["youCharacter"] != "dragon-chino" {
-		t.Errorf("a youCharacter = %q, want dragon-chino", ra["youCharacter"])
+	if ra["youCharacter"] != "dragon" {
+		t.Errorf("a youCharacter = %q, want dragon", ra["youCharacter"])
 	}
 	if ra["opponentCharacter"] != "robok" {
 		t.Errorf("a opponentCharacter = %q, want robok", ra["opponentCharacter"])
@@ -67,8 +67,8 @@ func TestRoundCarriesCharacters(t *testing.T) {
 	if rb["youCharacter"] != "robok" {
 		t.Errorf("b youCharacter = %q, want robok", rb["youCharacter"])
 	}
-	if rb["opponentCharacter"] != "dragon-chino" {
-		t.Errorf("b opponentCharacter = %q, want dragon-chino", rb["opponentCharacter"])
+	if rb["opponentCharacter"] != "dragon" {
+		t.Errorf("b opponentCharacter = %q, want dragon", rb["opponentCharacter"])
 	}
 }
 
