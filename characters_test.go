@@ -21,7 +21,7 @@ func TestRosterDefaults(t *testing.T) {
 }
 
 func TestValidCharacterRejectsUnknown(t *testing.T) {
-	for _, id := range []string{"", "goku", "scorpion\x00", strings.Repeat("x", 100)} {
+	for _, id := range []string{"", "goku", "dragon-chino\x00", strings.Repeat("x", 100)} {
 		if validCharacter(id) {
 			t.Errorf("expected %q to be rejected", id)
 		}
@@ -39,14 +39,14 @@ func TestRandomCharacter(t *testing.T) {
 func TestRoundCarriesCharacters(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	b.character = "subzero"
+	b.character = "robok"
 	m := h.makeMatch("mc1", side{client: a}, side{client: b})
 	m.start()
 
 	md := waitForEvent(t, a, "matched")
 	opp := md["opponentCharacter"].(string)
-	if opp != "subzero" {
-		t.Errorf("a matched opponentCharacter = %q, want subzero", opp)
+	if opp != "robok" {
+		t.Errorf("a matched opponentCharacter = %q, want robok", opp)
 	}
 	m.ackReady(0)
 	m.ackReady(1)
@@ -56,31 +56,31 @@ func TestRoundCarriesCharacters(t *testing.T) {
 	b.moves <- moveMsg{move: MovePaper, arrive: time.Now()}
 
 	ra := waitForEvent(t, a, "result")
-	if ra["youCharacter"] != "scorpion" {
-		t.Errorf("a youCharacter = %q, want scorpion", ra["youCharacter"])
+	if ra["youCharacter"] != "dragon-chino" {
+		t.Errorf("a youCharacter = %q, want dragon-chino", ra["youCharacter"])
 	}
-	if ra["opponentCharacter"] != "subzero" {
-		t.Errorf("a opponentCharacter = %q, want subzero", ra["opponentCharacter"])
+	if ra["opponentCharacter"] != "robok" {
+		t.Errorf("a opponentCharacter = %q, want robok", ra["opponentCharacter"])
 	}
 
 	rb := waitForEvent(t, b, "result")
-	if rb["youCharacter"] != "subzero" {
-		t.Errorf("b youCharacter = %q, want subzero", rb["youCharacter"])
+	if rb["youCharacter"] != "robok" {
+		t.Errorf("b youCharacter = %q, want robok", rb["youCharacter"])
 	}
-	if rb["opponentCharacter"] != "scorpion" {
-		t.Errorf("b opponentCharacter = %q, want scorpion", rb["opponentCharacter"])
+	if rb["opponentCharacter"] != "dragon-chino" {
+		t.Errorf("b opponentCharacter = %q, want dragon-chino", rb["opponentCharacter"])
 	}
 }
 
 func TestMatchExposesBotCharacter(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("mc2", side{client: a}, side{bot: true, character: "smoke"})
+	m := h.makeMatch("mc2", side{client: a}, side{bot: true, character: "rayito"})
 	m.start()
 
 	md := waitForEvent(t, a, "matched")
-	if md["opponentCharacter"] != "smoke" {
-		t.Errorf("matched opponentCharacter = %v, want smoke", md["opponentCharacter"])
+	if md["opponentCharacter"] != "rayito" {
+		t.Errorf("matched opponentCharacter = %v, want rayito", md["opponentCharacter"])
 	}
 	if !validCharacter(m.opponentCharacter(0)) {
 		t.Errorf("bot character not in roster")

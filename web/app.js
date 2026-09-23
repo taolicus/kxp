@@ -141,6 +141,10 @@ function setStats() {
 
 function renderFighters() {
   const pick = loadCharacter();
+  if (!CHARACTERS.length) {
+    $('#fighters').innerHTML = '';
+    return;
+  }
   $('#fighters').innerHTML = CHARACTERS.map((c) => `
     <button class="fighter${c.id === pick ? ' selected' : ''}" data-char="${c.id}" aria-label="${c.name}">
       <span class="fighter-emoji">${c.emoji}</span>
@@ -158,6 +162,7 @@ function openChoose(mode) {
 
 function fighterHTML(charId, label) {
   const c = characterByID(charId);
+  if (!c) return `<span class="slot-tag">${label}</span>`;
   return `<span class="slot-emoji">${c.emoji}</span><span>${label}</span>`;
 }
 
@@ -166,8 +171,9 @@ function setYouSlot() {
 }
 
 function setOppSlot(charId, name) {
-  const label = name || (charId ? characterByID(charId).name : 'Opponent');
-  if (charId) {
+  const c = characterByID(charId);
+  const label = name || (c ? c.name : 'Opponent');
+  if (c) {
     $('#opp-slot').innerHTML = fighterHTML(charId, label);
   } else {
     $('#opp-slot').innerHTML = `<span class="slot-tag">${label}</span>`;
@@ -446,7 +452,8 @@ function connect() {
   es.onerror = () => { /* EventSource auto-reconnects */ };
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadRoster();
   connect();
   setStats();
   renderFighters();

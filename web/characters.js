@@ -1,17 +1,14 @@
-const CHARACTERS = [
-  { id: 'scorpion', name: 'Alakran', emoji: '🦂' },
-  { id: 'liukang', name: 'Fueguito', emoji: '🔥' },
-  { id: 'johnnycage', name: 'Galancito', emoji: '🕶️' },
-  { id: 'kunglao', name: 'Sombrerito', emoji: '🎩' },
-  { id: 'kitana', name: 'Abaniquita', emoji: '🪭' },
-  { id: 'mileena', name: 'Colmillita', emoji: '🦷' },
-  { id: 'reptile', name: 'Lagartijo', emoji: '🦎' },
-  { id: 'subzero', name: 'Hielito', emoji: '🧊' },
-  { id: 'jax', name: 'Bracitos', emoji: '💪' },
-  { id: 'baraka', name: 'Navajita', emoji: '🗡️' },
-  { id: 'shangtsung', name: 'Abuelito', emoji: '🧙' },
-  { id: 'smoke', name: 'Humito', emoji: '💨' },
-];
+let CHARACTERS = [];
+
+async function loadRoster() {
+  try {
+    const res = await fetch('/characters');
+    if (!res.ok) throw new Error(`roster fetch: HTTP ${res.status}`);
+    CHARACTERS = await res.json();
+  } catch (e) {
+    CHARACTERS = [];
+  }
+}
 
 function characterByID(id) {
   return CHARACTERS.find((c) => c.id === id) || CHARACTERS[0];
@@ -22,5 +19,8 @@ function saveCharacter(id) {
 }
 
 function loadCharacter() {
-  try { return localStorage.getItem('kxp-character') || CHARACTERS[0].id; } catch (e) { return CHARACTERS[0].id; }
+  const def = CHARACTERS[0] && CHARACTERS[0].id;
+  let id;
+  try { id = localStorage.getItem('kxp-character'); } catch (e) { id = null; }
+  return (id && characterByID(id)) ? id : def;
 }

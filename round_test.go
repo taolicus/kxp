@@ -143,7 +143,7 @@ func TestTimeoutLoses(t *testing.T) {
 func TestShootEventCarriesWindow(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("sw1", side{client: a}, side{bot: true, character: "smoke"})
+	m := h.makeMatch("sw1", side{client: a}, side{bot: true, character: "rayito"})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -162,7 +162,7 @@ func TestShootEventCarriesWindow(t *testing.T) {
 func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("pl1", side{client: a}, side{bot: true, character: "smoke"})
+	m := h.makeMatch("pl1", side{client: a}, side{bot: true, character: "rayito"})
 	m.start()
 
 	d := waitForEvent(t, a, "countdown")

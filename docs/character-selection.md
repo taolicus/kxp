@@ -13,15 +13,17 @@ the opponent slot, and the result line).
   the server (`POST /character`) so your opponent can see it in the `result`
   event. The server defaults to the first fighter in the roster if none was set.
 - The CPU picks a random fighter per match, server-side.
-- Roster lives in two mirrored places:
-  - `characters.go` — server-side: validation + CPU random pick.
-  - `web/characters.js` — client-side: rendering (maps `id` → emoji + name).
-    Fighter art is placeholder emoji for now; the `emoji` field will be swapped
-    for real artwork later. Placeholder roster: Alakran (🦂), Fueguito (🔥),
-    Galancito (🕶️), Sombrerito (🎩), Abaniquita (🪭), Colmillita (🦷),
-    Lagartijo (🦎), Hielito (🧊), Bracitos (💪), Navajita (🗡️), Abuelito (🧙),
-    Humito (💨) — the 12 fighters of the original MKII 1992 roster, shown in a
-    4×3 grid.
+- Roster lives only on the server:
+  - `characters.go` — the source of truth (id, name, emoji), served to the
+    client by `GET /characters` and used for validation + CPU random pick.
+  - `web/characters.js` — fetches that roster at startup (`loadRoster`) and
+    renders the picker; it no longer bundles its own copy. Fighter art is
+    placeholder emoji for now; the `emoji` field will be swapped for real
+    artwork later. Placeholder roster (ids match display names): Dragon Chino
+    (🦂), Sombrero Loco (🔥), Lentes de Sol (🕶️), Lagartijo (🎩), Hielito
+    (🪭), Cambiaformas (🦷), Fabulosa (🦎), Robok (🧊), Rafaela (💪),
+    Bicho Raro (🗡️), Alakran (🧙), Rayito (💨) — the 12 fighters of the
+    original MKII 1992 roster, shown in a 4×3 grid.
 
 ## Data flow
 
@@ -50,7 +52,9 @@ the opponent slot, and the result line).
 
 ## Client changes
 
-- `web/characters.js` (new): roster array + helpers (emoji placeholders).
+- `web/characters.js` (new): fetches the roster from `GET /characters`
+  (`loadRoster`), then provides helpers (`characterByID`, `saveCharacter`,
+  `loadCharacter`).
 - `web/index.html`: "Choose your fighter" picker in the lobby; a VS bar on the
   game screen with your slot and the opponent slot.
 - `web/app.js`: render/handle picker, persist + POST selection, re-POST on
@@ -66,13 +70,14 @@ the opponent slot, and the result line).
 
 ## Adding a fighter
 
-1. Add `Character{id, name}` to the roster in `characters.go`.
-2. Add `{ id, name, emoji }` to `CHARACTERS` in `web/characters.js` (or swap the
-   emoji for a real image path once artwork exists).
-3. Done — the picker, validation, and CPU randomiser pick it up automatically.
+1. Add `Character{id, name, emoji}` to the roster in `characters.go`.
+2. Done — the picker, validation, and CPU randomiser pick it up automatically
+   (the client loads the roster from `GET /characters`, so there is no second
+   copy to update).
 
 ## Out of scope
 
 - Gameplay effects, stats, and balance.
 - Fighters on the lobby and queue screens.
-- Global roster syncing (client and server rosters are extended in lockstep).
+- Global roster syncing (the client fetches the roster from the server, so
+  there is a single source of truth).

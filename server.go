@@ -132,6 +132,7 @@ func (h *Hub) routes() *http.ServeMux {
 	mux.HandleFunc("POST /cpu", h.rateLimit(h.handleCPU))
 	mux.HandleFunc("POST /ready", h.rateLimit(h.handleReady))
 	mux.HandleFunc("POST /move", h.rateLimit(h.handleMove))
+	mux.HandleFunc("GET /characters", h.handleCharacters)
 	mux.HandleFunc("POST /character", h.rateLimit(h.handleCharacter))
 	return mux
 }
@@ -559,6 +560,11 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	h.startMatchLocked(m)
 	h.mu.Unlock()
 	w.Write([]byte("{}"))
+}
+
+func (h *Hub) handleCharacters(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(characters)
 }
 
 func (h *Hub) handleCharacter(w http.ResponseWriter, r *http.Request) {
