@@ -22,5 +22,5 @@ function loadCharacter() {
   const def = CHARACTERS[0] && CHARACTERS[0].id;
   let id;
   try { id = localStorage.getItem('kxp-character'); } catch (e) { id = null; }
-  return (id && characterByID(id)) ? id : def;
+  return (id && CHARACTERS.some((c) => c.id === id)) ? id : def;
 }
