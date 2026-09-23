@@ -76,6 +76,12 @@ in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
       (Chromium won't run on the arm64-Android dev device); the suite
       targets a configurable `BASE_URL` so it can run wherever a Chromium
       build exists.
+      *Landed: `e2e/gameplay.spec.js` + `playwright.config.cjs` +
+      `package.json` (`e2e:local`/`e2e:prod`, `@playwright/test`).
+      `BASE_URL` picks the target; localhost addresses auto-boot the Go
+      server (webServer), other hosts assume it deployed. Keyed off a
+      deterministic in-page probe on `renderResult` rather than racing the
+      result banner. Runs on a Chromium host, not the dev device.*
 
 ## Protocol rework (active)
 
@@ -213,12 +219,18 @@ Make the system testable and debuggable in production.
       the logs.
       *The join/leave logging half has landed (see Request/response logging
       above); the bounded SSE lifetime reaping has not.*
-- [ ] **Core-gameplay e2e (decided; scoped)** — see Current priorities item 8
-      for the three-flow Playwright scope. Not yet implemented.
+- [x] **Core-gameplay e2e (decided; scoped)** — see Current priorities item 8
+      for the three-flow Playwright scope. Landed (`e2e/gameplay.spec.js` +
+      `playwright.config.cjs`), but only exercisable on a Chromium host: the
+      dev device's platform is rejected by `@playwright/test` at import
+      ("Unsupported platform: android"), so the suite sits unrun until a
+      suitable host wires it in.
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
       available. Node unit tests run under `node --test web/*.test.cjs`.
+      Playwright e2e (`e2e:local` / `e2e:prod`) runs wherever Chromium exists;
+      add it to CI on such a host.
 
 ## Phase 3 — Architecture & features
 

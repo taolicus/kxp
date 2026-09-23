@@ -1,0 +1,13 @@
+{
+  "name": "kxp-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Core-gameplay e2e suite for KACHIPUN TOURNAMENT (Playwright). Chromium host-dependent: runs where a browser build exists, against any BASE_URL.",
+  "scripts": {
+    "e2e:local": "playwright test --config playwright.config.cjs",
+    "e2e:prod": "playwright test --config playwright.config.cjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0"
+  }
+}

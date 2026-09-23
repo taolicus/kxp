@@ -471,8 +471,13 @@ function connect() {
 
   es.addEventListener('state', (e) => {
     const s = JSON.parse(e.data).state;
-    if (s === 'idle') transition('stateIdle');
-    else transition('snapshot:waiting');
+    if (s === 'idle') {
+      // After a finished match the result screen is terminal until the player
+      // acts (Play Again / Change mode), so the server's trailing `state idle`
+      // teardown frame is expected, not an anomaly — never a bad-transition.
+      if (state === 'result') return;
+      transition('stateIdle');
+    } else transition('snapshot:waiting');
   });
 
   es.onerror = () => {

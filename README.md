@@ -66,10 +66,21 @@ node --test web/kxp.test.cjs web/machine.test.cjs
 (`go test -race` isn't supported on the arm64-Android dev device; see the
 roadmap's "Automated test workflow" note if you add CI.)
 
-A core-gameplay Playwright e2e suite is scoped (see the roadmap, item 8) and
-runs the same three connectivity flows locally (`e2e:local`) and against the
-deployed server (`e2e:prod`), targeting a configurable `BASE_URL`. It has not
-been implemented yet, and its browser runtime is host-dependent.
+E2e (core-gameplay Playwright suite; runs on a host with Chromium — the
+dev device's platform is rejected by `@playwright/test`, see the roadmap):
+
+```sh
+npm install
+BASE_URL=http://localhost:8080 npm run e2e:local   # boots its own server
+BASE_URL=https://example.com npm run e2e:prod      # deployed server
+```
+
+The three flows drive the real browser over real SSE: a CPU match completes
+within a hard bound with zero console/page errors; a self-PvP match across two
+isolated contexts resolves consistently with neither side left dead in
+`matched`/`countdown`; and a reload mid-match never leaves a stuck "Waiting
+for result…" view. A `BASE_URL` on localhost auto-starts the Go server;
+`e2e:prod` assumes the server is already live there.
 
 ## Status
 
@@ -89,7 +100,8 @@ scoring** — a no-valid-move timeout resolves `void`, scored like a draw (no
 streak break, the opponent still wins, "No contest" shown) — **busy
 affordances** (a pending affordance while a request awaits its SSE reply), and
 a **core-gameplay e2e suite** (three Playwright flows that surface
-game-breaking connectivity failures against the real server).
+game-breaking connectivity failures against the real server — landed, runs on
+a Chromium host via `npm run e2e:local` / `e2e:prod`).
 Still open are best-of-N modes and the identity/leaderboard features. See
 [roadmap.md](docs/roadmap.md).
 
