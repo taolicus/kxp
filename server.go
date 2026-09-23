@@ -51,6 +51,52 @@ func logDroppedEvent(typ string, c *Client) {
 	log.Printf("kxp: dropped %q event for client %s (send backlog full)", typ, c.id)
 }
 
+// statusWriter records the response status so the access-log middleware can
+// report it once the handler returns. It still implements the Flusher and
+// Unwrap hooks the SSE handler needs.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	if w.status == 0 {
+		w.status = code
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+// accessLog logs one line per request — method, path, status, duration — so a
+// production server's log shows every API hit including the 4xx/5xx outcomes.
+func accessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w}
+		next.ServeHTTP(sw, r)
+		if sw.status == 0 {
+			sw.status = http.StatusOK
+		}
+		log.Printf("kxp: access %s %s %d %s", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Microsecond))
+	})
+}
+
 func encodeEv(ev event) []byte {
 	b, err := json.Marshal(ev.Data)
 	if err != nil {
@@ -162,6 +208,7 @@ func (h *Hub) getOrCreate(id string) (*Client, bool) {
 		c := newClient()
 		c.id = id
 		h.clients[id] = c
+		log.Printf("kxp: client %s join online=%d", c.id, len(h.clients))
 		h.mu.Unlock()
 		h.broadcastOnline()
 		return c, true
@@ -169,6 +216,7 @@ func (h *Hub) getOrCreate(id string) (*Client, bool) {
 	c := newClient()
 	c.id = newID(6)
 	h.clients[c.id] = c
+	log.Printf("kxp: client %s join online=%d", c.id, len(h.clients))
 	h.mu.Unlock()
 	h.broadcastOnline()
 	return c, true
@@ -201,6 +249,7 @@ func (h *Hub) handlerError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	fmt.Fprintf(w, `{"error":%q}`, msg)
+	log.Printf("kxp: reject %d %q", code, msg)
 }
 
 func (h *Hub) decode(w http.ResponseWriter, r *http.Request, v any) error {
@@ -298,9 +347,11 @@ func (h *Hub) removeClient(c *Client) {
 		c.queueing = false
 	}
 	c.match = nil
+	n := len(h.clients)
 	h.mu.Unlock()
 	c.cancel()
 	if removed {
+		log.Printf("kxp: client %s leave online=%d", c.id, n)
 		h.broadcastOnline()
 	}
 }
