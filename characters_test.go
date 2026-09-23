@@ -75,12 +75,12 @@ func TestRoundCarriesCharacters(t *testing.T) {
 func TestMatchExposesBotCharacter(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("mc2", side{client: a}, side{bot: true, character: "raiden"})
+	m := h.makeMatch("mc2", side{client: a}, side{bot: true, character: "smoke"})
 	m.start()
 
 	md := waitForEvent(t, a, "matched")
-	if md["opponentCharacter"] != "raiden" {
-		t.Errorf("matched opponentCharacter = %v, want raiden", md["opponentCharacter"])
+	if md["opponentCharacter"] != "smoke" {
+		t.Errorf("matched opponentCharacter = %v, want smoke", md["opponentCharacter"])
 	}
 	if !validCharacter(m.opponentCharacter(0)) {
 		t.Errorf("bot character not in roster")

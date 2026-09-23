@@ -17,9 +17,11 @@ the opponent slot, and the result line).
   - `characters.go` — server-side: validation + CPU random pick.
   - `web/characters.js` — client-side: rendering (maps `id` → emoji + name).
     Fighter art is placeholder emoji for now; the `emoji` field will be swapped
-    for real artwork later. Placeholder roster: Alakran (🦂), Hielito (🧊),
-    Rayito (⚡), Fueguito (🔥), Humito (💨), Lagartijo (🦎), Bracitos (💪),
-    Abaniquita (🪭), Navajita (🗡️).
+    for real artwork later. Placeholder roster: Alakran (🦂), Fueguito (🔥),
+    Galancito (🕶️), Sombrerito (🎩), Abaniquita (🪭), Colmillita (🦷),
+    Lagartijo (🦎), Hielito (🧊), Bracitos (💪), Navajita (🗡️), Abuelito (🧙),
+    Humito (💨) — the 12 fighters of the original MKII 1992 roster, shown in a
+    4×3 grid.
 
 ## Data flow
 

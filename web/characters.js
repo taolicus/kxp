@@ -1,13 +1,16 @@
 const CHARACTERS = [
   { id: 'scorpion', name: 'Alakran', emoji: '🦂' },
-  { id: 'subzero', name: 'Hielito', emoji: '🧊' },
-  { id: 'raiden', name: 'Rayito', emoji: '⚡' },
   { id: 'liukang', name: 'Fueguito', emoji: '🔥' },
-  { id: 'smoke', name: 'Humito', emoji: '💨' },
-  { id: 'reptile', name: 'Lagartijo', emoji: '🦎' },
-  { id: 'jax', name: 'Bracitos', emoji: '💪' },
+  { id: 'johnnycage', name: 'Galancito', emoji: '🕶️' },
+  { id: 'kunglao', name: 'Sombrerito', emoji: '🎩' },
   { id: 'kitana', name: 'Abaniquita', emoji: '🪭' },
+  { id: 'mileena', name: 'Colmillita', emoji: '🦷' },
+  { id: 'reptile', name: 'Lagartijo', emoji: '🦎' },
+  { id: 'subzero', name: 'Hielito', emoji: '🧊' },
+  { id: 'jax', name: 'Bracitos', emoji: '💪' },
   { id: 'baraka', name: 'Navajita', emoji: '🗡️' },
+  { id: 'shangtsung', name: 'Abuelito', emoji: '🧙' },
+  { id: 'smoke', name: 'Humito', emoji: '💨' },
 ];
 
 function characterByID(id) {

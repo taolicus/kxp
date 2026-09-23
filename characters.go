@@ -9,14 +9,17 @@ type Character struct {
 
 var characters = []Character{
 	{ID: "scorpion", Name: "Alakran"},
-	{ID: "subzero", Name: "Hielito"},
-	{ID: "raiden", Name: "Rayito"},
 	{ID: "liukang", Name: "Fueguito"},
-	{ID: "smoke", Name: "Humito"},
-	{ID: "reptile", Name: "Lagartijo"},
-	{ID: "jax", Name: "Bracitos"},
+	{ID: "johnnycage", Name: "Galancito"},
+	{ID: "kunglao", Name: "Sombrerito"},
 	{ID: "kitana", Name: "Abaniquita"},
+	{ID: "mileena", Name: "Colmillita"},
+	{ID: "reptile", Name: "Lagartijo"},
+	{ID: "subzero", Name: "Hielito"},
+	{ID: "jax", Name: "Bracitos"},
 	{ID: "baraka", Name: "Navajita"},
+	{ID: "shangtsung", Name: "Abuelito"},
+	{ID: "smoke", Name: "Humito"},
 }
 
 func characterByID(id string) (Character, bool) {

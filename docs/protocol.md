@@ -97,7 +97,7 @@ Request bodies always start with the client id; content-type JSON.
 | `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current PvP match; `400 no active match` if none. Ignored for CPU matches. |
 | `POST /cpu` | `{id}` | `200 {}` — starts an instant CPU match (also drains/leaves the queue). |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
-| `POST /character` | `{id, character}` | `200 {}` — picks a fighter (`scorpion`, `subzero`, `raiden`, `liukang`, `smoke`, `reptile`, `jax`, `kitana`, `baraka`); `400 invalid character`. |
+| `POST /character` | `{id, character}` | `200 {}` — picks a fighter (`scorpion`, `liukang`, `johnnycage`, `kunglao`, `kitana`, `mileena`, `reptile`, `subzero`, `jax`, `baraka`, `shangtsung`, `smoke`); `400 invalid character`. |
 
 ## Client state machine
 
