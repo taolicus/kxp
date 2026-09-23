@@ -9,18 +9,18 @@ type Character struct {
 }
 
 var characters = []Character{
-	{ID: "dragon-chino", Name: "Dragon Chino", Emoji: "🦂"},
-	{ID: "sombrero-loco", Name: "Sombrero Loco", Emoji: "🔥"},
+	{ID: "dragon-chino", Name: "Dragon Chino", Emoji: "🐉"},
+	{ID: "sombrero-loco", Name: "Sombrero Loco", Emoji: "🎩"},
 	{ID: "lentes-de-sol", Name: "Lentes de Sol", Emoji: "🕶️"},
-	{ID: "lagartijo", Name: "Lagartijo", Emoji: "🎩"},
-	{ID: "hielito", Name: "Hielito", Emoji: "🪭"},
-	{ID: "cambiaformas", Name: "Cambiaformas", Emoji: "🦷"},
-	{ID: "fabulosa", Name: "Fabulosa", Emoji: "🦎"},
-	{ID: "robok", Name: "Robok", Emoji: "🧊"},
-	{ID: "rafaela", Name: "Rafaela", Emoji: "💪"},
-	{ID: "bicho-raro", Name: "Bicho Raro", Emoji: "🗡️"},
-	{ID: "alakran", Name: "Alakran", Emoji: "🧙"},
-	{ID: "rayito", Name: "Rayito", Emoji: "💨"},
+	{ID: "lagartijo", Name: "Lagartijo", Emoji: "🦎"},
+	{ID: "hielito", Name: "Hielito", Emoji: "🧊"},
+	{ID: "cambiaformas", Name: "Cambiaformas", Emoji: "🦎"},
+	{ID: "fabulosa", Name: "Fabulosa", Emoji: "🪭"},
+	{ID: "robok", Name: "Robok", Emoji: "🦾"},
+	{ID: "rafaela", Name: "Rafaela", Emoji: "⚔️"},
+	{ID: "bicho-raro", Name: "Bicho Raro", Emoji: "🦗"},
+	{ID: "alakran", Name: "Alakran", Emoji: "🦂"},
+	{ID: "rayito", Name: "Rayito", Emoji: "⚡"},
 }
 
 func characterByID(id string) (Character, bool) {
