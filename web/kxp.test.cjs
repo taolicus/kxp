@@ -177,3 +177,22 @@ test('rejectLabel: maps known server errors', () => {
   assert.equal(KXP.rejectLabel('something else'), 'NOT ACCEPTED');
   assert.equal(KXP.rejectLabel(undefined), 'NOT ACCEPTED');
 });
+
+test('beaconGate: first beacon always passes', () => {
+  assert.deepEqual(KXP.beaconGate('sse-error', 'shoot', null, 1000), { pass: true, key: 'sse-error|shoot' });
+});
+
+test('beaconGate: throttles to one per 5000ms regardless of kind', () => {
+  const last = { ms: 1000, key: 'sse-error|shoot' };
+  assert.equal(KXP.beaconGate('fetch-error', 'shoot', last, 1000 + 4000).pass, false);
+  assert.equal(KXP.beaconGate('fetch-error', 'shoot', last, 1000 + 5000).pass, true);
+  const again = { ms: 6000, key: 'fetch-error|shoot' };
+  assert.equal(KXP.beaconGate('stalled', 'shoot', again, 10000).pass, false);
+});
+
+test('beaconGate: identical kind+state only re-sent after 60s', () => {
+  const last = { ms: 1000, key: 'sse-error|shoot' };
+  assert.equal(KXP.beaconGate('sse-error', 'shoot', last, 1000 + 30000).pass, false);
+  assert.equal(KXP.beaconGate('sse-error', 'shoot', last, 1000 + 59999).pass, false);
+  assert.equal(KXP.beaconGate('sse-error', 'shoot', last, 1000 + 60000).pass, true);
+});

@@ -45,9 +45,12 @@ in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
       work only when the cause is confirmed.
       *Landed so far: the access/reject/join-leave logging half, plus the
       `/metrics` counter endpoint (requests, rejects by code/message,
-      joined/left, dropped events, rate-limited, SSE streams) and the
-      `/health` probe. The bounded SSE connection lifetime and frame journal
-      have not shipped.*
+      joined/left, dropped events, rate-limited, SSE streams, client error
+      beacons by kind), the `/health` probe, and the client-side error
+      beacon (`POST /report`, throttled client-side via `beaconGate`,
+      hooked at SSE errors, fetch failures, machine-rejected transitions,
+      stall-watchdog fires, and rejoin-past-window). The bounded SSE
+      connection lifetime and frame journal have not shipped.*
 6. **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
       (like a draw): no win, no streak break, "No contest" reported, while the
       opponent keeps the round win. Engine + client + leaderboard adopt it.

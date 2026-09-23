@@ -90,5 +90,23 @@
       : 'NOT ACCEPTED';
   }
 
-  return { aliases, shootWindow, planRound, applyResult, resultLines, rejectLabel };
+  // beaconGate is the throttle for the client-side error beacon. Beacons are
+  // fire-and-forget diagnostics, so they must never turn into a feedback loop:
+  // a wedged SSE stream can fire onerror on every reconnect attempt, and each
+  // would otherwise mint a /report request. Rules:
+  //   - first beacon always passes;
+  //   - one beacon per 5000ms regardless of kind;
+  //   - an identical (kind, state) is only re-sent after 60s — the symptom
+  //     either cleared or is repeating persistently, and a single sample is
+  //     enough to capture it.
+  // last is { ms, key } from the previous accepted beacon, or null.
+  function beaconGate(kind, state, last, now) {
+    const key = `${kind}|${state}`;
+    if (!last) return { pass: true, key };
+    if (now - last.ms < 5000) return { pass: false, key };
+    if (key === last.key && now - last.ms < 60000) return { pass: false, key };
+    return { pass: true, key };
+  }
+
+  return { aliases, shootWindow, planRound, applyResult, resultLines, rejectLabel, beaconGate };
 }));

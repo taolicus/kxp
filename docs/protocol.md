@@ -90,7 +90,8 @@ server-side (see the roadmap).
 
 `POST` request bodies always start with the client id; content-type JSON.
 `GET /events` is the SSE stream; `GET /characters`, `GET /health`, and
-`GET /metrics` are read-only and exempt from rate limiting.
+`GET /metrics` are read-only and exempt from rate limiting. Everything else
+(including the `POST /report` client error beacon) is rate-limited.
 
 | endpoint | body | responses |
 | --- | --- | --- |
@@ -102,7 +103,8 @@ server-side (see the roadmap).
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
 | `GET /characters` | — | `200 [{id, name, emoji}]` — the full roster; the single source of truth for character data. The client fetches it at startup and no longer bundles its own copy. |
 | `GET /health` | — | `200 {status, uptime, online, queue, activeMatches}` — liveness/readiness probe. Exempt from rate limiting. |
-| `GET /metrics` | — | `200 {uptime, online, queue, matches, counts}` where `counts` carries cumulative request/reject/join/leave/drop/rate-limit streams plus breakdowns `byStatus`, `byCode`, `byMsg`. Read-only; exempt from rate limiting. |
+| `GET /metrics` | — | `200 {uptime, online, queue, matches, counts}` where `counts` carries cumulative request/reject/join/leave/drop/rate-limit/beacon streams plus breakdowns `byStatus`, `byCode`, `byMsg`, `byBeaconKind`. Read-only; exempt from rate limiting. |
+| `POST /report` | `{id, kind, state, detail?, ts?}` | `200 {}` — fire-and-forget client-side error beacon (SSE stall, fetch failure, machine-rejected transition). Unknown/stale `id` accepted and logged — a beacon from a reaped client is itself diagnostic data. `kind` required (`400 missing kind`); rate-limited like other POSTs; the client throttles (see `beaconGate` in `web/kxp.js`). |
 
 ## Client state machine
 

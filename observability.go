@@ -24,14 +24,18 @@ type HubMetrics struct {
 	byStatus map[string]int
 	byCode   map[string]int
 	byMsg    map[string]int
+
+	beacons      int
+	byBeaconKind map[string]int
 }
 
 func newHubMetrics() *HubMetrics {
 	return &HubMetrics{
-		started:  time.Now(),
-		byStatus: make(map[string]int),
-		byCode:   make(map[string]int),
-		byMsg:    make(map[string]int),
+		started:      time.Now(),
+		byStatus:     make(map[string]int),
+		byCode:       make(map[string]int),
+		byMsg:        make(map[string]int),
+		byBeaconKind: make(map[string]int),
 	}
 }
 
@@ -83,6 +87,13 @@ func (m *HubMetrics) incStreamOpened() {
 	m.mu.Unlock()
 }
 
+func (m *HubMetrics) incBeacon(kind string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.beacons++
+	m.byBeaconKind[kind]++
+}
+
 // Copy returns a point-in-time snapshot of the counters plus a copy of the
 // distribution maps under one lock hold.
 func (m *HubMetrics) Copy() HubMetricsView {
@@ -96,9 +107,11 @@ func (m *HubMetrics) Copy() HubMetricsView {
 		DroppedEvents: m.dropped,
 		RateLimited:   m.rateLimited,
 		StreamsOpened: m.streamsOpened,
+		Beacons:       m.beacons,
 		ByStatus:      cloneMap(m.byStatus),
 		ByCode:        cloneMap(m.byCode),
 		ByMsg:         cloneMap(m.byMsg),
+		ByBeaconKind:  cloneMap(m.byBeaconKind),
 	}
 }
 
@@ -111,9 +124,11 @@ type HubMetricsView struct {
 	DroppedEvents int            `json:"droppedEvents"`
 	RateLimited   int            `json:"rateLimited"`
 	StreamsOpened int            `json:"streamsOpened"`
+	Beacons       int            `json:"beacons"`
 	ByStatus      map[string]int `json:"byStatus"`
 	ByCode        map[string]int `json:"byCode"`
 	ByMsg         map[string]int `json:"byMsg"`
+	ByBeaconKind  map[string]int `json:"byBeaconKind"`
 }
 
 func cloneMap(in map[string]int) map[string]int {

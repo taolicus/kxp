@@ -80,8 +80,9 @@ landed; the remaining reliability slices (stream seq + replay, `/ping` probe,
 latency compensation, reconnect recovery, ghost online count) are **parked as
 symptom descriptions** in [docs/issues.md](docs/issues.md) until their cause
 is confirmed. Decided and scheduled next are **connectivity diagnostics** (the first
-half — access/error/join-leave logging plus `/health` and `/metrics`
-endpoints — has landed; the bounded SSE
+half — access/error/join-leave logging, `/health` and `/metrics`
+endpoints, and a throttled client-side error beacon over `POST /report` —
+has landed; the bounded SSE
 connection lifetime is still open, all as a surgical incremental slice that
 produces the evidence), **connectivity-safe
 scoring** — a no-valid-move timeout resolves `void`, scored like a draw (no

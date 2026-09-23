@@ -25,6 +25,7 @@ function armStallWatchdog() {
   stallTimer = setTimeout(() => {
     if (state !== 'shoot' && state !== 'countdown') return;
     if (DEBUG) console.warn('kxp: stalled in game state, re-syncing via reconnect');
+    report('stalled', state);
     es.close();
     connect();
   }, 6000);
@@ -33,6 +34,19 @@ function armStallWatchdog() {
 const DEBUG = /[?&]debug/.test(location.search);
 const GAME_STATES = ['countdown', 'shoot', 'locked'];
 const BGS = ['pool', 'forest', 'tomb', 'arena', 'portal'];
+
+// Error beacon: fire-and-forget diagnostics when something the client sees
+// goes wrong (stalled SSE, failed fetch, a transition the machine wouldn't
+// take). Throttled by beaconGate upstream so a wedged link can't loop /report
+// requests. Never blocks the tab; failures to send are ignored.
+let lastBeacon = null;
+function report(kind, state) {
+  const now = Date.now();
+  const g = KXP.beaconGate(kind, state, lastBeacon, now);
+  lastBeacon = g.pass ? { ms: now, key: g.key } : lastBeacon;
+  if (!g.pass || !id) return;
+  post('/report', { kind, state, ts: now }).catch(() => {});
+}
 
 // bgReady resolves once the background for the current match is decoded and
 // applied, so the game view is only shown when its bg can paint in one frame.
@@ -275,13 +289,20 @@ async function post(path, body = {}) {
     let error = '';
     try { error = (await resp.json()).error || ''; } catch (e) {}
     return { ok: resp.ok, status: resp.status, error };
-  } catch (e) { return null; }
+  } catch (e) {
+    report('fetch-error', state);
+    return null;
+  }
 }
 
 function transition(ev, data) {
   const to = SM.next(state, ev);
   if (!to) {
+    // An event the state machine rejected: a frame arriving out of order (or
+    // for the wrong phase) that the client silently dropped. Worth surfacing
+    // as a beacon — it is the exact signature behind "stuck" symptoms.
     if (DEBUG) console.warn(`kxp: no transition ${state} + ${ev}`);
+    report('bad-transition', state);
     return false;
   }
   const from = state;
@@ -412,6 +433,7 @@ function connect() {
       } else if (d.phase === 'countdown' && d.pending) transition('snapshot:matched', d);
       else if (d.phase === 'shoot' && d.shootAt && d.windowMs && Date.now() + clockSkew - d.shootAt >= d.windowMs) {
         // PUN window already closed; nothing playable to rejoin.
+        report('rejoin-past-window', 'shoot');
         transition('snapshot:idle', d);
       }
       else transition(d.phase === 'shoot' ? 'snapshot:shoot' : 'snapshot:countdown', d);
@@ -453,7 +475,12 @@ function connect() {
     else transition('snapshot:waiting');
   });
 
-  es.onerror = () => { /* EventSource auto-reconnects */ };
+  es.onerror = () => {
+    // The spec fires this on every auto-reconnect attempt too, so a normal
+    // blip reports here once per beaconGate window. Connection loss is exactly
+    // what the diagnostics slice wants to see from the client side.
+    report('sse-error', state);
+  };
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

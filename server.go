@@ -190,6 +190,7 @@ func (h *Hub) routes() *http.ServeMux {
 	mux.HandleFunc("POST /cpu", h.rateLimit(h.handleCPU))
 	mux.HandleFunc("POST /ready", h.rateLimit(h.handleReady))
 	mux.HandleFunc("POST /move", h.rateLimit(h.handleMove))
+	mux.HandleFunc("POST /report", h.rateLimit(h.handleReport))
 	mux.HandleFunc("GET /characters", h.handleCharacters)
 	mux.HandleFunc("POST /character", h.rateLimit(h.handleCharacter))
 	mux.HandleFunc("GET /health", h.handleHealth)
@@ -756,5 +757,42 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusConflict, "move already submitted")
 		return
 	}
+	w.Write([]byte("{}"))
+}
+
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}
+
+// handleReport accepts fire-and-forget client-side error beacons over the same
+// POST surface the client already speaks. A beacon is a noisy, low-value
+// request: it only exists to log what the *client* saw (SSE stall/failure,
+// fetch error, a transition the machine rejected) so the server log can show
+// both sides of a connectivity problem. Stale or unknown ids are deliberately
+// accepted — a beacon from a client the hub already reaped is itself a datum.
+// Rate-limited like every state-changing POST; the client throttles hard
+// (kxp.js beaconGate) so a firehose of beacons can't trip it.
+func (h *Hub) handleReport(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID     string `json:"id"`
+		Kind   string `json:"kind"`
+		State  string `json:"state"`
+		Detail string `json:"detail"`
+		TS     int64  `json:"ts"`
+	}
+	if err := h.decode(w, r, &req); err != nil {
+		return
+	}
+	kind := clip(req.Kind, 48)
+	if kind == "" {
+		h.handlerError(w, http.StatusBadRequest, "missing kind")
+		return
+	}
+	h.metrics.incBeacon(kind)
+	log.Printf("kxp: beacon id=%s kind=%s state=%s detail=%q ts=%d", clip(req.ID, 64), kind, clip(req.State, 48), clip(req.Detail, 256), req.TS)
 	w.Write([]byte("{}"))
 }
