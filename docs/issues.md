@@ -91,14 +91,18 @@ the real number of live players.
 kept counting (no reap), or an anonymous client minted without a matching
 `connected` join. Neither is confirmed.
 
-**Proves the cause** — client join/leave lifecycle logs + bounded connection
-lifetime (roadmap item 5, this entry's diagnostic half) showing a
-counted-but-never-joined client, or a reaped half-open conn reconciling the
-count down.
+**Proves the cause** — client join/leave lifecycle logs + the now-shipped
+bounded connection lifetime (roadmap item 5): a `reap client …` line, a
+matching `reaped` counter, a reaped half-open conn reconciling the count down,
+or a leave with a non-empty frame journal but no matching `connected` join.
 
-**Prospective fix (not scheduled)** — connection reap / deadline set ships as
-part of the diagnostics slice to test this hypothesis; a permanent count-rule
-change waits until the lifecycle logs identify the survivor.
+**Diagnostic landings** — `/events` re-arms a rolling per-write deadline, so a
+write stalled on a vanished peer reaps within the bound; TCP keepalive (15s) on
+the listener catches silent idle peers; each client logs its last 16 flushed
+frames on leave. The latency-profile trace waits on the `/ping` rework.
+
+**Prospective fix (not scheduled)** — a permanent count-rule change waits until
+the lifecycle/log/reap evidence identifies the survivor.
 
 ## 5. Dropped connection forfeits instantly (drop = loss)
 

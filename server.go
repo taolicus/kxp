@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	cryptorand "crypto/rand"
 	"encoding/hex"
@@ -24,7 +25,22 @@ const (
 	maxClients = 256
 	maxQueue   = 128
 	maxMatches = 64
+
+	// frameJournalCap bounds the per-client SSE frame journal (last frames
+	// actually flushed to the client) that is logged on leave so a vanished
+	// device's history can be correlated with its reconnect/beacon.
+	frameJournalCap = 16
 )
+
+// sseWriteDeadline is the rolling per-write deadline on /events streams: it
+// bounds how long a single frame write may block before the handler treats the
+// connection as vanished (half-open peer, dead device) and reaps it. It is
+// re-armed before every write, so an idle-but-healthy stream is never killed by
+// its own interval; the deadline only fires when an actual write cannot
+// complete. Together with TCP keepalive (main.go's ListenConfig) this is the
+// "bounded SSE connection lifetime" that makes the online count reconcile down
+// instead of ghosting +1. A var (not const) so the reap test can shrink it.
+var sseWriteDeadline = 5 * time.Second
 
 // side is the hub-level view of one side of a match: the concrete client plus
 // match-time facts. Hub.makeMatch turns it into an engine matchParty.
@@ -125,6 +141,7 @@ type Client struct {
 	connID   string
 	queueing bool
 	match    *match
+	frames   []string
 }
 
 func newClient() *Client {
@@ -300,10 +317,31 @@ func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reap tracking: a write that cannot complete (bounded by sseWriteDeadline)
+	// means the peer is gone but the OS never told us — the classic half-open
+	// /dev/null conn that used to count as online forever. We mark it reaped so
+	// endConn can log a distinct line and bump the reaped counter; a normal
+	// context cancellation stays a plain leave.
+	reaped := false
 	connID := c.beginConn()
-	defer h.endConn(c, connID)
+	defer func() {
+		removed := h.endConn(c, connID)
+		if reaped && removed {
+			h.metrics.incReaped()
+			h.mu.Lock()
+			n := len(h.clients)
+			h.mu.Unlock()
+			log.Printf("kxp: reap client %s online=%d (write deadline)", c.id, n)
+		}
+	}()
 
-	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+	// The rolling per-write deadline: re-armed immediately before every frame
+	// so an idle-but-healthy stream is unaffected, while a write that blocks on
+	// a vanished peer fails within sseWriteDeadline and reaps the connection.
+	// SetWriteDeadline support is probed here once; per-frame arming treats any
+	// failure as a reap (the conn is unusable either way).
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
 		h.handlerError(w, http.StatusInternalServerError, "streaming timeout unsupported")
 		return
 	}
@@ -313,7 +351,29 @@ func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	c.sendEv(evt("connected", h.snapshot(c)))
+	writeFrame := func(b []byte) bool {
+		rc.SetWriteDeadline(time.Now().Add(sseWriteDeadline))
+		if _, err := w.Write(b); err != nil {
+			return false
+		}
+		fl.Flush()
+		return true
+	}
+
+	flushAndJournal := func(b []byte) bool {
+		if !writeFrame(b) {
+			return false
+		}
+		if typ := frameType(b); typ != "" {
+			c.recordFrame(typ)
+		}
+		return true
+	}
+
+	if !flushAndJournal(encodeEv(evt("connected", h.snapshot(c)))) {
+		reaped = true
+		return
+	}
 
 	tick := time.NewTicker(20 * time.Second)
 	defer tick.Stop()
@@ -325,17 +385,29 @@ func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
 		case <-h.down.Done():
 			return
 		case b := <-c.send:
-			if _, err := w.Write(b); err != nil {
+			if !flushAndJournal(b) {
+				reaped = true
 				return
 			}
-			fl.Flush()
 		case <-tick.C:
-			if _, err := w.Write([]byte(": ping\n\n")); err != nil {
+			if !writeFrame([]byte(": ping\n\n")) {
+				reaped = true
 				return
 			}
-			fl.Flush()
 		}
 	}
+}
+
+// frameType extracts the SSE event name from an encoded frame ("event: x\n...")
+// so the client-side frame journal can record what was actually flushed.
+// Comment frames (": ping") carry no type and return "".
+func frameType(b []byte) string {
+	if len(b) > 7 && bytes.Equal(b[:7], []byte("event: ")) {
+		if i := bytes.IndexByte(b, '\n'); i > 7 {
+			return string(b[7:i])
+		}
+	}
+	return ""
 }
 
 func (c *Client) beginConn() string {
@@ -346,14 +418,45 @@ func (c *Client) beginConn() string {
 	return id
 }
 
-func (h *Hub) endConn(c *Client, connID string) {
+// recordFrame appends the just-flushed SSE event type to the client's short
+// frame journal. The journal is bounded (frameJournalCap) and logged on leave
+// so a vanished/reaped device's last-seen history is visible in the server log
+// next to the leave line.
+func (c *Client) recordFrame(typ string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.frames) == frameJournalCap {
+		copy(c.frames, c.frames[1:])
+		c.frames = c.frames[:frameJournalCap-1]
+	}
+	c.frames = append(c.frames, typ)
+}
+
+func (c *Client) frameJournal() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.frames) == 0 {
+		return ""
+	}
+	joined := make([]byte, 0, len(c.frames)*12)
+	for i, f := range c.frames {
+		if i > 0 {
+			joined = append(joined, ',')
+		}
+		joined = append(joined, f...)
+	}
+	return string(joined)
+}
+
+func (h *Hub) endConn(c *Client, connID string) bool {
 	c.mu.Lock()
 	current := c.connID
 	c.mu.Unlock()
 	if current != connID {
-		return
+		return false
 	}
 	h.removeClient(c)
+	return true
 }
 
 func (h *Hub) removeClient(c *Client) {
@@ -373,7 +476,11 @@ func (h *Hub) removeClient(c *Client) {
 	c.cancel()
 	if removed {
 		h.metrics.incLeft()
-		log.Printf("kxp: client %s leave online=%d", c.id, n)
+		if j := c.frameJournal(); j != "" {
+			log.Printf("kxp: client %s leave online=%d frames=%s", c.id, n, j)
+		} else {
+			log.Printf("kxp: client %s leave online=%d", c.id, n)
+		}
 		h.broadcastOnline()
 	}
 }

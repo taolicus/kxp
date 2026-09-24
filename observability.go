@@ -18,6 +18,7 @@ type HubMetrics struct {
 	joined        int
 	left          int
 	dropped       int
+	reaped        int
 	rateLimited   int
 	streamsOpened int
 
@@ -75,6 +76,12 @@ func (m *HubMetrics) incDropped() {
 	m.mu.Unlock()
 }
 
+func (m *HubMetrics) incReaped() {
+	m.mu.Lock()
+	m.reaped++
+	m.mu.Unlock()
+}
+
 func (m *HubMetrics) incRateLimited() {
 	m.mu.Lock()
 	m.rateLimited++
@@ -105,6 +112,7 @@ func (m *HubMetrics) Copy() HubMetricsView {
 		Joined:        m.joined,
 		Left:          m.left,
 		DroppedEvents: m.dropped,
+		Reaped:        m.reaped,
 		RateLimited:   m.rateLimited,
 		StreamsOpened: m.streamsOpened,
 		Beacons:       m.beacons,
@@ -122,6 +130,7 @@ type HubMetricsView struct {
 	Joined        int            `json:"joined"`
 	Left          int            `json:"left"`
 	DroppedEvents int            `json:"droppedEvents"`
+	Reaped        int            `json:"reaped"`
 	RateLimited   int            `json:"rateLimited"`
 	StreamsOpened int            `json:"streamsOpened"`
 	Beacons       int            `json:"beacons"`

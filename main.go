@@ -33,16 +33,21 @@ func main() {
 	mux := hub.routes()
 	mux.Handle("/", http.FileServer(http.FS(sub)))
 
+	// KeepAlive arms TCP keepalive probes on every accepted connection so a
+	// device that vanishes without a FIN is detected by the OS between SSE
+	// frames (the /events loop's rolling write deadline covers blocked writes,
+	// but only the kernel can notice a silent idle peer). This is the other
+	// half of the bounded SSE connection lifetime.
 	var listener net.Listener
 	if *addr != "" {
-		listener, err = net.Listen("tcp", *addr)
+		listener, err = (&net.ListenConfig{KeepAlive: 15 * time.Second}).Listen(context.Background(), "tcp", *addr)
 		if err != nil {
 			log.Printf("port %s unavailable, scanning 8000–8999", *addr)
 		}
 	}
 	if listener == nil {
 		for port := 8000; port <= 8999; port++ {
-			listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+			listener, err = (&net.ListenConfig{KeepAlive: 15 * time.Second}).Listen(context.Background(), "tcp", fmt.Sprintf(":%d", port))
 			if err == nil {
 				break
 			}

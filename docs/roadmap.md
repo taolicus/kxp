@@ -43,14 +43,24 @@ in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
       produces the evidence.** The symptoms themselves are described — not
       scheduled — in [docs/issues.md](issues.md), and graduate into scheduled
       work only when the cause is confirmed.
-      *Landed so far: the access/reject/join-leave logging half, plus the
-      `/metrics` counter endpoint (requests, rejects by code/message,
-      joined/left, dropped events, rate-limited, SSE streams, client error
-      beacons by kind), the `/health` probe, and the client-side error
-      beacon (`POST /report`, throttled client-side via `beaconGate`,
-      hooked at SSE errors, fetch failures, machine-rejected transitions,
-      stall-watchdog fires, and rejoin-past-window). The bounded SSE
-      connection lifetime and frame journal have not shipped.*
+*Landed so far: the access/reject/join-leave logging half, plus the
+       `/metrics` counter endpoint (requests, rejects by code/message,
+       joined/left, dropped events, rate-limited, SSE streams, client error
+       beacons by kind, **reaped connections**), the `/health` probe, and the
+       client-side error beacon (`POST /report`, throttled client-side via
+       `beaconGate`, hooked at SSE errors, fetch failures, machine-rejected
+       transitions, stall-watchdog fires, and rejoin-past-window). **The
+       bounded SSE connection lifetime is also in**: `/events` re-arms a short
+       rolling per-write deadline before every frame, so a write that stalls
+       against a vanished peer (half-open conn) reaps the connection — the
+       client is removed, the online count reconciles down, a `reap client …`
+       line joins the `leave online=N` line, and the `reaped` counter moves.
+       TCP keepalive (15s) arms at the listener so the OS also notices silent
+       idle peers between frames. Each client logs a short **frame journal**
+       (last 16 event types actually flushed) on leave, so a vanished/reaped
+       device's last-seen can be correlated with its reconnect or beacon. The
+       remaining trace — latency profile visibility — waits on the protocol
+       rework's `/ping` probe data.*
 6. **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
       (like a draw): no win, no streak break, "No contest" reported, while the
       opponent keeps the round win. Engine + client + leaderboard adopt it.
