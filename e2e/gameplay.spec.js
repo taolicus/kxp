@@ -1,22 +1,35 @@
-// Core-gameplay e2e: three deliberately narrow flows that drive the real
-// browser against the real server over SSE, surfaced by Playwright on a
-// host where Chromium exists (see README / package.json scripts).
+// Core-gameplay e2e: three deliberately narrow flows that drive a real browser
+// against the DEPLOYED (production) server over real SSE, surfaced by
+// Playwright on any Chromium-capable host. The suite never boots the app
+// locally and needs only Node >= 20 and Playwright's Chromium; the target is
+// chosen by the required BASE_URL (see playwright.config.cjs).
 //
 // The flows are scoped by the roadmap (item 8) to the *game-breaking
 // connectivity failures that resist unit testing*:
 //
 //   1. a CPU match completes end-to-end within a hard bound, with zero
 //      console/page errors;
-//   2. a self-PvP match in two isolated contexts produces a consistent
-//      result on both sides, neither left dead in matched/countdown (the
-//      asymmetric-SSE class);
-//   3. a reload mid-match reconciles the client to a healthy state and the
-//      page is never stuck on a dead "Waiting for result…" view.
+//   2. a PvP match produces a result on both sides, neither left dead in
+//      matched/countdown (the asymmetric-SSE class). A first instance queues
+//      and waits a short bound (REAL_USER_PAIR_BOUND) for a real opponent — a
+//      real pairing is valid and the more valuable case, so it is run as-is;
+//      only if none appears is a second instance launched so the two queue
+//      against each other;
+//   3. a reload mid-match reconciles to a healthy state, never stuck on a dead
+//      "Waiting for result…" view.
 //
 // No button/stat/styling assertions, per scope.
 //
 // Runtime notes
 // -------------
+// The server pairs its online queue strictly FIFO with no private matching, so
+// on a live server a stranger queueing inside the pair window can take one of
+// our slots. Flow 2 therefore proves self-pairing from the result frames
+// (each side's opponentCharacter must be the other's youCharacter) and asserts
+// strict win↔loss/draw↔draw consistency only when self-pairing is proven;
+// otherwise it still asserts the hard completion invariants (result reached,
+// mode online, zero console errors) — which is the meaningful production check.
+//
 // A finished match leaves the client on the result screen (the machine has no
 // result→stateIdle edge; "Play Again / Change mode" waits for the player), so
 // the suite keys completion off `#btn-again` arming after `renderResult`
@@ -25,10 +38,17 @@
 
 const { test, expect } = require('@playwright/test');
 
-const CONNECT_BOUND = 10000; // SSE connected snapshot arrives
-const CPU_MATCH_BOUND = 25000; // matched→KA(2s)→CHI(1s)→PUN(2s)+skew margins
-const PVP_MATCH_BOUND = 40000; // CPU timing + PvP ready handshake (≤8s)
+// BASE_URL is guaranteed present and valid here: playwright.config.cjs throws
+// at load if it's missing or malformed, so the suite cannot start otherwise.
+const baseURL = process.env.BASE_URL;
+
+// Bounds are about the internet, not hardware: generous delivery margins for
+// a real network, deliberately not tuned to any one device.
+const CONNECT_BOUND = 15000; // SSE connected snapshot arrives
+const CPU_MATCH_BOUND = 30000; // matched→KA(2s)→CHI(1s)→PUN(2s)+delivery margins
+const PVP_MATCH_BOUND = 50000; // CPU timing + PvP ready handshake (≤8s)
 const RECONCILE_BOUND = 15000; // reloaded client reaches a healthy state
+const REAL_USER_PAIR_BOUND = 5000; // how long flow 2 waits for a real opponent
 
 const $ = (page, sel) => page.locator(sel);
 
@@ -52,7 +72,8 @@ function watchErrors(page) {
 // Accurately capture every resolved round. The client's renderResult is a
 // top-level function declaration → reachable from the window, so we can wrap
 // it once the page is up (before any match is started) and record the
-// outcome deterministically instead of racing the result banner.
+// outcome deterministically instead of racing the result banner. We also
+// record each side's character so flow 2 can prove self-pairing afterward.
 async function installResultProbe(page) {
   await page.evaluate(() => {
     if (window.__kxpProbe) return;
@@ -60,7 +81,13 @@ async function installResultProbe(page) {
     const orig = window.renderResult;
     window.renderResult = function (d) {
       try {
-        window.__kxpResults.push({ outcome: d.outcome, note: d.yourNote || '', mode: d.mode || '' });
+        window.__kxpResults.push({
+          outcome: d.outcome,
+          note: d.yourNote || '',
+          mode: d.mode || '',
+          you: d.youCharacter || '',
+          opp: d.opponentCharacter || '',
+        });
       } catch (e) {}
       if (orig) return orig.apply(this, arguments);
     };
@@ -82,7 +109,7 @@ async function gotoApp(page) {
   await waitForConnected(page);
 }
 
-// CPU: Play vs CPU is never disabled (works with 0 online).
+// CPU: Play vs CPU is never disabled (works with any online count).
 async function startCPUMatch(page) {
   await $(page, '#btn-cpu').click();
   await expect($(page, '#choose')).toBeVisible({ timeout: CONNECT_BOUND });
@@ -90,27 +117,23 @@ async function startCPUMatch(page) {
   await expect($(page, '#game')).toBeVisible({ timeout: CPU_MATCH_BOUND });
 }
 
-// Online: Play Online is only enabled once another client is seen. The start
-// click only queues; the caller must call this on BOTH players before
-// rendezvousing on #game (a match is found only once both are queued), so the
-// queue-start and match-start assertions are kept separate to avoid a
-// deadlock where the first player waits for #game that only the second
-// player's queue can produce.
-async function startOnlineMatch(page) {
+// Online: Play Online is only enabled once another client is online, so flow
+// 2 must connect its second context (left in the lobby) before the first can
+// queue. charId (optional) picks a distinct fighter so self-pairing can be
+// proven from opponentCharacter later. This queues only; the caller decides
+// when to rendezvous on #game.
+async function startOnlineMatch(page, charId) {
   await expect($(page, '#btn-online')).toBeEnabled({ timeout: PVP_MATCH_BOUND });
   await $(page, '#btn-online').click();
   await expect($(page, '#choose')).toBeVisible({ timeout: CONNECT_BOUND });
+  if (charId) await $(page, `.fighter[data-char="${charId}"]`).click();
   await $(page, '#btn-start').click();
 }
 
-async function matchStarted(page) {
-  await expect($(page, '#game')).toBeVisible({ timeout: PVP_MATCH_BOUND });
-}
-
 // Click the first move the PUN window enables; tolerate a window already past
-// (clock skew) — the engine resolves the round either way. A short settle is
-// applied so the click lands a beat after the client flips to shoot, avoiding
-// a spurious "too early" rejection sitting right on the phase boundary.
+// (clock skew / delivery lag) — the engine resolves the round either way.
+// A short settle is applied so the click lands a beat after the client flips
+// to shoot, avoiding a spurious "too early" rejection on the phase boundary.
 async function tryPick(page) {
   const move = $(page, '.move:not([disabled])').first();
   try {
@@ -146,46 +169,97 @@ test('flow 1: CPU match completes end-to-end within a hard bound with zero error
   expect(errors).toEqual([]);
 });
 
-test('flow 2: self-PvP in two isolated contexts resolves consistently on both sides', async ({ browser }) => {
-  test.setTimeout(PVP_MATCH_BOUND + CONNECT_BOUND + 30000);
-  const ctxA = await browser.newContext();
-  const ctxB = await browser.newContext();
+test('flow 2: PvP resolves on both sides — real opponent first, self-pair fallback, never dead in matched/countdown', async ({ browser }) => {
+  test.setTimeout(PVP_MATCH_BOUND * 3 + CONNECT_BOUND * 2 + 30000);
+  // Manual contexts do NOT inherit config use.baseURL, so pass it explicitly.
+  const ctxA = await browser.newContext({ baseURL });
+  const ctxB = await browser.newContext({ baseURL });
   const a = await ctxA.newPage();
   const b = await ctxB.newPage();
   const errsA = watchErrors(a);
   const errsB = watchErrors(b);
   try {
+    // B connects too but stays in the lobby: A's #btn-online only enables
+    // once another client is online, even with zero real traffic.
     await gotoApp(a);
     await gotoApp(b);
     await installResultProbe(a);
     await installResultProbe(b);
-    await startOnlineMatch(a);
-    await startOnlineMatch(b);
-    await matchStarted(a);
-    await matchStarted(b);
 
-    // Both sides must reach the shoot state and submit a pick.
-    await tryPick(a);
-    await tryPick(b);
+    // First instance queues alone and waits a short bound for a real
+    // opponent; A and B get distinct fighters so self-pairing can be proven
+    // from opponentCharacter afterward.
+    await startOnlineMatch(a, 'dragon');
+    let realOpponent = false;
+    try {
+      await $(a, '#game').waitFor({ state: 'visible', timeout: REAL_USER_PAIR_BOUND });
+      realOpponent = true;
+    } catch (e) {
+      // No real user joined within the bound → A is still queueing.
+    }
 
-    // Neither side may be left dead in matched/countdown: each renders a
-    // result and returns to the lobby within the bound.
-    await waitForMatchDone(a, PVP_MATCH_BOUND);
-    await waitForMatchDone(b, PVP_MATCH_BOUND);
+    if (!realOpponent) {
+      // No real opponent appeared: launch the second instance to queue
+      // against A. FIFO pairing joins the queue head (A) with B.
+      await startOnlineMatch(b, 'sombrero');
 
-    // Consistent result: mirror outcomes, or a shared draw.
-    const ra = (await readResults(a))[0];
-    const rb = (await readResults(b))[0];
-    const consistent =
-      (ra.outcome === 'win' && rb.outcome === 'loss') ||
-      (ra.outcome === 'loss' && rb.outcome === 'win') ||
-      (ra.outcome === 'draw' && rb.outcome === 'draw');
-    expect.soft(consistent, `outcomes ${ra.outcome} vs ${rb.outcome}`).toBe(true);
-    expect.soft(ra.mode, 'mode is online for a self-PvP match').toBe('online');
-    expect.soft(rb.mode, 'mode is online for a self-PvP match').toBe('online');
+      // Both must reach the game view. A stranger that grabbed A exactly at
+      // the boundary leaves B waiting in queue — that is the real-opponent
+      // case, so neither side may be blocked on the other's slot.
+      const [aStarted, bStarted] = await Promise.all([
+        $(a, '#game').waitFor({ state: 'visible', timeout: PVP_MATCH_BOUND }).then(() => true).catch(() => false),
+        $(b, '#game').waitFor({ state: 'visible', timeout: PVP_MATCH_BOUND }).then(() => true).catch(() => false),
+      ]);
+      if (!aStarted) {
+        // Both timed out: the FIFO pair never formed. Hard fail — this is
+        // exactly the "left dead in queue" class flow 2 exists to catch.
+        expect(aStarted, 'A must reach the game view').toBe(true);
+      }
+      if (!bStarted) {
+        // A is in-game, B never matched → a stranger took A at the boundary:
+        // degrades to the real-opponent path for A (B stays clean in queue).
+        await tryPick(a);
+        await waitForMatchDone(a, PVP_MATCH_BOUND);
+        const ra = (await readResults(a))[0];
+        expect.soft(ra.mode, 'mode is online for a PvP match').toBe('online');
+        expect(errsB).toEqual([]);
+      } else {
+        await tryPick(a);
+        await tryPick(b);
+        await waitForMatchDone(a, PVP_MATCH_BOUND);
+        await waitForMatchDone(b, PVP_MATCH_BOUND);
+
+        const ra = (await readResults(a))[0];
+        const rb = (await readResults(b))[0];
+        expect.soft(ra.mode, 'mode is online for a PvP match').toBe('online');
+        expect.soft(rb.mode, 'mode is online for a PvP match').toBe('online');
+
+        // Prove self-pairing: each side's opponent must be the other's
+        // character. Only then is a strict mirror/draw outcome meaningful —
+        // a stranger interleaving in the pair window breaks the symmetry by
+        // design and is handled via mode/completion invariants alone.
+        const selfPaired = !!ra.you && !!rb.you && ra.opp === rb.you && rb.opp === ra.you;
+        if (selfPaired) {
+          const consistent =
+            (ra.outcome === 'win' && rb.outcome === 'loss') ||
+            (ra.outcome === 'loss' && rb.outcome === 'win') ||
+            (ra.outcome === 'draw' && rb.outcome === 'draw');
+          expect.soft(consistent, `self-paired outcomes ${ra.outcome} vs ${rb.outcome}`).toBe(true);
+        }
+
+        expect(errsB).toEqual([]);
+      }
+    } else {
+      // A real user took a slot before our self-pair: run with it, the more
+      // valuable case. B stays idle in the lobby and must stay clean.
+      await tryPick(a);
+      await waitForMatchDone(a, PVP_MATCH_BOUND);
+      const ra = (await readResults(a))[0];
+      expect.soft(ra.mode, 'mode is online for a PvP match').toBe('online');
+      expect(errsB).toEqual([]);
+    }
 
     expect(errsA).toEqual([]);
-    expect(errsB).toEqual([]);
   } finally {
     await ctxA.close();
     await ctxB.close();

@@ -62,26 +62,26 @@ in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
       comes. Also covers the loading gap while "Waiting for result…".
       **Decided and scheduled.**
 8. **Core-gameplay e2e (decided; scoped)** — a small Playwright suite that
-      drives the real browser against the real SSE server to surface
-      **game-breaking connectivity failures that resist unit testing**. Scope
-      is deliberately narrow — three flows only, no button/stat/styling
+      drives the real browser against the **deployed server over the internet**
+      to surface **game-breaking connectivity failures that resist unit
+      testing**. The suite **never boots the app locally**; a host that can run
+      Node >= 20 and Playwright's Chromium is all it needs. Scope is
+      deliberately narrow — three flows only, no button/stat/styling
       assertions: (1) a CPU match completes end-to-end within a hard bound with
-      zero console/page errors; (2) a self-PvP match in two isolated contexts
-      produces a consistent result on both sides with neither left dead in
-      `matched`/`countdown` (asymmetric-SSE class); (3) reloading mid-match
-      reconciles the client to a live, fair, or lobby state — never a dead
-      view stuck on "Waiting for result…". Same tests run locally
-      (`e2e:local`) and against the deployed server (`e2e:prod`; full flows
-      create real matches by design). Browser runtime is host-dependent
-      (Chromium won't run on the arm64-Android dev device); the suite
-      targets a configurable `BASE_URL` so it can run wherever a Chromium
-      build exists.
+      zero console/page errors; (2) a PvP match resolves with neither side left
+      dead in `matched`/`countdown` (asymmetric-SSE class) — the first
+      instance queues and waits **5 seconds** for a real opponent; a real
+      pairing is valid and the more valuable case, so it is run as-is, and only
+      if none appears is a second instance launched so the two queue against
+      each other; (3) reloading mid-match reconciles the client to a live,
+      fair, or lobby state — never a dead view stuck on "Waiting for result…".
+      Full flows create real matches by design.
       *Landed: `e2e/gameplay.spec.js` + `playwright.config.cjs` +
-      `package.json` (`e2e:local`/`e2e:prod`, `@playwright/test`).
-      `BASE_URL` picks the target; localhost addresses auto-boot the Go
-      server (webServer), other hosts assume it deployed. Keyed off a
-      deterministic in-page probe on `renderResult` rather than racing the
-      result banner. Runs on a Chromium host, not the dev device.*
+      `package.json` (`npm run e2e`, `@playwright/test`). `BASE_URL` is
+      required and selects the production origin; it fails fast if unset.
+      Keyed off a deterministic in-page probe on `renderResult` rather than
+      racing the result banner. The runner is device-agnostic: any
+      Chromium-capable host runs it.*
 
 ## Protocol rework (active)
 
@@ -221,16 +221,15 @@ Make the system testable and debuggable in production.
       above); the bounded SSE lifetime reaping has not.*
 - [x] **Core-gameplay e2e (decided; scoped)** — see Current priorities item 8
       for the three-flow Playwright scope. Landed (`e2e/gameplay.spec.js` +
-      `playwright.config.cjs`), but only exercisable on a Chromium host: the
-      dev device's platform is rejected by `@playwright/test` at import
-      ("Unsupported platform: android"), so the suite sits unrun until a
-      suitable host wires it in.
+      `playwright.config.cjs` + `npm run e2e`). Tests the deployed server over
+      the internet via a required `BASE_URL`; runs on any Chromium-capable
+      host.
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
       available. Node unit tests run under `node --test web/*.test.cjs`.
-      Playwright e2e (`e2e:local` / `e2e:prod`) runs wherever Chromium exists;
-      add it to CI on such a host.
+      Playwright e2e (`npm run e2e` with a required `BASE_URL`) runs wherever
+      Chromium exists; add it to CI on such a host.
 
 ## Phase 3 — Architecture & features
 

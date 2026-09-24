@@ -66,21 +66,26 @@ node --test web/kxp.test.cjs web/machine.test.cjs
 (`go test -race` isn't supported on the arm64-Android dev device; see the
 roadmap's "Automated test workflow" note if you add CI.)
 
-E2e (core-gameplay Playwright suite; runs on a host with Chromium — the
-dev device's platform is rejected by `@playwright/test`, see the roadmap):
+E2e (core-gameplay Playwright suite) — targets the **deployed (production)
+server directly over the internet**; it never boots the app locally. The
+runner only needs Node >= 20 and Playwright's Chromium, pointed at the
+production origin via a required `BASE_URL`:
 
 ```sh
 npm install
-BASE_URL=http://localhost:8080 npm run e2e:local   # boots its own server
-BASE_URL=https://example.com npm run e2e:prod      # deployed server
+npx playwright install chromium          # one-time browser install
+BASE_URL=https://your-server.example npm run e2e
 ```
 
-The three flows drive the real browser over real SSE: a CPU match completes
-within a hard bound with zero console/page errors; a self-PvP match across two
-isolated contexts resolves consistently with neither side left dead in
-`matched`/`countdown`; and a reload mid-match never leaves a stuck "Waiting
-for result…" view. A `BASE_URL` on localhost auto-starts the Go server;
-`e2e:prod` assumes the server is already live there.
+`BASE_URL` is required and must be the deployed server's origin — the suite
+fails fast if it's missing. The three flows drive a real browser against real
+SSE and create real (short-lived) matches by design: (1) a CPU match completes
+end-to-end within a hard bound with zero console/page errors; (2) a PvP match
+resolves with neither side left dead in `matched`/`countdown` — the first
+instance waits **5 seconds** for a real opponent, and only if none joins is a
+second instance launched to pair against; a pairing against a real player is
+valid and run as-is; (3) a reload mid-match never leaves a stuck
+"Waiting for result…" view.
 
 ## Status
 
@@ -100,8 +105,8 @@ scoring** — a no-valid-move timeout resolves `void`, scored like a draw (no
 streak break, the opponent still wins, "No contest" shown) — **busy
 affordances** (a pending affordance while a request awaits its SSE reply), and
 a **core-gameplay e2e suite** (three Playwright flows that surface
-game-breaking connectivity failures against the real server — landed, runs on
-a Chromium host via `npm run e2e:local` / `e2e:prod`).
+game-breaking connectivity failures against the production server — landed,
+runs via `BASE_URL=… npm run e2e`).
 Still open are best-of-N modes and the identity/leaderboard features. See
 [roadmap.md](docs/roadmap.md).
 
