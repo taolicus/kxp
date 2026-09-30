@@ -73,23 +73,31 @@ await script('t5 · CPU match end-to-end', async () => {
   const ack = await post('/ready', { id });
   expectReadyAck(rep, ack);
 
-  const ka = await sse.wait('countdown', { timeout: BOUNDS.countdown, from: sse.marked(matched) });
-  const kaData = ka.data || {};
-  rep.eq('first countdown is KA', kaData.n, 'KA');
+  // Three beats precede PUN: READY at the gate, then KA and CHI one step apart.
+  // READY is leading slack for delivery lag -- a link that loses ~2s of the
+  // first frame still gets a real countdown instead of jumping to PUN.
+  const ready = await sse.wait('countdown', { timeout: BOUNDS.countdown, from: sse.marked(matched) });
+  const readyData = ready.data || {};
+  rep.eq('first countdown is READY', readyData.n, 'READY');
 
   // The announced plan (v1.1, protocol.md:156+). Present on the first countdown
   // frame; its absence is a deploy older than the rework, worth knowing.
-  const hasPlan = Number.isFinite(kaData.shootAt) && Number.isFinite(kaData.windowMs);
-  rep.truthy('countdown announces the round plan', hasPlan, hasPlan ? `shootAt=${kaData.shootAt} windowMs=${kaData.windowMs}` : 'no shootAt/windowMs on the countdown frame');
-  rep.eq('announced window is 2000ms', kaData.windowMs, 2000);
+  const hasPlan = Number.isFinite(readyData.shootAt) && Number.isFinite(readyData.windowMs);
+  rep.truthy('countdown announces the round plan', hasPlan, hasPlan ? `shootAt=${readyData.shootAt} windowMs=${readyData.windowMs}` : 'no shootAt/windowMs on the countdown frame');
+  rep.eq('announced window is 2000ms', readyData.windowMs, 2000);
+
+  const ka = await sse.wait('countdown', { timeout: BOUNDS.countdown, from: sse.marked(ready) });
+  rep.eq('second countdown is KA', ka.data?.n, 'KA');
 
   const chi = await sse.wait('countdown', { timeout: BOUNDS.countdown, from: sse.marked(ka) });
-  rep.eq('second countdown is CHI', chi.data?.n, 'CHI');
+  rep.eq('third countdown is CHI', chi.data?.n, 'CHI');
 
-  // Countdown spacing: KA then CHI is documented at +1s (protocol.md:39). On a
-  // bad link the frames can bunch up or stretch; the stretch is the risk.
+  // Countdown spacing: each beat is one step apart (protocol.md). On a bad link
+  // the frames can bunch up or stretch; the stretch is the risk.
   const kaToChi = chi.at - ka.at;
   rep.within('KA→CHI spacing is ~1s', kaToChi, 400, 4000);
+  const readyToKa = ka.at - ready.at;
+  rep.within('READY→KA spacing is ~1s', readyToKa, 400, 4000);
 
   const shoot = await sse.wait('shoot', { timeout: BOUNDS.countdown, from: sse.marked(chi) });
   const shootData = shoot.data || {};
@@ -98,8 +106,8 @@ await script('t5 · CPU match end-to-end', async () => {
   if (hasPlan) {
     // The announcement and the live frame must describe the same round, or the
     // client's pre-armed timer points at the wrong deadline.
-    rep.eq('shootAt matches the announced plan', shootData.shootAt, kaData.shootAt);
-    rep.eq('windowMs matches the announced plan', shootData.windowMs, kaData.windowMs);
+    rep.eq('shootAt matches the announced plan', shootData.shootAt, readyData.shootAt);
+    rep.eq('windowMs matches the announced plan', shootData.windowMs, readyData.windowMs);
   }
 
   // How much of the 2s window is actually left once the phone has the frame.
@@ -117,9 +125,9 @@ await script('t5 · CPU match end-to-end', async () => {
   const result = await sse.wait('result', { timeout: BOUNDS.match, from: sse.marked(shoot) });
   const r = result.data || {};
   const types = sse.types();
-  const order = ['matched', 'countdown', 'countdown', 'shoot', 'result'];
+  const order = ['matched', 'countdown', 'countdown', 'countdown', 'shoot', 'result'];
   const seenOrder = types.filter((t) => order.includes(t));
-  rep.eq('frame order matched → countdown ×2 → shoot → result', seenOrder, order, types.join(' → '));
+  rep.eq('frame order matched → countdown ×3 → shoot → result', seenOrder, order, types.join(' → '));
 
   rep.eq('result reports CPU mode', r.mode, 'cpu');
   rep.eq('result echoes the move we sent', r.you, move);

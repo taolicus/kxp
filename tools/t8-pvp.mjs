@@ -94,13 +94,19 @@ await script('t8 · PvP between two clients', async () => {
   expectReadyAck(rep, rA, 'A /ready accepted');
   expectReadyAck(rep, rB, 'B /ready accepted');
 
+  // READY is the leading beat; KA follows one step later.
   const kA = await A.sse.wait('countdown', { timeout: BOUNDS.countdown, from: curA, where: 'A countdown' });
   const kB = await B.sse.wait('countdown', { timeout: BOUNDS.countdown, from: curB, where: 'B countdown' });
-  rep.eq('A countdown is KA', kA.data?.n, 'KA');
-  rep.eq('B countdown is KA', kB.data?.n, 'KA');
+  rep.eq('A countdown is READY', kA.data?.n, 'READY');
+  rep.eq('B countdown is READY', kB.data?.n, 'READY');
 
-  const sA = await A.sse.wait('shoot', { timeout: BOUNDS.countdown, from: A.sse.marked(kA), where: 'A shoot' });
-  const sB = await B.sse.wait('shoot', { timeout: BOUNDS.countdown, from: B.sse.marked(kB), where: 'B shoot' });
+  const kaA = await A.sse.wait('countdown', { timeout: BOUNDS.countdown, from: A.sse.marked(kA), where: 'A KA' });
+  const kaB = await B.sse.wait('countdown', { timeout: BOUNDS.countdown, from: B.sse.marked(kB), where: 'B KA' });
+  rep.eq('A second countdown is KA', kaA.data?.n, 'KA');
+  rep.eq('B second countdown is KA', kaB.data?.n, 'KA');
+
+  const sA = await A.sse.wait('shoot', { timeout: BOUNDS.countdown, from: A.sse.marked(kaA), where: 'A shoot' });
+  const sB = await B.sse.wait('shoot', { timeout: BOUNDS.countdown, from: B.sse.marked(kaB), where: 'B shoot' });
   rep.truthy('both sides receive the PUN window', true, `windowMs=${sA.data?.windowMs}`);
 
   // B is given the move that beats A, so the round is decisive and the

@@ -22,21 +22,50 @@
     return { actionable: remaining > 0, remainingMs: remaining };
   }
 
+  // The countdown beats, in the order they run, as the offset before the
+  // announced PUN deadline at which each one begins. Mirrors countdownSlots in
+  // round.go: READY at S-3s, KA at S-2s, CHI at S-1s, PUN at S. Keeping the
+  // table here (rather than inline offsets) is what lets dueSlot and the timers
+  // in app.js stay in step with the server's schedule.
+  const COUNTDOWN_SLOTS = [['READY', 3000], ['KA', 2000], ['CHI', 1000]];
+
+  // countdownSlot resolves which beat is showing at msUntilPun (the time left
+  // before the announced deadline) and when the next one starts. It scans from
+  // the last beat backwards for the first offset still ahead of us, which is
+  // the beat that has begun but not yet ended. Before READY is due nothing is
+  // showing, and at or past the deadline PUN itself is due, so no beat is
+  // reported — that is what stops a late frame from flashing a beat with no
+  // time behind it just before the window opens.
+  function countdownSlot(msUntilPun) {
+    if (msUntilPun <= 0) return { label: null, msUntilNext: 0 };
+    for (let i = COUNTDOWN_SLOTS.length - 1; i >= 0; i--) {
+      const [label, off] = COUNTDOWN_SLOTS[i];
+      if (off >= msUntilPun) return { label, msUntilNext: msUntilPun - (off - 1000) };
+    }
+    return { label: null, msUntilNext: msUntilPun - COUNTDOWN_SLOTS[0][1] };
+  }
+
   // planRound lays the announced round schedule onto the client clock. The
   // server pre-announces the PUN deadline (shootAt, epoch-ms) on the first
-  // countdown frame, fixing KA at S-2000, CHI at S-1000, PUN at S. The client
-  // shows PUN from the schedule even if the `shoot` frame stalls or drops, so
-  // delivery can no longer cost the round. skew = serverNow - clientNow, from
-  // the connected snapshot. Returns null without a plan (pre-announce unseen).
-  // remainingMs is the portion of the window still open measured from `now`.
+  // countdown frame, fixing each beat per COUNTDOWN_SLOTS and PUN at S. The
+  // client shows PUN from the schedule even if the `shoot` frame stalls or
+  // drops, so delivery can no longer cost the round. skew = serverNow -
+  // clientNow, from the connected snapshot. Returns null without a plan
+  // (pre-announce unseen). remainingMs is the portion of the window still open
+  // measured from `now`. dueSlot/msUntilNextSlot say what is on screen right now
+  // and when it changes, so the client paints the deadline rather than `n`.
   function planRound(now, shootAt, windowMs, skew) {
     if (!shootAt) return null;
     const total = windowMs || 2000;
     const msUntilPun = shootAt - (now + (skew || 0));
+    const slot = countdownSlot(msUntilPun);
     return {
+      msUntilReady: msUntilPun - 3000,
       msUntilKa: msUntilPun - 2000,
       msUntilChi: msUntilPun - 1000,
       msUntilPun,
+      dueSlot: slot.label,
+      msUntilNextSlot: slot.msUntilNext,
       actionable: msUntilPun + total > 0,
       remainingMs: Math.max(0, total + msUntilPun),
     };
@@ -108,5 +137,5 @@
     return { pass: true, key };
   }
 
-  return { aliases, shootWindow, planRound, applyResult, resultLines, rejectLabel, beaconGate };
+  return { aliases, shootWindow, planRound, countdownSlot, applyResult, resultLines, rejectLabel, beaconGate };
 }));

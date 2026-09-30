@@ -162,7 +162,7 @@ func connectSSE(t *testing.T, srv *httptest.Server, id string) (*sseStream, stri
 // readCountdown consumes the matched + KA + CHI + shoot preamble of a match,
 // asserting the expected types along the way.
 func readCountdown(t *testing.T, st *sseStream, timeout time.Duration) {
-	for _, want := range []string{"countdown", "countdown", "shoot"} {
+	for _, want := range []string{"countdown", "countdown", "countdown", "shoot"} {
 		st.readEventTyp(t, want, timeout)
 	}
 }

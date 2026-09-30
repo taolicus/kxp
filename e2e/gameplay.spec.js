@@ -45,7 +45,7 @@ const baseURL = process.env.BASE_URL;
 // Bounds are about the internet, not hardware: generous delivery margins for
 // a real network, deliberately not tuned to any one device.
 const CONNECT_BOUND = 15000; // SSE connected snapshot arrives
-const CPU_MATCH_BOUND = 30000; // matched→KA(2s)→CHI(1s)→PUN(2s)+delivery margins
+const CPU_MATCH_BOUND = 30000; // matched→READY(3s)→KA(1s)→CHI(1s)→PUN(2s)+delivery margins
 const PVP_MATCH_BOUND = 50000; // CPU timing + PvP ready handshake (≤8s)
 const RECONCILE_BOUND = 15000; // reloaded client reaches a healthy state
 const REAL_USER_PAIR_BOUND = 5000; // how long flow 2 waits for a real opponent

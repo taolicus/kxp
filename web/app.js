@@ -11,7 +11,7 @@ let remainingWindowMs = 2000; // local portion of the PUN window still open
 let sawPunAt = 0;
 let clockSkew = 0; // serverNow - clientNow, estimated from the connected snapshot
 let stallTimer = null;
-let chiTimer = null; // local CHI knockback for a dropped countdown frame
+let slotTimer = null; // advances the local countdown beat when a countdown frame is dropped
 let punTimer = null; // local PUN entry scheduled from the announced round plan
 let plannedShootAt = 0; // announced deadline (epoch-ms) this punTimer belongs to
 
@@ -222,9 +222,9 @@ function flashPick(move) {
 
 function resetGame() {
   clearTimeout(shootTimer);
-  clearTimeout(chiTimer);
+  clearTimeout(slotTimer);
   clearTimeout(punTimer);
-  chiTimer = null;
+  slotTimer = null;
   punTimer = null;
   plannedShootAt = 0;
   sawPunAt = 0;
@@ -246,15 +246,26 @@ function resetGame() {
 function planFromCountdown(d) {
   if (!d.shootAt) return; // pre-announce unseen — fall back to frame-driven play
   if (d.shootAt === plannedShootAt) return; // duplicate countdown for this round
-  clearTimeout(chiTimer);
+  clearTimeout(slotTimer);
   clearTimeout(punTimer);
   plannedShootAt = d.shootAt;
   const plan = KXP.planRound(Date.now(), d.shootAt, d.windowMs, clockSkew);
   if (!plan) return;
-  if (plan.msUntilChi > 0) {
-    chiTimer = setTimeout(() => {
-      if (state === 'countdown') setCount('CHI');
-    }, plan.msUntilChi);
+  // The deadline decides what is on screen, not the frame that named it. A
+  // countdown frame that arrives late must not paint a beat with no time behind
+  // it: that beat would be overwritten in the same tick by an already-due
+  // transition, so the count would jump straight to PUN and the player would
+  // see no countdown at all even though the server had announced one and the
+  // pick window was still open. Instead paint whichever beat is genuinely due,
+  // and arm one timer to advance to the next. `dueSlot` is null once PUN itself
+  // is due, which is when punTimer below opens the window instead.
+  if (plan.dueSlot) setCount(plan.dueSlot);
+  if (plan.msUntilNextSlot > 0) {
+    slotTimer = setTimeout(() => {
+      if (state !== 'countdown') return;
+      const next = KXP.planRound(Date.now(), d.shootAt, d.windowMs, clockSkew);
+      if (next && next.dueSlot) setCount(next.dueSlot);
+    }, plan.msUntilNextSlot);
   }
   if (plan.actionable) {
     punTimer = setTimeout(() => {
@@ -386,9 +397,11 @@ const enter = {
         setOppSlot(d.opponentCharacter, d.opponentName);
       }
     }
-    setCount(d.n ?? 'Get ready');
+    // With shootAt announced, planFromCountdown owns the count paint and shows
+    // the slot that is genuinely due; without it, fall back to the frame's n.
+    if (d.shootAt) planFromCountdown(d);
+    else setCount(d.n ?? 'Get ready');
     $('#stage').classList.remove('go');
-    planFromCountdown(d);
   },
 
   shoot(d, from) {

@@ -54,20 +54,22 @@ test('shootWindow: reconnect snapshot without windowMs uses the saved fallback',
   assert.deepEqual(KXP.shootWindow(at + 700, at, 0, 1300), { actionable: true, remainingMs: 600 });
 });
 
-test('planRound: on the KA frame (~2s before PUN) lays out the full schedule', () => {
+test('planRound: on the READY frame (3s before PUN) lays out the full schedule', () => {
   const now = 1700000000000;
-  const shootAt = now + 2000;
+  const shootAt = now + 3000;
   assert.deepEqual(KXP.planRound(now, shootAt, 2000, 0), {
-    msUntilKa: 0, msUntilChi: 1000, msUntilPun: 2000, actionable: true, remainingMs: 4000,
+    msUntilReady: 0, msUntilKa: 1000, msUntilChi: 2000, msUntilPun: 3000,
+    dueSlot: 'READY', msUntilNextSlot: 1000, actionable: true, remainingMs: 5000,
   });
 });
 
 test('planRound: skew shifts the whole schedule', () => {
   const now = 1700000000000;
-  const shootAt = now + 2000;
+  const shootAt = now + 3000;
   const skew = 500; // server clock 500ms ahead
   assert.deepEqual(KXP.planRound(now, shootAt, 2000, skew), {
-    msUntilKa: -500, msUntilChi: 500, msUntilPun: 1500, actionable: true, remainingMs: 3500,
+    msUntilReady: -500, msUntilKa: 500, msUntilChi: 1500, msUntilPun: 2500,
+    dueSlot: 'READY', msUntilNextSlot: 500, actionable: true, remainingMs: 4500,
   });
 });
 
@@ -75,7 +77,8 @@ test('planRound: announced deadline already passing but window still open', () =
   const now = 1700000001000; // 1s after the announced PUN
   const shootAt = 1700000000000;
   assert.deepEqual(KXP.planRound(now, shootAt, 2000, 0), {
-    msUntilKa: -3000, msUntilChi: -2000, msUntilPun: -1000, actionable: true, remainingMs: 1000,
+    msUntilReady: -4000, msUntilKa: -3000, msUntilChi: -2000, msUntilPun: -1000,
+    dueSlot: null, msUntilNextSlot: 0, actionable: true, remainingMs: 1000,
   });
 });
 
@@ -95,6 +98,47 @@ test('planRound: exactly at the deadline is no longer actionable', () => {
 
 test('planRound: missing plan returns null', () => {
   assert.equal(KXP.planRound(1700000000000, 0, 2000, 0), null);
+});
+
+test('countdownSlot: reports the beat that is showing at each point on the clock', () => {
+  // Offsets are measured back from the announced PUN deadline.
+  assert.deepEqual(KXP.countdownSlot(3500), { label: null, msUntilNext: 500 });
+  assert.deepEqual(KXP.countdownSlot(3000), { label: 'READY', msUntilNext: 1000 });
+  assert.deepEqual(KXP.countdownSlot(2500), { label: 'READY', msUntilNext: 500 });
+  assert.deepEqual(KXP.countdownSlot(2000), { label: 'KA', msUntilNext: 1000 });
+  assert.deepEqual(KXP.countdownSlot(1000), { label: 'CHI', msUntilNext: 1000 });
+  assert.deepEqual(KXP.countdownSlot(500), { label: 'CHI', msUntilNext: 500 });
+});
+
+test('countdownSlot: reports no beat at or past the deadline', () => {
+  // This is what keeps a late frame from flashing a beat with no time behind it:
+  // at the deadline PUN itself is due, so the client paints nothing and opens
+  // the window instead of showing a countdown that has already ended.
+  assert.deepEqual(KXP.countdownSlot(0), { label: null, msUntilNext: 0 });
+  assert.deepEqual(KXP.countdownSlot(-1), { label: null, msUntilNext: 0 });
+  assert.deepEqual(KXP.countdownSlot(-5000), { label: null, msUntilNext: 0 });
+});
+
+test('countdownSlot: a late first frame still yields a real countdown', () => {
+  // The regression: a countdown frame delayed past its own beat used to paint
+  // that beat and be overwritten in the same tick, so the player saw no
+  // countdown at all. Each delivery lag must instead name the beat that is
+  // genuinely showing, until the countdown is genuinely over.
+  const shootAt = 1700000000000;
+  const at = (lag) => KXP.planRound(shootAt - 3000 + lag, shootAt, 2000, 0);
+  assert.equal(at(0).dueSlot, 'READY');
+  assert.equal(at(1000).dueSlot, 'KA');
+  assert.equal(at(2000).dueSlot, 'CHI');
+  assert.equal(at(3000).dueSlot, null);
+});
+
+test('planRound: a very late frame leaves the pick window reachable', () => {
+  // Even when the whole countdown is eaten, the player still gets to move.
+  const shootAt = 1700000000000;
+  const p = KXP.planRound(shootAt - 3000 + 2500, shootAt, 2000, 0);
+  assert.equal(p.dueSlot, 'CHI');
+  assert.equal(p.actionable, true);
+  assert.equal(p.remainingMs, 2500);
 });
 
 test('planRound: defaults the window when windowMs is absent', () => {

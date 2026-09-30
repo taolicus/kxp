@@ -9,7 +9,20 @@ import (
 const (
 	countStep   = time.Second
 	shootWindow = 2 * time.Second
+
+	// countdownSlots is how many beats precede PUN, and is what the announced
+	// deadline is offset by: a three-beat countdown announces PUN three steps
+	// out, so READY lands the moment the gate opens and KA/CHI follow one step
+	// apart. countdownBeats is sized from it, so the two cannot drift. The
+	// leading READY beat is slack for delivery lag; the last two are the
+	// KA-CHI-PUN rhythm itself. Keep this in step with COUNTDOWN_SLOTS in
+	// web/kxp.js -- the client paints from the deadline using that table, and a
+	// mismatch would show the wrong beat.
+	countdownSlots = 3
 )
+
+// countdownBeats are the beats announced before PUN, in the order they run.
+var countdownBeats = [countdownSlots]string{"READY", "KA", "CHI"}
 
 // readyTimeout bounds how long a match may wait for every human side to
 // advertise that it is ready to receive the countdown. A package var so tests
@@ -332,11 +345,21 @@ func (m *match) run() {
 	}
 
 	// Announce the round schedule before the countdown starts: the deadline is
-	// fixed here (KA at S-2s, CHI at S-1s, PUN at S) and the loop sleeps to the
-	// announced slots. The client plays the countdown against a deadline it
-	// already knows, so a stalled or dropped `shoot` frame can no longer cost
-	// the round; the shoot frame stays authoritative for the window.
-	m.setShootAt(time.Now().Add(2 * countStep))
+	// fixed here and the loop sleeps to the announced slots. The client plays
+	// the countdown against a deadline it already knows, so a stalled or dropped
+	// `shoot` frame can no longer cost the round; the shoot frame stays
+	// authoritative for the window.
+	//
+	// The lead is countdownSlots long rather than the two beats KA/CHI alone
+	// need. The countdown frames are the client's first warning that a round is
+	// starting, and they arrive over the same connection that has to survive
+	// radio wake-up, a flaky AP or a buffering proxy. Announcing only two beats
+	// meant a link that lost ~2s of delivery painted no countdown at all: the
+	// player saw the count jump to PUN and had no cue the round had begun, even
+	// though the pick window was still open. A leading READY beat buys a second
+	// of slack for that, and the client degrades to whichever beats remain
+	// rather than skipping the countdown (see countdownSlot in web/kxp.js).
+	m.setShootAt(time.Now().Add(countdownSlots * countStep))
 
 	if m.left() {
 		m.abort()
@@ -351,15 +374,17 @@ func (m *match) run() {
 			"ts":       tsNow(),
 		}
 	}
-	for i := range m.sides {
-		m.send(i, evt("countdown", planPayload("KA")))
-	}
-	if m.waitUntil(m.shootAtTime().Add(-countStep)) {
-		m.abort()
-		return
-	}
-	for i := range m.sides {
-		m.send(i, evt("countdown", planPayload("CHI")))
+	// Walk the slots in reverse: countdownSlots is how many beats precede PUN,
+	// and the last beat is the one due one step out.
+	for i := countdownSlots; i > 0; i-- {
+		if m.waitUntil(m.shootAtTime().Add(-time.Duration(i) * countStep)) {
+			m.abort()
+			return
+		}
+		n := countdownBeats[countdownSlots-i]
+		for j := range m.sides {
+			m.send(j, evt("countdown", planPayload(n)))
+		}
 	}
 	if m.waitUntil(m.shootAtTime()) {
 		m.abort()

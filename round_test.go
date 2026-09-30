@@ -178,8 +178,12 @@ func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
 	if ts, ok := d["ts"].(float64); !ok || ts <= 0 {
 		t.Errorf("countdown ts = %v, want a positive server epoch-ms", d["ts"])
 	}
-	if announced := m.shootAtMs(); announced < time.Now().UnixMilli()+1400 || announced > time.Now().UnixMilli()+2600 {
-		t.Errorf("announced shootAt %d not ~2s ahead of now", announced)
+	// The first frame is the leading READY beat, sent as the gate opens, so the
+	// deadline sits a full countdownSlots lead out. Derived from the constants
+	// so it cannot drift when the beat count changes.
+	wantLead := int64(countdownSlots) * int64(countStep/time.Millisecond)
+	if announced := m.shootAtMs(); announced < time.Now().UnixMilli()+wantLead-600 || announced > time.Now().UnixMilli()+wantLead+600 {
+		t.Errorf("announced shootAt %d not ~%dms ahead of now", announced, wantLead)
 	}
 
 	s := waitForEvent(t, a, "shoot")
@@ -197,6 +201,37 @@ func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
 	}
 	if got := int64(ra["youTimingMs"].(float64)); got > 5000 {
 		t.Errorf("youTimingMs = %d, want arrival judged against the announced deadline", got)
+	}
+	a.cancel()
+}
+
+// TestCountdownBeatsLeadPUN locks the pre-PUN beat list. Two beats left no room
+// for delivery lag: a link that lost ~2s of the first frame had nothing left to
+// show and the player saw the count jump straight to PUN. READY is the slack that
+// fixes it, and the order is what the client paints against, so both are pinned
+// here rather than left to the countdown's pacing.
+func TestCountdownBeatsLeadPUN(t *testing.T) {
+	h := NewHub()
+	a := newClient()
+	m := h.makeMatch("pl1", side{client: a}, side{bot: true, character: "rayito"})
+	m.start()
+	m.ackReady(0)
+
+	want := []string{"READY", "KA", "CHI"}
+	if countdownSlots != len(want) {
+		t.Fatalf("countdownSlots = %d, want %d for %v", countdownSlots, len(want), want)
+	}
+	for _, w := range want {
+		d := waitForEvent(t, a, "countdown")
+		if got := d["n"]; got != w {
+			t.Fatalf("countdown n = %v, want %q (got so far: the beat list is out of order)", got, w)
+		}
+		if got := int64(d["shootAt"].(float64)); got != m.shootAtMs() {
+			t.Errorf("beat %q carries shootAt %d, want the announced %d", w, got, m.shootAtMs())
+		}
+	}
+	if s := waitForEvent(t, a, "shoot"); s == nil {
+		t.Fatal("no shoot frame after the countdown beats")
 	}
 	a.cancel()
 }

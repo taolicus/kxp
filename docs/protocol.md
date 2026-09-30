@@ -67,8 +67,9 @@ arrived, which is equally consistent with a slow upload, a stalled connection, o
 a device that slept, so it can prove the handshake was cancelled but never which
 player caused it.
 
-Match duration: `matched` → `KA` (+1s) → `CHI` (+1s) → `shoot` (2s window) →
-`result`. Handshake time precedes the countdown and is client-dependent.
+Match duration: `matched` → `READY` (+1s) → `KA` (+1s) → `CHI` (+1s) → `shoot`
+(2s window) → `result`. Handshake time precedes the countdown and is
+client-dependent.
 
 ## Server-sent events
 
@@ -83,7 +84,7 @@ snapshot.
 | `online` | `{count}` | Number of other clients currently connected. |
 | `waiting` | `{}` | Entered the queue. |
 | `matched` | `{opponentName, opponentCharacter}` | Opponent found; every client should start `POST /ready`. |
-| `countdown` | `{n}` | `n` is `KA` or `CHI`. |
+| `countdown` | `{n, shootAt, windowMs, ts}` | `n` is `READY`, `KA` or `CHI`. The plan fields are present on every countdown frame — see v1.1 below. |
 | `shoot` | `{windowMs, shootAt}` | **PUN!** Window opens. `windowMs` is authoritative (2000); `shootAt` is server clock epoch-ms. |
 | `lock` | (none — client timer) | Client closes its own input after `windowMs - elapsed` of the window remains reachable. |
 | `result` | see below | Round resolved. |
@@ -190,12 +191,27 @@ Tasks B/C exist as parked drafts, not scheduled work (see the roadmap and
 
 ### v1.1 — announced deadline + per-frame `ts` (implemented)
 
-- The server pre-announces the round schedule at countdown start. The `KA`
-  frame (and the `CHI` frame, idempotently) carries `{n, shootAt, windowMs, ts}`
-  where `shootAt` is the announced, already-fixed deadline; the run loop sleeps
-  to the announced slots (KA at S−2s, CHI at S−1s) and advances to `shoot` at `S`
-  **without re-minting `shootAt`**.
-- The client schedules KA/CHI/PUN locally against the announced `shootAt`; a
+- The server pre-announces the round schedule at countdown start. The first
+  countdown frame (and each later one, idempotently) carries
+  `{n, shootAt, windowMs, ts}` where `shootAt` is the announced, already-fixed
+  deadline; the run loop sleeps to the announced slots (READY at S−3s, KA at
+  S−2s, CHI at S−1s) and advances to `shoot` at `S` **without re-minting
+  `shootAt`**.
+- Three beats precede PUN, not two. `READY` is leading slack: the countdown is
+  the player's first warning that a round has begun, and it arrives over the
+  same connection that may still be waking from radio idle or a buffering
+  proxy. With only the two beats of the KA-CHI-PUN rhythm, a link that lost
+  ~2s of delivery had no beat left to show — the count jumped straight to PUN
+  and the player never saw a countdown at all, despite the pick window being
+  open. A third beat absorbs that lag.
+- The client paints from the announced deadline, not from `n`. On receipt it
+  resolves which beat is genuinely showing (`countdownSlot` in `web/kxp.js`)
+  and arms one timer to advance to the next, so a frame delayed past its own
+  beat degrades to the next beat instead of painting one with no time behind it
+  — that flash would be overwritten in the same tick and cost the countdown
+  outright. `READY`/`KA`/`CHI` offsets live in one table shared by that logic
+  and `countdownBeats` in `round.go`; the two must stay in step.
+- The client schedules the countdown locally against the announced `shootAt`; a
   late or dropped `shoot`/`countdown` frame is harmless (already acted upon), so
   `shoot` demotes to advisory. `connected` snapshots carry the plan
   (`shootAt`+`windowMs`) when `phase=countdown` — only once announced, so a
