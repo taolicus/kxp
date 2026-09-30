@@ -80,10 +80,12 @@ func TestCPUBotAckDoesNotReleaseGate(t *testing.T) {
 	waitForEvent(t, a, "countdown")
 }
 
-// TestCPUReadyTimeoutRequeuesHuman covers the new failure mode a CPU match can
-// now hit: the human never acks, so the match is cancelled and the human goes
-// back to the queue rather than being dropped with no round played.
-func TestCPUReadyTimeoutRequeuesHuman(t *testing.T) {
+// TestCPUReadyTimeoutReturnsHumanToLobby covers the failure mode a CPU match can
+// now hit: the human never acks, so the match is cancelled. The human goes back
+// to the *lobby*, not onto the online queue — they asked for a CPU round, and
+// requeueing them put them into the PvP queue for a human opponent they never
+// asked for. The teardown frame says why, so the bounce is explicable.
+func TestCPUReadyTimeoutReturnsHumanToLobby(t *testing.T) {
 	old := readyTimeout
 	readyTimeout = 80 * time.Millisecond
 	defer func() { readyTimeout = old }()
@@ -99,13 +101,115 @@ func TestCPUReadyTimeoutRequeuesHuman(t *testing.T) {
 	if d["state"] != "idle" {
 		t.Errorf("state event = %v, want idle", d["state"])
 	}
+	if d["reason"] != "handshake-timeout" {
+		t.Errorf("reason = %v, want handshake-timeout", d["reason"])
+	}
+	if _, ok := d["requeued"]; ok {
+		t.Errorf("CPU human was reported requeued (%v), but a CPU timeout returns them to the lobby", d["requeued"])
+	}
+	h.mu.Lock()
+	queued := a.queueing
+	h.mu.Unlock()
+	if queued {
+		t.Error("CPU human was put on the online queue after an unacked handshake timed out: that silently switches them from a CPU round to waiting for a human")
+	}
+}
+
+// TestReadyTimeoutRequeuesAndExplainsBothSides covers the PvP half: both sides
+// go back on the queue, and each is told so. Without `requeued` the client drops
+// to the lobby while the server holds it in the queue — invisible, with no
+// Cancel, and re-matched within the gate window again.
+func TestReadyTimeoutRequeuesAndExplainsBothSides(t *testing.T) {
+	old := readyTimeout
+	readyTimeout = 80 * time.Millisecond
+	defer func() { readyTimeout = old }()
+
+	h := NewHub()
+	a, b := newClient(), newClient()
+	m := h.makeMatch("to2", side{client: a}, side{client: b})
+	m.start()
+
+	waitForEvent(t, a, "matched")
+	waitForEvent(t, b, "matched")
+
+	for _, c := range []*Client{a, b} {
+		d := waitForEvent(t, c, "state")
+		if d["state"] != "idle" {
+			t.Errorf("state event = %v, want idle", d["state"])
+		}
+		if d["reason"] != "handshake-timeout" {
+			t.Errorf("reason = %v, want handshake-timeout", d["reason"])
+		}
+		if d["requeued"] != true {
+			t.Errorf("requeued = %v, want true: the side went back on the queue, so the client must show the queue view", d["requeued"])
+		}
+	}
+	// No assertion on `queueing` here: both sides land on the queue together and
+	// tryMatch pairs them straight back up, so the flag is transient by design.
+	// The lonely-queued-side case is pinned deterministically by the abandon test
+	// below, where only the survivor is re-queued.
+	a.cancel()
+	b.cancel()
+}
+
+// TestReadyAbandonExplainsToSurvivor: when one side leaves before the countdown,
+// the survivor is re-queued and told why. Silence here is the same defect as the
+// timeout case — the round vanished for no stated reason.
+func TestReadyAbandonExplainsToSurvivor(t *testing.T) {
+	h := NewHub()
+	a, b := newClient(), newClient()
+	m := h.makeMatch("ab2", side{client: a}, side{client: b})
+	m.start()
+
+	waitForEvent(t, a, "matched")
+	waitForEvent(t, b, "matched")
+	m.ackReady(0)
+
+	b.cancel() // side 1 leaves before the countdown
+
+	d := waitForEvent(t, a, "state")
+	if d["reason"] != "opponent-left" {
+		t.Errorf("reason = %v, want opponent-left", d["reason"])
+	}
+	if d["requeued"] != true {
+		t.Errorf("requeued = %v, want true", d["requeued"])
+	}
 	h.mu.Lock()
 	queued := a.queueing
 	h.mu.Unlock()
 	if !queued {
-		t.Error("human not re-queued after an unacked CPU handshake timed out")
+		t.Fatal("survivor not re-queued after pending abandonment")
 	}
-	a.cancel()
+}
+
+// TestFinishedMatchTeardownCarriesNoReason is the guard on the additive
+// contract: a match that played to completion must emit a bare `state idle`.
+// If it carried a stale reason, every player would be told their round was
+// cancelled right after they finished it.
+func TestFinishedMatchTeardownCarriesNoReason(t *testing.T) {
+	h := NewHub()
+	a, b := newClient(), newClient()
+	m := h.makeMatch("fin1", side{client: a}, side{client: b})
+	m.start()
+
+	waitForEvent(t, a, "matched")
+	waitForEvent(t, b, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
+	waitForEvent(t, a, "countdown")
+	waitForEvent(t, a, "shoot")
+	m.abort() // ends the match without a cancellation reason
+
+	d := waitForEvent(t, a, "state")
+	if d["state"] != "idle" {
+		t.Errorf("state event = %v, want idle", d["state"])
+	}
+	if _, ok := d["reason"]; ok {
+		t.Errorf("finished match carried a cancellation reason (%v), want none", d["reason"])
+	}
+	if _, ok := d["requeued"]; ok {
+		t.Errorf("finished match was reported requeued (%v), want no flag", d["requeued"])
+	}
 }
 
 func TestReadyAbandonOnLeaveRequeuesSurvivor(t *testing.T) {

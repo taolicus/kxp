@@ -43,6 +43,30 @@ has finished setting the round up. A slow client waits as long as it needs (up
 to the 8s timeout) and a fast one pays nothing. A CPU match gates on its single
 human exactly this way; the bot is not a participant and is never waited for.
 
+### Cancelled handshakes
+
+A handshake that does not complete is *cancelled*, never lost: no `result` is
+emitted and nothing is scored. The teardown `state` frame says why, so a bounced
+player is not left staring at a lobby that silently moved them.
+
+| `reason` | when | `requeued` | player ends up |
+| --- | --- | --- | --- |
+| `handshake-timeout` | no human acked within 8s | PvP: `true`. CPU: absent | PvP: back in the online queue. CPU: back in the lobby. |
+| `opponent-left` | the other side disconnected before the countdown | `true` (survivor only) | back in the online queue |
+
+`requeued` is present and true **only when the server actually put that client
+back on the queue**, which is what the client needs in order to keep showing the
+Searching view and its Cancel button. Without it the client reads a bare
+`state idle` as "back to the lobby" while the server still holds it in the queue —
+invisible, with no way to leave. A CPU match's human is deliberately **not**
+re-queued: they asked for a CPU round, so they return to the lobby instead of
+being dropped into the queue for a human opponent they never requested.
+
+The client shows the reason without blame: the server observes an ack that never
+arrived, which is equally consistent with a slow upload, a stalled connection, or
+a device that slept, so it can prove the handshake was cancelled but never which
+player caused it.
+
 Match duration: `matched` → `KA` (+1s) → `CHI` (+1s) → `shoot` (2s window) →
 `result`. Handshake time precedes the countdown and is client-dependent.
 
@@ -64,7 +88,7 @@ snapshot.
 | `lock` | (none — client timer) | Client closes its own input after `windowMs - elapsed` of the window remains reachable. |
 | `result` | see below | Round resolved. |
 | `opponent-left` | `{outcome: "win", mode}` | Other player left; counts as a win. |
-| `state` | `{state: "idle"}` | Match fully finished / queue left; client may return to the lobby. |
+| `state` | `{state: "idle", reason?, requeued?}` | Match fully finished / queue left; client may return to the lobby. Both extra fields are **additive and server-generated** (never taken from request input) and appear **only** when a ready handshake was cancelled — see "Cancelled handshakes" below. A finished match's teardown stays a bare `{state: "idle"}`, so a client that predates them is unaffected. |
 
 `result` payload:
 

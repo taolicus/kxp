@@ -317,23 +317,48 @@ function transition(ev, data) {
   return true;
 }
 
+// Copy for a cancelled handshake. State only what the server can prove — the
+// handshake did not complete in time, or the other side left — and never which
+// player was responsible: the server observes an ack that never arrived, which is
+// equally consistent with a slow upload, a stalled connection, or a device that
+// slept. An unrecognised reason shows nothing rather than leaking the raw value.
+const CANCEL_NOTES = {
+  'handshake-timeout': 'Connection wasn’t ready in time — match cancelled.',
+  'opponent-left': 'Opponent left before the round started.',
+};
+
+function setNotice(reason) {
+  const el = $('#notice');
+  if (!el) return;
+  const text = reason ? CANCEL_NOTES[reason] : '';
+  // textContent, not innerHTML: the reason is server-generated today, and this
+  // keeps it that way if it ever becomes client-supplied.
+  el.textContent = text;
+  el.classList.toggle('hidden', !text);
+}
+
 const enter = {
-  lobby() {
+  lobby(d) {
     stopReadyLoop();
     clearTimeout(stallTimer);
     resetGame();
     show('lobby');
+    setNotice(d && d.reason);
   },
 
-  waiting() {
+  waiting(d) {
     stopReadyLoop();
     clearTimeout(stallTimer);
     show('queue');
+    // A plain /queue has no reason, so this clears any notice left over from an
+    // earlier cancelled handshake rather than stranding it above the spinner.
+    setNotice(d && d.reason);
   },
 
   matched(d) {
     stopReadyLoop();
     clearTimeout(stallTimer);
+    setNotice(null);
     randomizeBg();
     showGame();
     resetGame();
@@ -451,8 +476,8 @@ function connect() {
     setOnline(JSON.parse(e.data).count);
   });
 
-  es.addEventListener('waiting', () => {
-    transition('waiting');
+  es.addEventListener('waiting', (e) => {
+    transition('waiting', JSON.parse(e.data));
   });
 
   es.addEventListener('matched', (e) => {
@@ -476,14 +501,20 @@ function connect() {
   });
 
   es.addEventListener('state', (e) => {
-    const s = JSON.parse(e.data).state;
+    const d = JSON.parse(e.data);
+    const s = d.state;
     if (s === 'idle') {
       // After a finished match the result screen is terminal until the player
       // acts (Play Again / Change mode), so the server's trailing `state idle`
       // teardown frame is expected, not an anomaly — never a bad-transition.
       if (state === 'result') return;
-      transition('stateIdle');
-    } else transition('snapshot:waiting');
+      // A cancelled handshake arrives here too, carrying the server's reason.
+      // `requeued` means the server put us back on the online queue, so going
+      // to the lobby would be a lie: the player would sit in a lobby that looks
+      // idle while the server held them in the queue, with no Searching view and
+      // no Cancel. Step to `waiting` instead, so the queue UI is real again.
+      transition(d.requeued ? 'waiting' : 'stateIdle', d);
+    } else transition('snapshot:waiting', d);
   });
 
   es.onerror = () => {

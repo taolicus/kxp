@@ -218,6 +218,15 @@ button.primary:hover {
   font-size: 0.9rem;
 }
 
+/* Cancelled-handshake notice. Sits above whichever view is showing and states
+   only what the server can prove — the handshake was cancelled — never which
+   player was responsible, which the server cannot know. */
+.note {
+  margin: 0 0 var(--s4);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .fighters {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

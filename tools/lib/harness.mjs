@@ -32,6 +32,7 @@ export const BOUNDS = {
   countdown: 30000, // matched -> shoot
   match: 45000,     // full CPU match
   reconnect: 30000, // re-open /events and get a snapshot
+  teardown: 10000,  // the trailing `state idle` after a result
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

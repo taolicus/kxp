@@ -592,18 +592,28 @@ func (h *Hub) makeMatch(id string, a, b side) *match {
 	if b.bot {
 		m.botMove = make(chan moveMsg, 1)
 	}
-	m.requeue = func(i int) {
+	// A CPU match's human goes back to the lobby, never onto the online queue:
+	// they asked for a CPU round, and dropping them into the PvP queue would
+	// silently change the mode they are in. The closure used to be identical
+	// for both modes, so a CPU handshake timeout put the player into the queue
+	// for a human opponent they never requested.
+	cpu := src[1].client == nil
+	m.requeue = func(i int) bool {
 		s := src[i]
-		if s.client == nil {
-			return
+		if s.client == nil || cpu {
+			return false
 		}
 		h.mu.Lock()
 		if s.client.alive.Err() == nil && !s.client.queueing {
 			s.client.queueing = true
 			h.queue = append(h.queue, s.client)
 		}
+		queued := s.client.queueing
 		h.mu.Unlock()
-		go h.tryMatch()
+		if queued {
+			go h.tryMatch()
+		}
+		return queued
 	}
 	m.finish = func() { h.finishMatch(m, src) }
 
@@ -645,6 +655,15 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 		}
 	}
 	h.mu.Unlock()
+	// A cancelled handshake is told to the client so a bounced player learns the
+	// round was *cancelled* rather than lost. Both fields are additive and
+	// server-generated (never taken from request input, so there is no injection
+	// surface): a client that predates them ignores them and behaves exactly as
+	// before. Sending them on `state idle` rather than swapping the event type
+	// for `waiting` is deliberate — `waiting` has no `matched -> waiting` edge in
+	// the client machine, so a stale tab open across a deploy would strand itself
+	// on the game screen with a rejected transition.
+	reason := m.abandonReason()
 	for i, s := range sides {
 		if s.client == nil {
 			continue
@@ -653,7 +672,14 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 		// client must not start its new round on its old round's buffered pick.
 		s.client.drainMoves()
 		if teardown[i] {
-			s.client.sendEv(evt("state", map[string]any{"state": "idle"}))
+			payload := map[string]any{"state": "idle"}
+			if reason != "" {
+				payload["reason"] = reason
+			}
+			if m.requeued[i] {
+				payload["requeued"] = true
+			}
+			s.client.sendEv(evt("state", payload))
 		}
 	}
 }

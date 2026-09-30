@@ -16,6 +16,27 @@ const (
 // can shrink it.
 var readyTimeout = 8 * time.Second
 
+// Why a pending match was cancelled before its countdown began. Reported to the
+// client on the teardown frame so a bounced player learns the round was
+// *cancelled* rather than lost — silence here is what made a slow link look
+// like a mystery.
+const (
+	abandonNone int32 = iota
+	abandonTimeout
+	abandonOpponentLeft
+)
+
+func abandonLabel(v int32) string {
+	switch v {
+	case abandonTimeout:
+		return "handshake-timeout"
+	case abandonOpponentLeft:
+		return "opponent-left"
+	default:
+		return ""
+	}
+}
+
 const (
 	phaseIdle int32 = iota
 	phaseCountdown
@@ -119,11 +140,28 @@ type match struct {
 	readyCh chan struct{}
 
 	// requeue re-queues side i after a failed ready handshake. Hub-provided;
-	// nil in engine-only tests.
-	requeue func(i int)
+	// nil in engine-only tests. Returns whether side i actually went back on
+	// the queue, which is false for a CPU match's human (it returns to the
+	// lobby instead of joining the online queue) and for a side with no
+	// connection.
+	requeue func(i int) bool
 	// finish runs exactly once when the match is over (hub cleanup). Must be
 	// provided for any match that actually runs.
 	finish func()
+
+	// abandon records why the handshake was cancelled (abandonNone for a match
+	// that ran). A plain int32 rather than an atomic: it is written in
+	// readyTimeout/readyAbandon and read in finish, which is deferred in run on
+	// the same goroutine, so the accesses are already ordered. Every other field
+	// here is atomic because it is genuinely shared across goroutines; this one
+	// is not, and an atomic would imply a guarantee that isn't needed.
+	abandon int32
+	// abandonSide is the side that left, for abandonOpponentLeft only.
+	abandonSide int
+	// requeued records, per side, whether that side went back on the online
+	// queue when the handshake failed. Written by requeueSide and read by the
+	// hub's teardown, so same ordering argument as abandon.
+	requeued [2]bool
 }
 
 func newMatch(id string) *match {
@@ -233,6 +271,7 @@ func (m *match) waitReady() bool {
 // readyTimeout cancels a match whose human sides never acked and re-queues
 // them; in a CPU match only the human is re-queued.
 func (m *match) readyTimeout() {
+	m.abandon = abandonTimeout
 	m.advance(phaseCountdown, phaseDone)
 	m.requeueSide(0)
 	m.requeueSide(1)
@@ -241,15 +280,26 @@ func (m *match) readyTimeout() {
 // readyAbandon cancels a pending match when side i left before the countdown;
 // the survivor is re-queued rather than awarded any result.
 func (m *match) readyAbandon(i int) {
+	m.abandon = abandonOpponentLeft
+	m.abandonSide = i
 	m.advance(phaseCountdown, phaseDone)
 	m.requeueSide(1 - i)
 }
 
+// requeueSide offers side i back to the hub's queue and records whether it
+// actually went, so the teardown frame can tell the client where that side
+// ended up. A CPU match's human is offered and declined (it returns to the
+// lobby), which is exactly the distinction the client needs to render.
 func (m *match) requeueSide(i int) {
 	if m.requeue != nil {
-		m.requeue(i)
+		m.requeued[i] = m.requeue(i)
 	}
 }
+
+// abandonReason reports why the pending match was cancelled, or "" if it was
+// not cancelled. Read by the hub during teardown; see the abandon field for why
+// this needs no synchronisation.
+func (m *match) abandonReason() string { return abandonLabel(m.abandon) }
 
 // start advances idle -> countdown and runs the match concurrently.
 func (m *match) start() {

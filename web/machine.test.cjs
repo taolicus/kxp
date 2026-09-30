@@ -42,6 +42,15 @@ test('matched = ready-handshake gate before the countdown', () => {
   assert.strictEqual(next('matched', 'shoot'), null);
 });
 
+test('a cancelled handshake can put a matched client back in the queue', () => {
+  // The server re-queues both sides of a timed-out PvP handshake, so the client
+  // that was sitting in the "match found" view is really back in the queue. It
+  // needs a direct edge, because routing through stateIdle would drop it into the
+  // lobby for a frame — the same silence this edge exists to remove, and a flash
+  // of the wrong view on the way.
+  assert.strictEqual(next('matched', 'waiting'), 'waiting');
+});
+
 test('rematch routing after a result', () => {
   assert.strictEqual(next('result', 'matched'), 'matched');
   assert.strictEqual(next('result', 'rematch:online'), 'waiting');

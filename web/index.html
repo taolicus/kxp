@@ -11,6 +11,12 @@
 <body>
 <main id="app">
 
+  <!-- Cancelled-handshake notice. Deliberately outside the view sections so the
+       same copy can appear over the lobby or the queue: a CPU timeout returns
+       the player to the lobby, a PvP one puts them back in the queue, and both
+       need the same explanation. -->
+  <p id="notice" class="note hidden"></p>
+
   <section id="lobby" class="view">
     <h1 class="mkx-title">KACHIPUN TOURNAMENT</h1>
     <p id="online" class="online">&hellip;</p>

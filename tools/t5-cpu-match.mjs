@@ -141,6 +141,17 @@ await script('t5 · CPU match end-to-end', async () => {
 
   const totalMs = result.at - connected.at;
   console.log(`  note: match wall time ${totalMs}ms (server's own schedule is ~4s + handshake)`);
+
+  // A completed match's trailing `state idle` must stay bare. It carries a
+  // `reason`/`requeued` only when a handshake was *cancelled*, and this match was
+  // not — a stale reason here would tell the player their finished round was
+  // cancelled. Asserted on the real teardown every CPU match ends with.
+  const teardown = await sse.wait('state', { timeout: BOUNDS.teardown, from: sse.marked(result) });
+  const td = teardown.data || {};
+  rep.eq('finished match teardown reports idle', td.state, 'idle');
+  rep.truthy('finished match teardown carries no cancellation reason', td.reason === undefined, `reason=${td.reason}`);
+  rep.truthy('finished match teardown is not flagged requeued', td.requeued === undefined, `requeued=${td.requeued}`);
+
   sse.drop();
 
   return rep.print({

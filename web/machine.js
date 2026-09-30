@@ -19,7 +19,7 @@
   const transitions = {
     lobby: { queue: 'waiting', waiting: 'waiting', matched: 'matched' },
     waiting: { cancel: 'lobby', matched: 'matched', waiting: 'waiting', stateIdle: 'lobby' },
-    matched: { cancel: 'lobby', matched: 'matched', countdown: 'countdown', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
+    matched: { cancel: 'lobby', matched: 'matched', countdown: 'countdown', result: 'result', opponentLeft: 'result', stateIdle: 'lobby', waiting: 'waiting' },
     countdown: { countdown: 'countdown', matched: 'countdown', shoot: 'shoot', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     shoot: { move: 'locked', lock: 'locked', reject: 'locked', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     locked: { move: 'locked', reject: 'locked', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
