@@ -7,7 +7,18 @@
     "node": ">=20"
   },
   "scripts": {
-    "e2e": "playwright test --config playwright.config.cjs"
+    "e2e": "playwright test --config playwright.config.cjs",
+    "unit": "node --test web/*.test.cjs",
+    "go": "go test ./...",
+    "t1": "node tools/t1-reach.mjs",
+    "t2": "node tools/t2-readonly.mjs",
+    "t3": "node tools/t3-character.mjs",
+    "t4": "node tools/t4-sse.mjs",
+    "t5": "node tools/t5-cpu-match.mjs",
+    "t6": "node tools/t6-reconnect.mjs",
+    "t7": "node tools/t7-move-matrix.mjs",
+    "t8": "node tools/t8-pvp.mjs",
+    "tall": "node tools/run-all.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.47.0"

@@ -190,6 +190,28 @@ Note: the unchecked items below are postponed to keep feature work moving
       Phase 4 anti-cheat). Cause **unconfirmed** — parked in
       [docs/issues.md](issues.md), entry 3; ships only after the connectivity
       diagnostics slice (item 5) measures real pings.
+- [ ] **Stale `state` teardown after a handshake re-pair** — when a PvP ready
+      handshake is abandoned, `readyTimeout`/`readyAbandon` re-queue both sides
+      and `m.requeue` calls `tryMatch`, which can re-pair the survivor into a
+      *new* match before the abandoned match's `m.finish` → `finishMatch` runs.
+      `finishMatch` then sends `state {state:"idle"}` to every side of the old
+      match **unconditionally**, without re-checking `client.match == m` the way
+      it does for the match teardown itself (`server.go:637-642`). The survivor
+      can therefore observe `matched` (new match) *then* `state` (stale
+      teardown), in either order depending on goroutine interleaving — the two
+      frames are emitted within the same millisecond.
+      Client impact: the browser reads that trailing `state` as a `stateIdle`
+      edge out of `matched` and drops to the lobby while the server still holds
+      it in a live match (see the `matched` row in
+      [docs/protocol.md](protocol.md)). Self-healing — the next handshake
+      timeout re-pairs and re-sends `matched` — so it is a view inconsistency
+      rather than a wedge, and it needs no recovery work. **Cause narrowed, fix
+      not decided**: the fix is presumably to send the teardown frame only to
+      sides still on that match, or to make the frame match-scoped.
+      *Observed via the protocol probe suite's `t8` scenario B, roughly 1 run
+      in 7 (order-dependent, so a clean pass is not proof it is gone). Not
+      filed in [docs/issues.md](issues.md): that register holds symptoms whose
+      cause is unconfirmed, and this one's mechanism is traced.*
 
 ## Phase 2 — Testing & observability
 
@@ -231,9 +253,31 @@ Make the system testable and debuggable in production.
       above); the bounded SSE lifetime reaping has not.*
 - [x] **Core-gameplay e2e (decided; scoped)** — see Current priorities item 8
       for the three-flow Playwright scope. Landed (`e2e/gameplay.spec.js` +
-      `playwright.config.cjs` + `npm run e2e`). Tests the deployed server over
-      the internet via a required `BASE_URL`; runs on any Chromium-capable
+      `playwright.config.cjs` + `npm run e2e`). Tests the deployed server over the
+      internet via a required `BASE_URL`; runs on any Chromium-capable
       host.
+- [x] **Protocol-level production probes (browser-free)** — the server needs no
+      browser to be exercised: every endpoint is a `POST` plus one `GET /events`
+      SSE stream, so a plain Node `fetch` client drives real matches directly.
+      Lands the same class of coverage as the Playwright suite on hosts that
+      cannot run Chromium at all (the arm64 Android dev device: no Playwright
+      browser binaries, and Chromium's dependencies are unavailable there).
+      Landed `tools/t1`–`t8` + `tools/lib/harness.mjs` + `tools/README.md`
+      (`npm run tall`, `npm run tall -- t5 t6`, `QUICK=1 npm run tall`):
+      link characterization, read-only endpoint contracts, character
+      round-trip, SSE frame/id/skew contract, a timed CPU match, mid-match
+      reconnect + reconciliation, the full rejection-code matrix, and
+      self-paired PvP including the abandoned-handshake case.
+      The design constraint that matters: verdicts are split into PASS / FAIL /
+      INCONCLUSIVE (link dropped, or self-rate-limited), because the suite is
+      run over unreliable links and a suite that cannot tell a transport fault
+      from a server defect trains you to ignore it — `tall` exits 1 on a real
+      failure and 2 on an inconclusive one.
+      *Not a replacement for `npm run e2e`: rendering, CSS and in-browser
+      console errors remain Playwright-only. Client state machine and server
+      internals stay offline (`npm run unit`, `npm run go`). It already earned
+      its keep — it traced the stale-teardown race filed in Phase 1 and
+      measured the zero-grace drop behaviour recorded in issues.md entry 5.*
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
