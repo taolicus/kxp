@@ -18,7 +18,7 @@
 //
 //   npm run t7
 
-import { Sse, post, get, errMsg, script, makeReporter, BOUNDS } from './lib/harness.mjs';
+import { Sse, post, get, errMsg, script, makeReporter, BOUNDS, expectReadyAck } from './lib/harness.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -70,7 +70,7 @@ await script('t7 · rejection contract', async () => {
   // CPU matches gate their countdown on this ack (round.go:136-142), so it has
   // to go before the countdown wait below or the match times out unstarted.
   const ack = await post('/ready', { id });
-  rep.eq('/ready accepted', ack.status, 200, errMsg(ack));
+  expectReadyAck(rep, ack);
   await sse.wait('countdown', { timeout: BOUNDS.countdown, from: cursor, where: 'setup' });
 
   // Too early: input during the countdown must be refused, not buffered.

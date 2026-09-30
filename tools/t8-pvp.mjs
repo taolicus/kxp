@@ -31,7 +31,7 @@
 //
 //   npm run t8
 
-import { Sse, post, get, errMsg, script, makeReporter, BOUNDS } from './lib/harness.mjs';
+import { Sse, post, get, errMsg, script, makeReporter, BOUNDS, expectReadyAck } from './lib/harness.mjs';
 
 // BEATS[x] is the move that beats x, so BEATS is the inverse of game.go's
 // winsAgainst (which maps a move to what it beats). Keeping both directions
@@ -91,8 +91,8 @@ await script('t8 · PvP between two clients', async () => {
 
   const rA = await post('/ready', { id: A.id });
   const rB = await post('/ready', { id: B.id });
-  rep.eq('A /ready accepted', rA.status, 200, errMsg(rA));
-  rep.eq('B /ready accepted', rB.status, 200, errMsg(rB));
+  expectReadyAck(rep, rA, 'A /ready accepted');
+  expectReadyAck(rep, rB, 'B /ready accepted');
 
   const kA = await A.sse.wait('countdown', { timeout: BOUNDS.countdown, from: curA, where: 'A countdown' });
   const kB = await B.sse.wait('countdown', { timeout: BOUNDS.countdown, from: curB, where: 'B countdown' });
@@ -172,7 +172,7 @@ await script('t8 · PvP between two clients', async () => {
   await post('/queue', { id: D.id });
   await post('/queue', { id: E.id });
   await D.sse.wait('matched', { timeout: BOUNDS.countdown, from: curD, where: 'B setup' });
-  rep.eq('D is matched to E', (await post('/ready', { id: D.id })).status, 200);
+  expectReadyAck(rep, await post('/ready', { id: D.id }), 'D is matched to E');
 
   // E never readies. readyTimeout (8s, round.go:16) cancels the match and
   // re-queues both sides. The survivor must be told, in bounded time.

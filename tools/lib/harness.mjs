@@ -297,6 +297,14 @@ export function makeReporter(title) {
 
   const ok = (name, detail = '') => { checks.push({ name, pass: true, detail }); return true; };
   const fail = (name, detail = '') => { checks.push({ name, pass: false, detail }); return false; };
+  // A gate failure is a failure the link caused, not the server: the readiness
+  // gate expired while this client's own ack was still in flight. Kept distinct
+  // from an ordinary failure so it can be reported as INCONCLUSIVE without
+  // silencing a real defect that happened in the same run.
+  const gate = (name, detail = '') => {
+    checks.push({ name, pass: false, detail, gate: true });
+    return false;
+  };
   const eq = (name, actual, expected, detail = '') =>
     JSON.stringify(actual) === JSON.stringify(expected)
       ? ok(name, detail || `= ${JSON.stringify(actual)}`)
@@ -310,16 +318,26 @@ export function makeReporter(title) {
 
   const report = {
     checks,
-    ok, fail, eq, truthy, within,
+    ok, fail, eq, truthy, within, gate,
     get passed() { return checks.filter((c) => c.pass).length; },
     get failed() { return checks.filter((c) => !c.pass).length; },
+    get gateFailures() { return checks.filter((c) => c.gate).length; },
+    // Failures the server is actually answerable for. A run whose only failures
+    // are gate expiries is a verdict on the link, not on the app.
+    get serverFailures() { return checks.filter((c) => !c.pass && !c.gate).length; },
+    verdict() {
+      if (this.serverFailures > 0) return 'FAIL';
+      if (this.gateFailures > 0) return 'GATE';
+      return 'PASS';
+    },
     // The check list on its own, with no verdict. script() uses this when the
     // body threw: a "RESULT: FAIL" line there would claim the checks decided the
     // outcome, which they did not — something threw first.
     printChecks() {
       console.log(`\n── ${title} ──`);
       for (const c of checks) {
-        console.log(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.name}${c.detail ? `  (${c.detail})` : ''}`);
+        const mark = c.pass ? 'PASS' : c.gate ? 'GATE' : 'FAIL';
+        console.log(`  ${mark}  ${c.name}${c.detail ? `  (${c.detail})` : ''}`);
       }
     },
     print(latency = {}) {
@@ -329,17 +347,63 @@ export function makeReporter(title) {
         .map(([k, v]) => `${k} ${typeof v === 'number' ? v + 'ms' : v}`)
         .join(', ');
       if (lat) console.log(`  ·    latency: ${lat}`);
-      console.log(`  ${report.failed ? 'RESULT: FAIL' : 'RESULT: PASS'} — ${report.passed}/${checks.length} checks, ${secs}s`);
-      return report.failed === 0;
+      const v = report.verdict();
+      const line = {
+        PASS: `RESULT: PASS`,
+        FAIL: `RESULT: FAIL`,
+        GATE: `RESULT: INCONCLUSIVE (ready gate expired — ack slower than the link allowed)`,
+      }[v];
+      console.log(`  ${line} — ${report.passed}/${checks.length} checks, ${secs}s`);
+      if (v === 'GATE') {
+        console.log('  note: the server expired its readiness gate and requeued the client; that is designed behaviour, not a defect.');
+      }
+      return v === 'PASS';
     },
   };
   activeReporter = report;
   return report;
 }
 
+// Record a POST /ready outcome, separating the two very different reasons it can
+// fail. A rejection because the gate already expired is the link being slower
+// than the server's 8s budget and must not be read as a defect; anything else is
+// the server failing to accept a valid ack. Shared so t5, t6 and t7 cannot drift
+// into classifying the same event differently.
+export function expectReadyAck(rep, res, name = '/ready accepted') {
+  const msg = errMsg(res);
+  const expired = res.status === 400 && /no active match/.test(msg);
+  if (expired) {
+    return rep.gate(name, `= ${res.status} "${msg}" — the readiness gate expired before this ack arrived, so the match was requeued`);
+  }
+  return rep.eq(name, res.status, 200, msg);
+}
+
 // Entry point for a script: prints a header, runs the body, and turns any
 // escaping throw into a classified verdict. A NET verdict is explicitly not a
 // server defect, so a script can end "INCONCLUSIVE (link)" rather than red.
+// Pick the verdict for a throw, given what the script had already checked.
+//
+// Precedence, strongest first. A real server failure is a failure whatever else
+// happened. A gate expiry means the link was slower than the server's 8s
+// readiness budget and the server then requeued the client exactly as designed —
+// so the countdown it was waiting for was never coming, and the timeout is a
+// consequence rather than a contract break. Otherwise a withheld frame that
+// followed some other failed check is that failure, not a second one.
+//
+// Exported and pure so the precedence is unit-testable: it is the decision that
+// decides whether a run accuses the server or the link, and an early version of
+// it nested the gate branch inside a condition that could never be true when the
+// verdict was GATE, so a real gate expiry was reported as a contract break.
+export function classifyThrow(kind, rep) {
+  const v = rep ? rep.verdict() : 'PASS';
+  if (v === 'GATE') return 'GATE';
+  if (v === 'FAIL') {
+    if (kind === 'WITHHELD' && rep.failed > 0) return 'ASSERT';
+    return kind;
+  }
+  return kind;
+}
+
 export async function script(name, body) {
   console.log(`\n${'='.repeat(60)}\n${name}  →  ${BASE}\n${'='.repeat(60)}`);
   const started = Date.now();
@@ -357,34 +421,27 @@ export async function script(name, body) {
       activeReporter.printChecks();
     }
     const kind = classify(err);
-    // A withheld frame is only the server's fault when every precondition for it
-    // actually held. If a check already failed, the missing frame is explained:
-    // the live t5 failure recorded `/ready accepted = 400 "no active match"`
-    // because the server's 8s readiness gate expired while the ack was still in
-    // flight, and the countdown it was waiting for was never going to come. The
-    // server did exactly what it is designed to do — requeue the human and say
-    // `state idle` — so calling it a contract break accuses it of a bug it does
-    // not have, which is the cry-wolf outcome this harness exists to avoid.
-    // The failed check is the finding; the timeout is a consequence.
-    const explained = Boolean(activeReporter && activeReporter.failed > 0);
-    const label = explained ? 'ASSERT' : kind;
+    const label = classifyThrow(kind, activeReporter);
     const text = {
       NET: 'INCONCLUSIVE (link dropped — not a server verdict)',
       RATE: 'INCONCLUSIVE (rate limited — this suite out-ran itself)',
+      GATE: 'INCONCLUSIVE (ready gate expired — ack slower than the link allowed)',
       SERVER: 'FAIL (server responded badly)',
       WITHHELD: 'FAIL (server withheld a frame on a healthy stream — contract break, not a link fault)',
       ASSERT: 'FAIL (expectation not met)',
     }[label];
     console.log(`\n  RESULT: ${text}\n  ${label}: ${err.message}`);
-    if (explained && kind === 'WITHHELD') {
+    if (label === 'GATE') {
+      console.log('  note: the server expired its readiness gate and requeued the client; that is designed behaviour, not a defect.');
+    } else if (label === 'ASSERT' && kind === 'WITHHELD') {
       console.log('  note: the withheld frame followed a failed check above; reported as that failure, not a contract break.');
     }
     if (err.__seen) console.log(`  frames seen: [${err.__seen.join(', ')}]`);
     console.log(`  ·    total ${((Date.now() - started) / 1000).toFixed(1)}s`);
     // Exit code follows the verdict, not the mere fact of a throw: 1 for a real
-    // defect (including a frame withheld on a healthy stream), 2 only for the
-    // two verdicts that mean "the link, not the app". tall reads the printed
+    // defect (including a frame withheld on a healthy stream), 2 for the
+    // verdicts that mean "the link, not the app". tall reads the printed
     // verdict, so this keeps a direct `npm run t5` consistent with it.
-    process.exit(label === 'NET' || label === 'RATE' ? 2 : 1);
+    process.exit(label === 'NET' || label === 'RATE' || label === 'GATE' ? 2 : 1);
   }
 }

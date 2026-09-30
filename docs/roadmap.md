@@ -344,6 +344,21 @@ Make the system testable and debuggable in production.
       unchanged when all checks pass, which is the missing-`/ready`-ack bug it
       was added to catch — both directions are covered.
 
+      **A distinct `GATE` verdict.** Collapsing the gate expiry into a generic
+      failure — or into generic link noise — both lose information, so it is its
+      own outcome: `INCONCLUSIVE (ready gate expired — ack slower than the link
+      allowed)`, exit 2. A gate expiry is recorded by `expectReadyAck` only for
+      the rejection that actually means it (`400 no active match`); every other
+      `/ready` rejection stays an ordinary failure, because those *are* the
+      server's. `tall` calls the case out separately from other inconclusive runs,
+      since it is not merely unjudgeable — a round really was lost to the network.
+      Precedence is server failure > gate expiry > pass, so an inconclusive link
+      can never mask a defect found in the same run, and it lives in a pure
+      `classifyThrow` with tests in both directions. The first version nested the
+      gate branch inside a condition unreachable when the verdict was GATE, so a
+      real expiry was still reported as a contract break; the live re-check caught
+      it after the unit tests had already passed.
+
       **Server fix found on the way.** The live failure was not a server bug, but
       the adjacent window was: `advance(phaseCountdown, phaseDone)` runs before
       `finishMatch` clears `c.match`, and an ack landing in that window was

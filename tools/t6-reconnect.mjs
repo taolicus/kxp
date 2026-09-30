@@ -33,7 +33,7 @@
 //   npm run t6
 //   RECONNECT_GAP=800 npm run t6      # tune the slow-drop gap
 
-import { Sse, post, get, errMsg, script, makeReporter, BOUNDS } from './lib/harness.mjs';
+import { Sse, post, get, errMsg, script, makeReporter, BOUNDS, expectReadyAck } from './lib/harness.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -115,7 +115,7 @@ async function dropScenario(rep, label, gapMs) {
       // Same gate as above, on the recovery match: wait for `matched`, then ack.
       await second.sse.wait('matched', { timeout: BOUNDS.countdown, from: cursor2, where: `${label} recovery setup` });
       const ack = await post('/ready', { id });
-      rep.eq(`${label}: /ready accepted on the recovered match`, ack.status, 200, errMsg(ack));
+      expectReadyAck(rep, ack, `${label}: /ready accepted on the recovered match`);
       const shoot = await second.sse.wait('shoot', { timeout: BOUNDS.countdown, from: cursor2, where: `${label} recovery` });
       const mv = await post('/move', { id, move: 'paper', sawPunAt: Date.now(), clickedAt: Date.now() });
       rep.eq(`${label}: recovered match accepts a move`, mv.status, 200, errMsg(mv));

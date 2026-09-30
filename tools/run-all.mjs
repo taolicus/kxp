@@ -104,6 +104,10 @@ if (failed.length) {
   process.exit(1);
 }
 if (skipped.length) {
+  const gated = skipped.filter((r) => r.reason.startsWith('ready gate expired'));
+  if (gated.length) {
+    console.log(`  ${gated.length} ran out of readiness-gate budget (the link was slower than the server's 8s window). That is a link verdict, not a defect — but it does mean a round was lost to the network.`);
+  }
   console.log(`  No failures, but ${skipped.length} could not be judged. Re-run for a clean read.`);
   process.exit(2);
 }

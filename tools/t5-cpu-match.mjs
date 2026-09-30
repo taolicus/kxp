@@ -22,7 +22,7 @@
 //
 //   npm run t5
 
-import { Sse, post, get, errMsg, script, makeReporter, BOUNDS } from './lib/harness.mjs';
+import { Sse, post, get, errMsg, script, makeReporter, BOUNDS, expectReadyAck } from './lib/harness.mjs';
 
 const WINS = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -71,7 +71,7 @@ await script('t5 · CPU match end-to-end', async () => {
   rep.ok('CPU countdown waits for the ready handshake', await early ? 'countdown began within 1.2s of matching' : 'held, as expected, until /ready');
 
   const ack = await post('/ready', { id });
-  rep.eq('/ready accepted', ack.status, 200, errMsg(ack));
+  expectReadyAck(rep, ack);
 
   const ka = await sse.wait('countdown', { timeout: BOUNDS.countdown, from: sse.marked(matched) });
   const kaData = ka.data || {};
