@@ -210,9 +210,28 @@ Note: the unchecked items below are postponed to keep feature work moving
       reconnecting client back through `matched` and re-arms its acks) cover
       the realistic cases.
 
-      Verified: `go test ./...` and 38/38 client unit tests green. `-race` is
+            Verified: `go test ./...` and 38/38 client unit tests green. `-race` is
       **not runnable on this platform** (android/arm64 under Termux), so the
       `ackReady` CAS/close path is hand-checked, not race-checked.
+
+      **The probe suite caught the deploy gap, then mislabelled it.** `t5`, `t6`
+      and `t7` drive CPU matches and never sent `/ready` (only `t8`, the PvP
+      probe, did). Against the gated server they sat in the handshake for 8s,
+      timed out, and never saw a `countdown` — and the harness reported all
+      three as `INCONCLUSIVE (link dropped)`, because any frame timeout matched
+      the network-error pattern. So the first post-deploy run read as a train
+      problem, on a link that was in fact fine: t1–t4 and t8 all passed around
+      it. The tell was the 8s duration, matching `readyTimeout` exactly.
+
+      Fixed on both sides. The three probes now ack (t5 asserts the gate is
+      *held* before the ack, making it the live regression test for this
+      change), and `classify()` now separates a frame withheld on a **healthy**
+      stream — `WITHHELD`, a FAIL — from one lost on a broken link. The general
+      lesson: a timeout means "did not arrive", and only the stream's own health
+      says whether that is the server's doing or the train's. Reporting the
+      first as the second is how a contract break hides behind a flaky link.
+
+
 - [ ] **Latency compensation — parked (see issues.md)** — one-way delivery
       latency can flatten an on-time reaction into a `400 too late` for
       high-latency players (win/loss stays arrival-time-authoritative; see

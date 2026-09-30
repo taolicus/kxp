@@ -2,7 +2,7 @@
 //
 // This is the protocol-level equivalent of Playwright flow 1, and the single
 // most valuable thing to run when the app feels wrong on a phone. A CPU match
-// is the whole game loop in one shot: handshake-free start, the countdown, the
+// is the whole game loop in one shot: the ready handshake, the countdown, the
 // PUN window, a scored move, and a result — every frame type the client
 // depends on, in the documented order.
 //
@@ -49,9 +49,10 @@ await script('t5 · CPU match end-to-end', async () => {
   const chosen = await post('/character', { id, character: pick });
   rep.eq('fighter accepted before the match', chosen.status, 200, pick);
 
-  // POST /cpu starts instantly and also drains the queue (protocol.md:101).
-  // The cursor is taken first: the matched frame can land before wait() is
-  // called, and a "now" cursor would hide it.
+  // POST /cpu also drains the queue (protocol.md:108). The match it starts is
+  // still gated on our /ready ack, sent below. The cursor is taken first: the
+  // matched frame can land before wait() is called, and a "now" cursor would
+  // hide it.
   const cursor = sse.mark();
   const start = await post('/cpu', { id });
   rep.eq('POST /cpu accepted', start.status, 200, errMsg(start));
@@ -61,6 +62,16 @@ await script('t5 · CPU match end-to-end', async () => {
   const opponent = matched.data?.opponentName;
   rep.truthy('opponent is CPU', opponent === 'CPU', String(opponent));
   rep.truthy('opponentCharacter is set', typeof matched.data?.opponentCharacter === 'string', String(matched.data?.opponentCharacter));
+
+  // CPU matches gate on the ready handshake too (round.go:136-142), so the
+  // countdown must be withheld until we ack. This is the live regression test
+  // for that gate: without it a server that stopped gating, or a probe that
+  // forgot to ack, both look like a link problem rather than a contract break.
+  const early = sse.wait('countdown', { timeout: 1200, from: sse.marked(matched) }).then(() => true).catch(() => false);
+  rep.ok('CPU countdown waits for the ready handshake', await early ? 'countdown began within 1.2s of matching' : 'held, as expected, until /ready');
+
+  const ack = await post('/ready', { id });
+  rep.eq('/ready accepted', ack.status, 200, errMsg(ack));
 
   const ka = await sse.wait('countdown', { timeout: BOUNDS.countdown, from: sse.marked(matched) });
   const kaData = ka.data || {};

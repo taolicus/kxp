@@ -45,6 +45,10 @@ const NET_ERR = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|EAI_AGAIN|ENOTFOUND|UND
 export function classify(err) {
   if (err && err.__httpStatus === 429) return 'RATE';
   if (err && err.__httpStatus) return 'SERVER';
+  // A frame that timed out on a healthy stream was withheld by the server, not
+  // lost in transit. That is a contract break and must be reported as one:
+  // calling it INCONCLUSIVE is what let a missing /ready ack survive a deploy.
+  if (err && err.__streamHealthy) return 'WITHHELD';
   return NET_ERR.test(String(err && err.message || err)) ? 'NET' : 'ASSERT';
 }
 
@@ -228,10 +232,21 @@ export class Sse {
         const idx = this.waiters.indexOf(waiter);
         if (idx !== -1) this.waiters.splice(idx, 1);
         const got = this.frames.slice(from).map((f) => f.type);
+        // A frame that never arrived is only a link problem if the link is
+        // actually gone. If the stream is still up and parsing cleanly, the
+        // server simply did not send it — a contract break, not a train.
+        // Conflating the two is how a missing /ready ack reads as "inconclusive".
+        const streamErrors = this.errors.length;
+        const label = this.closed
+          ? 'stream closed locally'
+          : streamErrors
+            ? `stream reported ${streamErrors} error(s): ${this.errors[streamErrors - 1].message}`
+            : 'stream still open and parsing cleanly';
         const err = new Error(
-          `timeout ${timeout}ms waiting for '${type}'${where ? ` (${where})` : ''}; saw: [${got.join(', ') || 'nothing'}]`
+          `timeout ${timeout}ms waiting for '${type}'${where ? ` (${where})` : ''}; saw: [${got.join(', ') || 'nothing'}]; ${label}`
         );
         err.__seen = got;
+        err.__streamHealthy = !this.closed && streamErrors === 0;
         reject(err);
       }, timeout);
       this.waiters.push(waiter);
@@ -320,11 +335,16 @@ export async function script(name, body) {
       NET: 'INCONCLUSIVE (link dropped — not a server verdict)',
       RATE: 'INCONCLUSIVE (rate limited — this suite out-ran itself)',
       SERVER: 'FAIL (server responded badly)',
+      WITHHELD: 'FAIL (server withheld a frame on a healthy stream — contract break, not a link fault)',
       ASSERT: 'FAIL (expectation not met)',
     }[kind];
     console.log(`\n  RESULT: ${label}\n  ${kind}: ${err.message}`);
     if (err.__seen) console.log(`  frames seen: [${err.__seen.join(', ')}]`);
     console.log(`  ·    total ${((Date.now() - started) / 1000).toFixed(1)}s`);
-    process.exit(2);
+    // Exit code follows the verdict, not the mere fact of a throw: 1 for a real
+    // defect (including a frame withheld on a healthy stream), 2 only for the
+    // two verdicts that mean "the link, not the app". tall reads the printed
+    // verdict, so this keeps a direct `npm run t5` consistent with it.
+    process.exit(kind === 'NET' || kind === 'RATE' ? 2 : 1);
   }
 }

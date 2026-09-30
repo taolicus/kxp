@@ -67,6 +67,9 @@ async function dropScenario(rep, label, gapMs) {
     return null;
   }
   await sse0.wait('matched', { timeout: BOUNDS.countdown, from: cursor, where: `${label} setup` });
+  // CPU matches gate their countdown on this ack (round.go:136-142). Without it
+  // the match sits in the handshake until readyTimeout and never counts down.
+  await post('/ready', { id });
   await sse0.wait('countdown', { timeout: BOUNDS.countdown, from: cursor, where: `${label} setup` });
 
   const droppedAt = Date.now();
@@ -109,6 +112,10 @@ async function dropScenario(rep, label, gapMs) {
     const again = await post('/cpu', { id });
     rep.eq(`${label}: a fresh match can be started after the drop`, again.status, 200, errMsg(again));
     if (again.status === 200) {
+      // Same gate as above, on the recovery match: wait for `matched`, then ack.
+      await second.sse.wait('matched', { timeout: BOUNDS.countdown, from: cursor2, where: `${label} recovery setup` });
+      const ack = await post('/ready', { id });
+      rep.eq(`${label}: /ready accepted on the recovered match`, ack.status, 200, errMsg(ack));
       const shoot = await second.sse.wait('shoot', { timeout: BOUNDS.countdown, from: cursor2, where: `${label} recovery` });
       const mv = await post('/move', { id, move: 'paper', sawPunAt: Date.now(), clickedAt: Date.now() });
       rep.eq(`${label}: recovered match accepts a move`, mv.status, 200, errMsg(mv));

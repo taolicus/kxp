@@ -67,6 +67,10 @@ await script('t7 · rejection contract', async () => {
   if (start.status !== 200) { sse.drop(); return rep.print({ id }); }
 
   await sse.wait('matched', { timeout: BOUNDS.countdown, from: cursor, where: 'setup' });
+  // CPU matches gate their countdown on this ack (round.go:136-142), so it has
+  // to go before the countdown wait below or the match times out unstarted.
+  const ack = await post('/ready', { id });
+  rep.eq('/ready accepted', ack.status, 200, errMsg(ack));
   await sse.wait('countdown', { timeout: BOUNDS.countdown, from: cursor, where: 'setup' });
 
   // Too early: input during the countdown must be refused, not buffered.
