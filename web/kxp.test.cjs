@@ -96,6 +96,54 @@ test('planRound: exactly at the deadline is no longer actionable', () => {
   assert.equal(KXP.planRound(now, shootAt, 2000, 0).actionable, false);
 });
 
+test('countdownSchedule: walks every remaining beat, then stops at PUN', () => {
+  // This is the regression that shipped: the client armed a one-shot timer, the
+  // later countdown frames were deduped by shootAt, so the walk stopped after the
+  // first step. READY painted, KA painted, and CHI never appeared at all -- the
+  // count jumped from KA straight to PUN. The walk has to cover every beat that
+  // is genuinely still ahead, and has to terminate.
+  const shootAt = 1700000003000;
+  let t = 1700000000000; // first frame arrives exactly at the gate
+  const nowFn = () => t;
+  const steps = KXP.countdownSchedule(nowFn, shootAt, 2000, 0);
+  const seen = [];
+  for (const s of steps) {
+    seen.push([s.label, s.delay]);
+    t += s.delay; // stand in for the timer firing
+  }
+  assert.deepEqual(seen, [
+    ['READY', 1000],
+    ['KA', 1000],
+    ['CHI', 1000],
+    [null, 0], // PUN is due; punTimer opens the window, the walk ends
+  ]);
+});
+
+test('countdownSchedule: a late first frame skips only the beats already gone', () => {
+  // Same walk, but the first frame is delayed. Whatever has already passed is
+  // dropped, and everything still ahead must still be painted.
+  const shootAt = 1700000003000;
+  const late = (lag) => {
+    let t = 1700000000000 + lag;
+    const seen = [];
+    for (const s of KXP.countdownSchedule(() => t, shootAt, 2000, 0)) {
+      if (s.label) seen.push(s.label);
+      t += s.delay;
+    }
+    return seen;
+  };
+  assert.deepEqual(late(0), ['READY', 'KA', 'CHI']);
+  assert.deepEqual(late(1000), ['KA', 'CHI']);
+  assert.deepEqual(late(2000), ['CHI']);
+  assert.deepEqual(late(3000), []); // nothing left; PUN opens straight away
+});
+
+test('countdownSchedule: terminates when the deadline has long passed', () => {
+  // Must not spin: a stuck generator here would re-arm the timer forever.
+  const steps = [...KXP.countdownSchedule(() => 1700000000000 + 60000, 1700000000000, 2000, 0)];
+  assert.deepEqual(steps, [{ label: null, delay: 0 }]);
+});
+
 test('planRound: missing plan returns null', () => {
   assert.equal(KXP.planRound(1700000000000, 0, 2000, 0), null);
 });

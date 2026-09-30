@@ -256,17 +256,22 @@ function planFromCountdown(d) {
   // it: that beat would be overwritten in the same tick by an already-due
   // transition, so the count would jump straight to PUN and the player would
   // see no countdown at all even though the server had announced one and the
-  // pick window was still open. Instead paint whichever beat is genuinely due,
-  // and arm one timer to advance to the next. `dueSlot` is null once PUN itself
-  // is due, which is when punTimer below opens the window instead.
-  if (plan.dueSlot) setCount(plan.dueSlot);
-  if (plan.msUntilNextSlot > 0) {
-    slotTimer = setTimeout(() => {
-      if (state !== 'countdown') return;
-      const next = KXP.planRound(Date.now(), d.shootAt, d.windowMs, clockSkew);
-      if (next && next.dueSlot) setCount(next.dueSlot);
-    }, plan.msUntilNextSlot);
-  }
+  // pick window was still open. countdownSchedule yields whichever beats are
+  // genuinely still ahead, so a frame delayed past its own beat degrades to the
+  // next real beat instead of flashing a dead one.
+  //
+  // The timer re-arms on every step rather than firing once. The later
+  // countdown frames carry the same shootAt and are deduped above, so this
+  // chain is the only thing advancing the beat; a one-shot timer stopped after
+  // the first step and the tail of the countdown was never painted.
+  const steps = KXP.countdownSchedule(() => Date.now(), d.shootAt, d.windowMs, clockSkew);
+  const step = () => {
+    const next = steps.next();
+    if (next.done) return;
+    if (next.value.label && state === 'countdown') setCount(next.value.label);
+    if (next.value.delay > 0) slotTimer = setTimeout(step, next.value.delay);
+  };
+  step();
   if (plan.actionable) {
     punTimer = setTimeout(() => {
       if (state !== 'countdown') return;

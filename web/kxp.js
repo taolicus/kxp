@@ -45,6 +45,29 @@
     return { label: null, msUntilNext: msUntilPun - COUNTDOWN_SLOTS[0][1] };
   }
 
+  // countdownSchedule walks the remaining countdown steps, yielding the beat due
+  // now (null once PUN itself is due, or before the first beat) together with the
+  // delay until the beat after it, and stopping when there is nothing left.
+  //
+  // This is a generator rather than a single "next slot" lookup because the
+  // client needs to walk every remaining beat from one timer, not just the next
+  // one. The later countdown frames are deduped by plannedShootAt (they announce
+  // the same shootAt), so a re-arm chain started from the first frame is the
+  // only thing advancing the beat -- a one-shot timer advanced READY to KA and
+  // then stalled, so CHI never appeared and the count jumped to PUN.
+  //
+  // nowFn is called each step rather than a fixed start time, so timer drift
+  // cannot accumulate across the walk.
+  function* countdownSchedule(nowFn, shootAt, windowMs, skew) {
+    for (;;) {
+      const plan = planRound(nowFn(), shootAt, windowMs, skew);
+      if (!plan) return;
+      yield { label: plan.dueSlot, delay: plan.msUntilNextSlot };
+      // Stop once PUN is due (delay 0, no label): punTimer opens the window.
+      if (!plan.dueSlot || plan.msUntilNextSlot <= 0) return;
+    }
+  }
+
   // planRound lays the announced round schedule onto the client clock. The
   // server pre-announces the PUN deadline (shootAt, epoch-ms) on the first
   // countdown frame, fixing each beat per COUNTDOWN_SLOTS and PUN at S. The
@@ -137,5 +160,5 @@
     return { pass: true, key };
   }
 
-  return { aliases, shootWindow, planRound, countdownSlot, applyResult, resultLines, rejectLabel, beaconGate };
+  return { aliases, shootWindow, planRound, countdownSlot, countdownSchedule, applyResult, resultLines, rejectLabel, beaconGate };
 }));
