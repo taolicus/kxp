@@ -281,6 +281,16 @@ export class Sse {
 
 // Assertions. Each returns a check result so a script can report every finding
 // instead of aborting on the first one.
+
+// The reporter a script created most recently. A script builds its reporter
+// inside the body, so when the body throws partway through, script() has no other
+// handle on it — and the checks it had already recorded are the evidence for what
+// went wrong. This was the difference between a diagnosable failure and a bare
+// "WITHHELD: timeout waiting for 'countdown'": the t5 run that hit this had
+// already recorded `/ready accepted = 400 "no active match"`, which names the
+// cause outright, and threw before anything printed it.
+let activeReporter = null;
+
 export function makeReporter(title) {
   const checks = [];
   const t0 = Date.now();
@@ -298,25 +308,33 @@ export function makeReporter(title) {
       ? ok(name, `${value} in [${lo}, ${hi}]`)
       : fail(name, `${value} outside [${lo}, ${hi}]`);
 
-  return {
+  const report = {
     checks,
     ok, fail, eq, truthy, within,
     get passed() { return checks.filter((c) => c.pass).length; },
     get failed() { return checks.filter((c) => !c.pass).length; },
-    print(latency = {}) {
-      const secs = ((Date.now() - t0) / 1000).toFixed(1);
+    // The check list on its own, with no verdict. script() uses this when the
+    // body threw: a "RESULT: FAIL" line there would claim the checks decided the
+    // outcome, which they did not — something threw first.
+    printChecks() {
       console.log(`\n── ${title} ──`);
       for (const c of checks) {
         console.log(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.name}${c.detail ? `  (${c.detail})` : ''}`);
       }
+    },
+    print(latency = {}) {
+      const secs = ((Date.now() - t0) / 1000).toFixed(1);
+      report.printChecks();
       const lat = Object.entries(latency)
         .map(([k, v]) => `${k} ${typeof v === 'number' ? v + 'ms' : v}`)
         .join(', ');
       if (lat) console.log(`  ·    latency: ${lat}`);
-      console.log(`  ${this.failed ? 'RESULT: FAIL' : 'RESULT: PASS'} — ${this.passed}/${checks.length} checks, ${secs}s`);
-      return this.failed === 0;
+      console.log(`  ${report.failed ? 'RESULT: FAIL' : 'RESULT: PASS'} — ${report.passed}/${checks.length} checks, ${secs}s`);
+      return report.failed === 0;
     },
   };
+  activeReporter = report;
+  return report;
 }
 
 // Entry point for a script: prints a header, runs the body, and turns any
@@ -330,21 +348,43 @@ export async function script(name, body) {
     console.log(`  ·    total ${((Date.now() - started) / 1000).toFixed(1)}s`);
     process.exit(passed ? 0 : 1);
   } catch (err) {
+    // Whatever the script had already checked is the diagnosis, and it is only
+    // reachable here: the reporter lives inside the body, so a throw means
+    // rep.print() never ran. Printing it before the verdict is the difference
+    // between "a frame was withheld" and "the ack was rejected with 400 because
+    // the gate had already timed out".
+    if (activeReporter && activeReporter.checks.length) {
+      activeReporter.printChecks();
+    }
     const kind = classify(err);
-    const label = {
+    // A withheld frame is only the server's fault when every precondition for it
+    // actually held. If a check already failed, the missing frame is explained:
+    // the live t5 failure recorded `/ready accepted = 400 "no active match"`
+    // because the server's 8s readiness gate expired while the ack was still in
+    // flight, and the countdown it was waiting for was never going to come. The
+    // server did exactly what it is designed to do — requeue the human and say
+    // `state idle` — so calling it a contract break accuses it of a bug it does
+    // not have, which is the cry-wolf outcome this harness exists to avoid.
+    // The failed check is the finding; the timeout is a consequence.
+    const explained = Boolean(activeReporter && activeReporter.failed > 0);
+    const label = explained ? 'ASSERT' : kind;
+    const text = {
       NET: 'INCONCLUSIVE (link dropped — not a server verdict)',
       RATE: 'INCONCLUSIVE (rate limited — this suite out-ran itself)',
       SERVER: 'FAIL (server responded badly)',
       WITHHELD: 'FAIL (server withheld a frame on a healthy stream — contract break, not a link fault)',
       ASSERT: 'FAIL (expectation not met)',
-    }[kind];
-    console.log(`\n  RESULT: ${label}\n  ${kind}: ${err.message}`);
+    }[label];
+    console.log(`\n  RESULT: ${text}\n  ${label}: ${err.message}`);
+    if (explained && kind === 'WITHHELD') {
+      console.log('  note: the withheld frame followed a failed check above; reported as that failure, not a contract break.');
+    }
     if (err.__seen) console.log(`  frames seen: [${err.__seen.join(', ')}]`);
     console.log(`  ·    total ${((Date.now() - started) / 1000).toFixed(1)}s`);
     // Exit code follows the verdict, not the mere fact of a throw: 1 for a real
     // defect (including a frame withheld on a healthy stream), 2 only for the
     // two verdicts that mean "the link, not the app". tall reads the printed
     // verdict, so this keeps a direct `npm run t5` consistent with it.
-    process.exit(kind === 'NET' || kind === 'RATE' ? 2 : 1);
+    process.exit(label === 'NET' || label === 'RATE' ? 2 : 1);
   }
 }

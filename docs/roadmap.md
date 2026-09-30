@@ -316,6 +316,40 @@ Note: the unchecked items below are postponed to keep feature work moving
 
 Make the system testable and debuggable in production.
 
+- [x] **A failing probe keeps its evidence** — three separate places discarded
+      the reason a run failed, which is why one intermittent live failure took
+      three attempts to diagnose.
+
+      **`run-all` threw the output away.** It pipes each script's stdout, greps
+      it for a verdict, and discards the rest — then tells the reader "FAIL means
+      the server misbehaved, go and read that output". That output no longer
+      existed. A failing script's full log is now printed under the summary.
+
+      **`script()` dropped the checks too.** Worse: a script's reporter lives
+      inside the body, so any throw before `rep.print()` discarded every check
+      already recorded. The t5 run that started this had already recorded
+      `/ready accepted = 400 "no active match"` — which names the cause outright
+      — and threw on the next line waiting for a countdown. All of it was lost,
+      leaving a bare `WITHHELD: timeout waiting for 'countdown'` and no way to
+      tell a server bug from a slow ack. The reporter is now retained and its
+      checks printed before any verdict.
+
+      **The verdict itself was wrong.** With the checks visible it was clear the
+      server had behaved correctly: the 8s readiness gate expired while the
+      client's ack was still in flight, so it requeued the human and sent
+      `state idle`. The probe then waited 30s for a countdown that was never
+      going to come and reported a *contract break*. A withheld frame is only the
+      server's fault when every precondition for it held, so a withheld frame
+      following a failed check is now reported as that failure. `WITHHELD` is
+      unchanged when all checks pass, which is the missing-`/ready`-ack bug it
+      was added to catch — both directions are covered.
+
+      **Server fix found on the way.** The live failure was not a server bug, but
+      the adjacent window was: `advance(phaseCountdown, phaseDone)` runs before
+      `finishMatch` clears `c.match`, and an ack landing in that window was
+      answered `200 {}` — claiming a countdown for a match that will never run
+      one. Now `409 ready gate closed`. Checked to fail against the old handler.
+
 - [x] **Deploy identity on `/health`** — the live suite now proves *which* build
       it tested. `/health` reports `build {sha, modified, source}`; `t1` asserts
       it against the local HEAD and fails with a fix hint on absent, unknown,

@@ -384,3 +384,76 @@ func TestEndpointValidation(t *testing.T) {
 		t.Fatalf("move after match: want 400, got %d", code)
 	}
 }
+
+// TestReadyAckOnAbandonedMatchIsRejected covers the window the live t5 failure
+// did NOT turn out to be, and which is worth closing anyway.
+//
+// finishMatch nils c.match, so by the time a client acks a match that has
+// properly finished, handleReady already answers 400 "no active match" — correct,
+// and covered by the requeue tests. The narrow gap is the window between
+// advance(phaseCountdown, phaseDone) and finishMatch running: the phase is done
+// but c.match is still set. An ack in that window used to be answered 200, which
+// claims the countdown is coming for a match that will never run one.
+func TestReadyAckOnAbandonedMatchIsRejected(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+
+	st, id := connectSSE(t, srv, "")
+	defer st.close()
+
+	if code, _ := postJSON(t, srv.URL+"/cpu", map[string]any{"id": id}); code != 200 {
+		t.Fatalf("/cpu status: %d", code)
+	}
+	st.readEventTyp(t, "matched", 5*time.Second)
+
+	// Drive the match to done but keep c.match set, which is exactly the window:
+	// the phase advances before the teardown clears the pointer. h.client takes
+	// h.mu itself, so it has to be called before the lock is held, not inside it.
+	c := h.client(id)
+	h.mu.Lock()
+	m := c.match
+	h.mu.Unlock()
+	if m == nil {
+		t.Fatal("no match attached to the client after matched")
+	}
+	m.advance(phaseCountdown, phaseDone)
+
+	code, body := postJSON(t, srv.URL+"/ready", map[string]any{"id": id})
+	if code != http.StatusConflict {
+		t.Fatalf("/ready on an abandoned match = %d, want 409, not a 200 promising a countdown that cannot come (body %v)", code, body)
+	}
+	// The client renders this inline, so the message has to say something.
+	if msg, _ := body["error"].(string); msg == "" {
+		t.Errorf("/ready 409 body = %v, want a non-empty error message", body)
+	}
+}
+
+// TestReadyAckWhileGateOpenStaysAccepted is the guard against over-correcting the
+// check above into a regression. The gate is open for the whole countdown phase,
+// not just the instant before the first ack, so a re-sent ack — which a
+// reconnecting client does — must still be accepted while the match is live.
+func TestReadyAckWhileGateOpenStaysAccepted(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+
+	st, id := connectSSE(t, srv, "")
+	defer st.close()
+
+	if code, _ := postJSON(t, srv.URL+"/cpu", map[string]any{"id": id}); code != 200 {
+		t.Fatalf("/cpu status: %d", code)
+	}
+	st.readEventTyp(t, "matched", 5*time.Second)
+
+	// First ack opens the gate.
+	if code, body := postJSON(t, srv.URL+"/ready", map[string]any{"id": id}); code != 200 {
+		t.Fatalf("/ready while the gate is open = %d, want 200 (body %v)", code, body)
+	}
+	// Second ack is idempotent, and the match is still mid-countdown: accepting
+	// it is what stops a reconnecting client from wedging itself.
+	if code, body := postJSON(t, srv.URL+"/ready", map[string]any{"id": id}); code != 200 {
+		t.Errorf("/ready re-sent mid-countdown = %d, want 200 (body %v)", code, body)
+	}
+	readCountdown(t, st, 5*time.Second)
+}

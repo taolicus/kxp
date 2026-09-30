@@ -65,7 +65,7 @@ const run = (test) => new Promise((resolve) => {
     const verdict = /RESULT: (PASS|FAIL)/.exec(out)?.[1]
       ?? (/INCONCLUSIVE/.test(out) ? 'INCONCLUSIVE' : 'FAIL');
     const reason = /INCONCLUSIVE \(([^)]*)\)/.exec(out)?.[1] ?? '';
-    resolve({ ...test, verdict, reason, secs: ((Date.now() - started) / 1000).toFixed(1) });
+    resolve({ ...test, verdict, reason, secs: ((Date.now() - started) / 1000).toFixed(1), out });
   });
 });
 
@@ -86,8 +86,20 @@ const skipped = results.filter((r) => r.verdict === 'INCONCLUSIVE');
 const passed = results.filter((r) => r.verdict === 'PASS');
 
 console.log(`\n  ${passed.length} passed, ${failed.length} failed, ${skipped.length} inconclusive (link)`);
+
+// The evidence for a failure is the child's own output, and it only exists
+// because stdout was piped. Discarding it on the failure path is how a real
+// defect becomes an unactionable "FAIL means the server misbehaved" with
+// nothing to act on: the failing check name is the whole point, and it is gone
+// by the time the summary prints. Anything that did not pass gets its output
+// shown, in full, rather than a pointer to output nobody kept.
+for (const r of [...failed, ...skipped]) {
+  console.log(`\n${'─'.repeat(64)}\n${r.verdict}  ${r.name} · ${r.label}  (${r.secs}s)\n${'─'.repeat(64)}`);
+  console.log(r.out.trimEnd() || '  (the script produced no output — it likely died before reporting)');
+}
+
 if (failed.length) {
-  console.log(`  FAIL means the server misbehaved — go and read that output.`);
+  console.log(`  FAIL means the server misbehaved — the failing script's own output is printed above.`);
   console.log(`  INCONCLUSIVE means the link dropped — re-run when you have signal.`);
   process.exit(1);
 }

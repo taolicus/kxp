@@ -726,6 +726,22 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "no active match")
 		return
 	}
+	// The readiness gate is only open while the match is still in the countdown
+	// phase, which is where start() puts it and where waitReady() blocks. Once
+	// the gate has closed — readyTimeout fired, or a side left — the match has
+	// advanced to done and no countdown will ever follow.
+	//
+	// Acking such a match must not answer 200. The client acks from the end of
+	// its `matched` handler and then waits for the countdown, so a 200 is read
+	// as "the countdown is coming". On a slow link the ack itself can outlast
+	// the 8s gate, and answering 200 there tells a waiting client to sit still
+	// for a frame that can never arrive — the silent-stuck shape in
+	// docs/issues.md 1, reached by telling the client it succeeded. 409 says the
+	// gate is gone, which the client can act on.
+	if p := m.phase.Load(); p != phaseCountdown {
+		h.handlerError(w, http.StatusConflict, "ready gate closed")
+		return
+	}
 	if i := m.indexOfMoves(c.moves); i >= 0 {
 		m.ackReady(i)
 	}

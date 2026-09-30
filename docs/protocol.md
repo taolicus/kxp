@@ -104,7 +104,7 @@ server-side (see the roadmap).
 | --- | --- | --- |
 | `POST /queue` | `{id}` | `200 {}` — joins the online queue (idempotent). |
 | `POST /cancel` | `{id}` | `200 {}` — leaves the queue (best effort). |
-| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none. Gates CPU and PvP alike. Idempotent. |
+| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has already left the countdown phase and will send no countdown. Gates CPU and PvP alike. Idempotent while the match is live, so a re-sent ack from a reconnecting client is still accepted — but a `200` is never returned for a match that will not run a countdown, since a client reads it as "hold still, it is coming". |
 | `POST /cpu` | `{id}` | `200 {}` — starts a CPU match (also drains/leaves the queue). The match still waits for the client's `/ready` ack before its countdown. |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
