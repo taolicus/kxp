@@ -176,9 +176,13 @@ Tasks B/C exist as parked drafts, not scheduled work (see the roadmap and
 - `countdown`, `shoot`, `matched`, `result`, and `waiting` all gain a `ts`
   field (server epoch-ms at construction), making delivery lag vs clock skew
   measurable at the client for the first time.
-- Server plumbing: `shootAt` moved from a plain `time.Time` to an `atomic.Int64`
-  (UnixNano) so snapshots can read it during countdown without racing the run
-  goroutine; `handleMove` judges lateness against the announced `deadline()`.
+- Server plumbing: `shootAt` moved from a plain `time.Time` to an
+  `atomic.Pointer[time.Time]` so snapshots can read it during countdown without
+  racing the run goroutine; it is held as a `time.Time` so it retains a
+  monotonic reading for the server's own arrival-timing and deadline maths,
+  while the wire value is derived from that instant via `UnixMilli` (epoch-ms
+  above is unchanged). `handleMove` judges lateness against the announced
+  `deadline()`.
 
 ### v1.2 — stream sequence numbers + replay (parked — see issues.md)
 

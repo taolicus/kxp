@@ -506,7 +506,7 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 			out["opponentName"] = m.opponentName(i)
 			out["opponentCharacter"] = m.opponentCharacter(i)
 		}
-		if (out["phase"] == "shoot" || out["phase"] == "countdown") && m.shootAt.Load() != 0 {
+		if (out["phase"] == "shoot" || out["phase"] == "countdown") && m.hasShootAt() {
 			out["windowMs"] = shootWindow.Milliseconds()
 			out["shootAt"] = m.shootAtMs()
 		}

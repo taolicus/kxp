@@ -24,9 +24,15 @@ clobber a newer phase. The engine never prints debug state (no
 The server fixes the round deadline when the countdown begins: it stores
 `shootAt = now + 2·countStep` and the run loop sleeps to the announced slots
 (first `countdown` frame at S−2s, `CHI` at S−1s, then `shoot` at S). `shootAt`
-is an `atomic.Int64` (UnixNano) because reconnect snapshots read it during the
-countdown. Reaction time is `arrival.Sub(shootAt)` where `arrival` is
-`time.Now()` captured at POST receipt. Picks outside the shoot window (its
+is an `atomic.Pointer[time.Time]` because reconnect snapshots read it during the
+countdown. It is held as a `time.Time` rather than epoch-ns so it keeps its
+**monotonic reading**: every judgement below compares it against a `time.Now()`
+that has one, and `Sub` silently drops to wall-clock arithmetic when either
+operand lacks it, which would mis-time the round by the size of any mid-round
+clock step (NTP resync, network change). The wire value is derived from the same
+instant via `UnixMilli`. Reaction time is `arrival.Sub(shootAt)`, where
+`arrival` is `time.Now()` captured at POST receipt. Picks outside the shoot window
+(its
 length is server-controlled — see the `windowMs` field in the `countdown`/
 `shoot` frames) are rejected with `400`; failing to pick within it is a timeout
 loss. `handleMove` judges lateness against the announced deadline and its

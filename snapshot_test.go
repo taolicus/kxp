@@ -43,7 +43,7 @@ func TestSnapshotCarriesShootWindow(t *testing.T) {
 	m := &match{id: "sn3"}
 	c.match = m
 	m.phase.Store(phaseShoot)
-	m.shootAt.Store(time.Now().UnixNano())
+	m.setShootAt(time.Now())
 
 	s := h.snapshot(c)
 	if s["phase"] != "shoot" {
@@ -63,7 +63,7 @@ func TestSnapshotCarriesCountdownPlan(t *testing.T) {
 	m := &match{id: "snc1"}
 	c.match = m
 	m.phase.Store(phaseCountdown)
-	m.shootAt.Store(time.Now().Add(2 * time.Second).UnixNano())
+	m.setShootAt(time.Now().Add(2 * time.Second))
 
 	s := h.snapshot(c)
 	if s["phase"] != "countdown" {

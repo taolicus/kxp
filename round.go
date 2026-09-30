@@ -102,7 +102,18 @@ type match struct {
 	sides   [2]matchParty
 	botMove chan moveMsg
 	phase   atomic.Int32
-	shootAt atomic.Int64 // announced PUN deadline (epoch ns); fixed at countdown start
+	// shootAt is the announced PUN deadline, fixed at countdown start. It is
+	// held as a time.Time rather than epoch-ns so it carries a monotonic
+	// reading alongside the wall clock, because three separate judgements are
+	// made against it within a round: arrival timing in resolve, the KA/CHI/PUN
+	// sleeps in run, and the too-late cutoff in handleMove. Each compares it
+	// against a time.Now() that *does* carry a monotonic reading, and
+	// time.Time.Sub silently falls back to wall arithmetic when either operand
+	// lacks one — so a wall-only deadline makes all three wrong by exactly the
+	// size of any clock step in the interval. A phone that changes network or
+	// resyncs NTP steps the wall clock mid-round; the wire value is derived from
+	// the same instant (see shootAtMs), so the protocol is unaffected.
+	shootAt atomic.Pointer[time.Time]
 	moves   [2]*moveMsg
 	ready   atomic.Int32 // bitmask: bit i set once side i acked readiness
 	readyCh chan struct{}
@@ -119,12 +130,28 @@ func newMatch(id string) *match {
 	return &match{id: id, readyCh: make(chan struct{})}
 }
 
-// shootAtTime is the announced PUN deadline as a time.Time.
-func (m *match) shootAtTime() time.Time { return time.Unix(0, m.shootAt.Load()) }
+// setShootAt fixes the announced PUN deadline. The caller must pass a value
+// derived from time.Now() so the monotonic reading is retained; storing a
+// reconstructed wall time here (time.Unix, a parsed frame, a zero Time) would
+// reintroduce the wall-clock dependence this exists to remove.
+func (m *match) setShootAt(at time.Time) { m.shootAt.Store(&at) }
 
-// shootAtMs is the announced PUN deadline in server epoch-ms, as carried in
-// outbound frames.
-func (m *match) shootAtMs() int64 { return time.Unix(0, m.shootAt.Load()).UnixMilli() }
+// shootAtTime is the announced PUN deadline, or the zero time if the round
+// schedule has not been announced yet.
+func (m *match) shootAtTime() time.Time {
+	if p := m.shootAt.Load(); p != nil {
+		return *p
+	}
+	return time.Time{}
+}
+
+// hasShootAt reports whether the round schedule has been announced.
+func (m *match) hasShootAt() bool { return m.shootAt.Load() != nil }
+
+// shootAtMs is the announced deadline in server epoch-ms, as carried in
+// outbound frames. Wall clock deliberately: the client reconciles it against its
+// own clock and its skew estimate, so the wire value must stay a wall instant.
+func (m *match) shootAtMs() int64 { return m.shootAtTime().UnixMilli() }
 
 // deadline is when the PUN window closes, server-authoritative.
 func (m *match) deadline() time.Time { return m.shootAtTime().Add(shootWindow) }
@@ -259,7 +286,7 @@ func (m *match) run() {
 	// announced slots. The client plays the countdown against a deadline it
 	// already knows, so a stalled or dropped `shoot` frame can no longer cost
 	// the round; the shoot frame stays authoritative for the window.
-	m.shootAt.Store(time.Now().Add(2 * countStep).UnixNano())
+	m.setShootAt(time.Now().Add(2 * countStep))
 
 	if m.left() {
 		m.abort()
