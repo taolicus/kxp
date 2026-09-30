@@ -180,6 +180,9 @@ func TestCPUIntegration(t *testing.T) {
 	}
 
 	st.readEventTyp(t, "matched", 5*time.Second)
+	if code, _ := postJSON(t, srv.URL+"/ready", map[string]any{"id": id}); code != 200 {
+		t.Fatalf("/ready status: %d", code)
+	}
 	readCountdown(t, st, 5*time.Second)
 
 	if code, _ := postJSON(t, srv.URL+"/move", map[string]any{"id": id, "move": "rock"}); code != 200 {
@@ -350,6 +353,9 @@ func TestEndpointValidation(t *testing.T) {
 		t.Fatal("/cpu rejected")
 	}
 	st.readEventTyp(t, "matched", 5*time.Second)
+	if code, _ := postJSON(t, srv.URL+"/ready", map[string]any{"id": id}); code != 200 {
+		t.Fatalf("/ready status: %d", code)
+	}
 	if code, _ := postJSON(t, srv.URL+"/move", map[string]any{"id": id, "move": "rock"}); code != 400 {
 		t.Fatalf("move during countdown: want 400, got %d", code)
 	}

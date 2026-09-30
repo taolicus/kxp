@@ -180,10 +180,39 @@ Note: the unchecked items below are postponed to keep feature work moving
       re-sent every 2s while matched); a stale `matched` reaching a client on
       the result screen routes to a healthy "match found" state. Non-acking
       pairs are cancelled and the survivor(s) re-queued. CPU matches skip the
-      handshake. A `shootAt` field in the `shoot` event plus the client's
-      clock-skew estimate let the player act for the true remaining server
-      window whenever any is left (only a fully closed window shows "Waiting
-      for result…").
+      handshake. *(Amended: the gate now covers CPU matches too — see
+      "CPU ready gate" below.)* A `shootAt` field in the `shoot` event plus the
+      client's clock-skew estimate let the player act for the true remaining
+      server window whenever any is left (only a fully closed window shows
+      "Waiting for result…").
+- [x] **CPU ready gate** — the ready handshake now gates CPU matches, not
+      just PvP. The gate is a bitmask over the non-bot sides, so a CPU match
+      waits on its one human and `ackReady` ignores a bot bit outright. The
+      original rationale ("CPU matches have one human who just clicked, so
+      they start immediately") was the gap: the one match with no sync barrier
+      was the one that started instantly.
+
+      Considered and **rejected**: inserting a fixed `Ready?` 2s step ahead of
+      KA. It does not buy sync — the client does all of its setup in one shot
+      when the first `countdown` arrives (`planRound` → arm `punTimer`), which
+      is microseconds, so there is nothing incremental to give a slow client
+      more time for. It does cost something real: it widens the pre-PUN phase
+      from ~3.2s to ~5.2s, and that phase is precisely the window in which a
+      drop loses the round outright (see issues.md entry 5). Buying a
+      hypothetical benefit with a certain 67% increase in drop exposure. The
+      handshake gives the same buffer *verified* rather than hoped-for, and
+      self-timed — a slow client waits as long as it needs, a fast one pays
+      nothing.
+
+      New failure mode, accepted: a CPU match whose human never acks is now
+      cancelled and re-queued after 8s, where before it could not happen. The
+      2s ack re-post plus the `pending` snapshot flag (which routes a
+      reconnecting client back through `matched` and re-arms its acks) cover
+      the realistic cases.
+
+      Verified: `go test ./...` and 38/38 client unit tests green. `-race` is
+      **not runnable on this platform** (android/arm64 under Termux), so the
+      `ackReady` CAS/close path is hand-checked, not race-checked.
 - [ ] **Latency compensation — parked (see issues.md)** — one-way delivery
       latency can flatten an on-time reaction into a `400 too late` for
       high-latency players (win/loss stays arrival-time-authoritative; see

@@ -61,12 +61,12 @@ streak-breaking loss.
 ## Matchmaking
 
 A single global FIFO queue pairs players under the hub mutex. Anonymous
-clients receive server-issued random IDs on first SSE connection. A two-player
-(PvP) match runs a ready handshake between "matched" and the countdown: neither
-countdown may start until both clients have `POST`ed `/ready` (re-sent every 2s
-while matched). If a pair never acks — timeout or disconnect — the pending
-match is cancelled and the survivor(s) re-queued. CPU matches skip the
-handshake entirely.
+clients receive server-issued random IDs on first SSE connection. Every match
+runs a ready handshake between "matched" and the countdown: no countdown may
+start until every human side has `POST`ed `/ready` (re-sent every 2s while
+matched). The gate is a bitmask over the non-bot sides, so a CPU match waits on
+its one human and a PvP match waits on both. If a match never acks — timeout or
+disconnect — the pending match is cancelled and the survivor(s) re-queued.
 
 ## SSE lifecycle
 

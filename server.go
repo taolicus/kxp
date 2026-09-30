@@ -510,7 +510,7 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 			out["windowMs"] = shootWindow.Milliseconds()
 			out["shootAt"] = m.shootAtMs()
 		}
-		if out["phase"] == "countdown" && m.needsReady() && !m.bothReady() {
+		if out["phase"] == "countdown" && !m.allHumanReady() {
 			out["pending"] = true
 		}
 	} else if c.queueing {

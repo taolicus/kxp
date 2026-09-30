@@ -147,6 +147,7 @@ func TestShootEventCarriesWindow(t *testing.T) {
 	m.start()
 
 	waitForEvent(t, a, "matched")
+	m.ackReady(0)
 	d := waitForEvent(t, a, "shoot")
 	want := float64(shootWindow.Milliseconds())
 	if got := d["windowMs"]; got != want {
@@ -164,6 +165,7 @@ func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
 	a := newClient()
 	m := h.makeMatch("pl1", side{client: a}, side{bot: true, character: "rayito"})
 	m.start()
+	m.ackReady(0)
 
 	d := waitForEvent(t, a, "countdown")
 	shootAt, ok := d["shootAt"].(float64)
@@ -204,6 +206,7 @@ func TestCPURound(t *testing.T) {
 	a := newClient()
 	m := h.makeMatch("m4", side{client: a}, side{bot: true})
 	m.start()
+	m.ackReady(0)
 
 	waitForEvent(t, a, "shoot")
 	a.moves <- moveMsg{move: MovePaper, arrive: time.Now()}

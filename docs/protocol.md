@@ -29,15 +29,22 @@ idle → countdown → shoot → done
 `shoot` is the **PUN!** instant: the server records `shootAt` and opens a 2s
 window. Any pick is judged by arrival time relative to `shootAt`.
 
-A human-vs-human (PvP) match additionally runs a **ready handshake** between
-"matched" and the countdown: neither countdown may start until both clients
-have `POST /ready`. Clients re-send readiness every 2s while matched (self
-healing on a lost ack). If a pair never acks — 8s timeout or a disconnect —
-the pending match is cancelled and the survivor(s) go back to the queue. CPU
-matches skip the handshake entirely and start instantly.
+Every match runs a **ready handshake** between "matched" and the countdown: no
+countdown may start until every *human* side has `POST`ed `/ready`. Clients
+re-send readiness every 2s while matched (self healing on a lost ack), and a
+client that reconnects mid-handshake is re-admitted by the `pending` snapshot
+flag, which sends it back through `matched` and so re-arms its acks. If a match
+never acks — 8s timeout or a disconnect — the pending match is cancelled and the
+survivor(s) go back to the queue.
+
+The handshake is a **self-timing buffer, not a fixed sleep**: the client acks
+from the end of its `matched` handler, so the countdown cannot begin until it
+has finished setting the round up. A slow client waits as long as it needs (up
+to the 8s timeout) and a fast one pays nothing. A CPU match gates on its single
+human exactly this way; the bot is not a participant and is never waited for.
 
 Match duration: `matched` → `KA` (+1s) → `CHI` (+1s) → `shoot` (2s window) →
-`result`. PvP adds handshake time on top.
+`result`. Handshake time precedes the countdown and is client-dependent.
 
 ## Server-sent events
 
@@ -51,7 +58,7 @@ snapshot.
 | `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`countdown`/`shoot`/`done`) and opponent fields only when `ingame`; `shootAt`+`windowMs` only when `phase=shoot` (epoch-ms); `pending=true` only while a PvP handshake is still open. Used to reconcile on reconnect. |
 | `online` | `{count}` | Number of other clients currently connected. |
 | `waiting` | `{}` | Entered the queue. |
-| `matched` | `{opponentName, opponentCharacter}` | Opponent found; PvP clients should start `POST /ready`. |
+| `matched` | `{opponentName, opponentCharacter}` | Opponent found; every client should start `POST /ready`. |
 | `countdown` | `{n}` | `n` is `KA` or `CHI`. |
 | `shoot` | `{windowMs, shootAt}` | **PUN!** Window opens. `windowMs` is authoritative (2000); `shootAt` is server clock epoch-ms. |
 | `lock` | (none — client timer) | Client closes its own input after `windowMs - elapsed` of the window remains reachable. |
@@ -97,8 +104,8 @@ server-side (see the roadmap).
 | --- | --- | --- |
 | `POST /queue` | `{id}` | `200 {}` — joins the online queue (idempotent). |
 | `POST /cancel` | `{id}` | `200 {}` — leaves the queue (best effort). |
-| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current PvP match; `400 no active match` if none. Ignored for CPU matches. |
-| `POST /cpu` | `{id}` | `200 {}` — starts an instant CPU match (also drains/leaves the queue). |
+| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none. Gates CPU and PvP alike. Idempotent. |
+| `POST /cpu` | `{id}` | `200 {}` — starts a CPU match (also drains/leaves the queue). The match still waits for the client's `/ready` ack before its countdown. |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
 | `GET /characters` | — | `200 [{id, name, emoji}]` — the full roster; the single source of truth for character data. The client fetches it at startup and no longer bundles its own copy. |

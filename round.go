@@ -11,8 +11,9 @@ const (
 	shootWindow = 2 * time.Second
 )
 
-// readyTimeout bounds how long a matched pair may take to both advertise that
-// they are ready to receive the countdown. A package var so tests can shrink it.
+// readyTimeout bounds how long a match may wait for every human side to
+// advertise that it is ready to receive the countdown. A package var so tests
+// can shrink it.
 var readyTimeout = 8 * time.Second
 
 const (
@@ -132,10 +133,26 @@ func (m *match) deadline() time.Time { return m.shootAtTime().Add(shootWindow) }
 // it to separate delivery lag from clock skew.
 func tsNow() int64 { return time.Now().UnixMilli() }
 
+// humanMask is the set of sides that must ack readiness: every non-bot. A CPU
+// match has one human, so its mask is 0b01 rather than the PVP 0b11.
+func (m *match) humanMask() int32 {
+	var mask int32
+	for i := range m.sides {
+		if !m.sides[i].bot {
+			mask |= 1 << i
+		}
+	}
+	return mask
+}
+
 // ackReady marks side i as ready to receive the countdown. Idempotent; closes
-// readyCh once every human side has acked.
+// readyCh once every human side has acked. A bot side is ignored: it has no
+// client to be told anything, so it can never be a participant in the gate.
 func (m *match) ackReady(i int) {
-	const both = int32(3)
+	if m.sides[i].bot {
+		return
+	}
+	mask := m.humanMask()
 	for {
 		cur := m.ready.Load()
 		if cur&(1<<i) != 0 {
@@ -144,29 +161,29 @@ func (m *match) ackReady(i int) {
 		if !m.ready.CompareAndSwap(cur, cur|(1<<i)) {
 			continue
 		}
-		if cur|(1<<i) == both {
+		if (cur|(1<<i))&mask == mask {
 			close(m.readyCh)
 		}
 		return
 	}
 }
 
-// needsReady reports whether this match waits for a ready handshake. Only
-// two-player (PVP) matches gate on readiness; CPU matches have one human who
-// just clicked, so they start immediately.
-func (m *match) needsReady() bool {
-	return !m.sides[0].bot && !m.sides[1].bot
+// allHumanReady reports whether every human side has acked readiness. An
+// all-bot match has an empty mask and is trivially ready.
+func (m *match) allHumanReady() bool {
+	mask := m.humanMask()
+	return m.ready.Load()&mask == mask
 }
 
-// bothReady reports whether every side has acked readiness.
-func (m *match) bothReady() bool {
-	return m.ready.Load() == 3
-}
-
-// waitReady blocks until the countdown may begin. Returns false when the
-// pending match should be abandoned (timeout / disconnect).
+// waitReady blocks until the countdown may begin. Every match gates on it, CPU
+// included: the client acks from the end of its `matched` handler, so the
+// countdown cannot begin until it has actually finished setting the match up.
+// That is a self-timing buffer rather than a fixed sleep, so a slow client
+// waits as long as it needs (up to readyTimeout) and a fast one pays nothing.
+// Returns false when the pending match should be abandoned (timeout /
+// disconnect).
 func (m *match) waitReady() bool {
-	if !m.needsReady() || m.bothReady() {
+	if m.allHumanReady() {
 		return true
 	}
 	timer := time.NewTimer(readyTimeout)
@@ -186,7 +203,8 @@ func (m *match) waitReady() bool {
 	}
 }
 
-// readyTimeout cancels a match whose pair never acked and re-queues them.
+// readyTimeout cancels a match whose human sides never acked and re-queues
+// them; in a CPU match only the human is re-queued.
 func (m *match) readyTimeout() {
 	m.advance(phaseCountdown, phaseDone)
 	m.requeueSide(0)
