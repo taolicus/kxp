@@ -126,16 +126,20 @@ server-side (see the roadmap).
 
 | endpoint | body | responses |
 | --- | --- | --- |
-| `POST /queue` | `{id}` | `200 {}` — joins the online queue (idempotent). |
+| `POST /queue` | `{id}` | `200 {}` — joins the online queue (idempotent). `409 already in a match` while the client holds a live match. |
 | `POST /cancel` | `{id}` | `200 {}` — leaves the queue (best effort). |
 | `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has already left the countdown phase and will send no countdown. Gates CPU and PvP alike. Idempotent while the match is live, so a re-sent ack from a reconnecting client is still accepted — but a `200` is never returned for a match that will not run a countdown, since a client reads it as "hold still, it is coming". |
-| `POST /cpu` | `{id}` | `200 {}` — starts a CPU match (also drains/leaves the queue). The match still waits for the client's `/ready` ack before its countdown. |
+| `POST /cpu` | `{id}` | `200 {}` — starts a CPU match (also drains/leaves the queue). The match still waits for the client's `/ready` ack before its countdown. `409 already in a match` while the client holds a live match. |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
 | `GET /characters` | — | `200 [{id, name, emoji}]` — the full roster; the single source of truth for character data. The client fetches it at startup and no longer bundles its own copy. |
 | `GET /health` | — | `200 {status, uptime, online, queue, activeMatches, build}` — liveness/readiness probe. Exempt from rate limiting. `build` is `{sha, modified, source}`: the commit the running binary was built from, whether that build tree had uncommitted changes, and how the identity was obtained (`vcs`, `ldflags`, or `unknown`). `sha` is `"unknown"` when the binary carries no VCS metadata. The probe suite's `t1` compares it against the local HEAD — without it, a green live result cannot be distinguished from a stale binary serving traffic. |
 | `GET /metrics` | — | `200 {uptime, online, queue, matches, counts}` where `counts` carries cumulative request/reject/join/leave/drop/rate-limit/beacon streams plus breakdowns `byStatus`, `byCode`, `byMsg`, `byBeaconKind`. Read-only; exempt from rate limiting. |
 | `POST /report` | `{id, kind, state, detail?, ts?}` | `200 {}` — fire-and-forget client-side error beacon (SSE stall, fetch failure, machine-rejected transition). Unknown/stale `id` accepted and logged — a beacon from a reaped client is itself diagnostic data. `kind` required (`400 missing kind`); rate-limited like other POSTs; the client throttles (see `beaconGate` in `web/kxp.js`). |
+
+### One live match per client
+
+`/cpu` and `/queue` both return `409 already in a match` while the client holds a live match. The invariant has to be enforced at the handler, because nothing downstream can repair the damage otherwise: a retried or double-tapped start request would overwrite the client's match pointer and orphan the first match, and both match loops would then drive the same event stream. The client would see two `matched` and two `countdown` frames for one round, its single pick would be routed to whichever match the pointer names, and the orphan would resolve with no human move — reporting `result: loss` with `yourNote: "timeout"` for a round the player never played. The stale-teardown guard in `finishMatch` cannot clean that up either: it deliberately suppresses the teardown frame for any side that has already been re-pointed at a newer match, so the phantom round is never retracted. The browser also disables its start button for the duration of the request, so a double-tap on Fight does not ask for a second match in the first place.
 
 ## Client state machine
 

@@ -695,6 +695,14 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
+	// Same invariant as handleCPU: one client, at most one live match. Without
+	// this a client mid-round could be dropped into the queue and paired into a
+	// concurrent match, with the same interleaved-stream result.
+	if c.match != nil {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusConflict, "already in a match")
+		return
+	}
 	if len(h.queue) >= maxQueue {
 		h.mu.Unlock()
 		h.handlerError(w, http.StatusServiceUnavailable, "queue full")
@@ -785,6 +793,24 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
+	// A client that already holds a live match must not be given a second one.
+	// Both requests are idempotent-ish from the browser's side but not from the
+	// server's: a double-tap on Fight posts /cpu twice in the same tick, and the
+	// second makeMatch would overwrite c.match, orphaning the first match. Both
+	// loops then drive the same event stream, so the client sees two `matched`
+	// and two `countdown` frames for one round; its single pick is routed to
+	// whichever match c.match points at, and the orphan resolves with no human
+	// move and reports `result: loss` with yourNote "timeout" — a loss the
+	// player never made, delivered as a normal result they cannot explain.
+	// finishMatch cannot clean this up either: its stale-teardown guard only
+	// tells a side still in *that* match to go idle, so the orphan's teardown is
+	// suppressed and the client keeps a phantom round on screen. Reject instead,
+	// so one client is in at most one match.
+	if c.match != nil {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusConflict, "already in a match")
+		return
+	}
 	if h.active.Load() >= maxMatches {
 		h.mu.Unlock()
 		h.handlerError(w, http.StatusServiceUnavailable, "too many active matches")

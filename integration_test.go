@@ -457,3 +457,51 @@ func TestReadyAckWhileGateOpenStaysAccepted(t *testing.T) {
 	}
 	readCountdown(t, st, 5*time.Second)
 }
+
+// A double-tap on Fight posts /cpu twice in one tick. The second request must be
+// refused, not served: two live matches on one client interleave `matched` and
+// `countdown` frames, the player's single pick is routed to whichever match
+// c.match points at, and the orphan resolves with no human move — delivering
+// `result: loss` / yourNote "timeout" for a round the player never played.
+// finishMatch cannot clean that up (its stale-teardown guard suppresses the
+// orphan's frame), so the server has to refuse the second match up front.
+func TestSecondMatchRefusedForLiveClient(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+
+	st, id := connectSSE(t, srv, "")
+	defer st.close()
+
+	if code, _ := postJSON(t, srv.URL+"/cpu", map[string]any{"id": id}); code != 200 {
+		t.Fatalf("first /cpu status: %d", code)
+	}
+	st.readEventTyp(t, "matched", 5*time.Second)
+
+	for _, path := range []string{"/cpu", "/queue"} {
+		code, body := postJSON(t, srv.URL+path, map[string]any{"id": id})
+		if code != http.StatusConflict {
+			t.Fatalf("%s while in a match: status %d, want 409 (body %v)", path, code, body)
+		}
+		if body["error"] != "already in a match" {
+			t.Fatalf("%s error: %q", path, body["error"])
+		}
+	}
+
+	// The guard must not wedge the client: once the match tears down, c.match is
+	// cleared and a fresh match is allowed.
+	if code, _ := postJSON(t, srv.URL+"/ready", map[string]any{"id": id}); code != 200 {
+		t.Fatal("/ready status")
+	}
+	readCountdown(t, st, 5*time.Second)
+	if code, _ := postJSON(t, srv.URL+"/move", map[string]any{"id": id, "move": "rock"}); code != 200 {
+		t.Fatal("/move rejected the on-time pick")
+	}
+	st.readEventTyp(t, "result", 8*time.Second)
+	st.readEventTyp(t, "state", 5*time.Second)
+
+	if code, body := postJSON(t, srv.URL+"/cpu", map[string]any{"id": id}); code != 200 {
+		t.Fatalf("/cpu after teardown: status %d (body %v), want 200", code, body)
+	}
+	st.readEventTyp(t, "matched", 5*time.Second)
+}

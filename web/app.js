@@ -176,6 +176,7 @@ function renderFighters() {
 function openChoose(mode) {
   pendingMode = mode;
   $('#btn-start').textContent = mode === 'online' ? 'Search for Opponent' : 'Fight!';
+  $('#btn-start').disabled = false;
   if (CHARACTERS.length && !localStorage.getItem('kxp-character')) {
     saveCharacter(CHARACTERS[0].id);
   }
@@ -543,12 +544,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-online').addEventListener('click', () => openChoose('online'));
   $('#btn-cpu').addEventListener('click', () => openChoose('cpu'));
   $('#btn-start').addEventListener('click', () => {
-    if (pendingMode === 'online') {
-      transition('queue');
-      post('/queue');
-    } else {
-      post('/cpu');
-    }
+    // Re-entry guard, mirroring #btn-again. Without it a double-tap fires two
+    // /cpu posts in one tick; the server now rejects the second with 409, but
+    // the guard is what keeps a tap-tap on a phone from asking for a match the
+    // player already has. Re-armed on failure so a rejected tap is not a dead
+    // button, and pendingMode is consumed so a later failure cannot restore a
+    // mode the player has already left.
+    const btn = $('#btn-start');
+    if (btn.disabled) return;
+    const mode = pendingMode;
+    pendingMode = '';
+    btn.disabled = true;
+    if (mode === 'online') transition('queue');
+    const p = post(mode === 'online' ? '/queue' : '/cpu');
+    Promise.resolve(p).then((res) => {
+      if (res && res.ok) return;
+      btn.disabled = false;
+      pendingMode = mode;
+      if (res && res.status === 409) setNotice('You are already in a match.');
+    });
   });
   $('#btn-back').addEventListener('click', () => show('lobby'));
   $('#btn-cancel').addEventListener('click', () => {
