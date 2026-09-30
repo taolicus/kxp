@@ -238,28 +238,39 @@ Note: the unchecked items below are postponed to keep feature work moving
       Phase 4 anti-cheat). Cause **unconfirmed** — parked in
       [docs/issues.md](issues.md), entry 3; ships only after the connectivity
       diagnostics slice (item 5) measures real pings.
-- [ ] **Stale `state` teardown after a handshake re-pair** — when a PvP ready
+- [x] **Stale `state` teardown after a handshake re-pair** — when a PvP ready
       handshake is abandoned, `readyTimeout`/`readyAbandon` re-queue both sides
       and `m.requeue` calls `tryMatch`, which can re-pair the survivor into a
       *new* match before the abandoned match's `m.finish` → `finishMatch` runs.
-      `finishMatch` then sends `state {state:"idle"}` to every side of the old
+      `finishMatch` then sent `state {state:"idle"}` to every side of the old
       match **unconditionally**, without re-checking `client.match == m` the way
       it does for the match teardown itself (`server.go:637-642`). The survivor
-      can therefore observe `matched` (new match) *then* `state` (stale
+      could therefore observe `matched` (new match) *then* `state` (stale
       teardown), in either order depending on goroutine interleaving — the two
       frames are emitted within the same millisecond.
       Client impact: the browser reads that trailing `state` as a `stateIdle`
       edge out of `matched` and drops to the lobby while the server still holds
       it in a live match (see the `matched` row in
-      [docs/protocol.md](protocol.md)). Self-healing — the next handshake
-      timeout re-pairs and re-sends `matched` — so it is a view inconsistency
-      rather than a wedge, and it needs no recovery work. **Cause narrowed, fix
-      not decided**: the fix is presumably to send the teardown frame only to
-      sides still on that match, or to make the frame match-scoped.
-      *Observed via the protocol probe suite's `t8` scenario B, roughly 1 run
-      in 7 (order-dependent, so a clean pass is not proof it is gone). Not
-      filed in [docs/issues.md](issues.md): that register holds symptoms whose
-      cause is unconfirmed, and this one's mechanism is traced.*
+      [docs/protocol.md](protocol.md)).
+
+      **Fixed.** The teardown frame is now per-side and conditional: only a side
+      still in *this* match is told to go idle, decided under `h.mu` because
+      `Client.match` is plain state and an unlocked read would be a data race
+      (and `-race` cannot run on the arm64 dev device). `drainMoves` stays
+      unconditional — that channel is the client's own, and a re-paired client
+      must not open its new round on the old round's buffered pick.
+
+      Three unit tests in `finish_test.go` drive the pointer states directly,
+      because the live race is order-dependent and a clean probe run is not proof
+      of absence: a re-paired side gets no frame, an already-removed side
+      (`match == nil`) gets no frame, and the normal path still tells **both**
+      sides to go idle — that last one is the guard against over-correcting into
+      stranding every finished client. The first and third fail against the
+      unfixed server and pass against the fixed one.
+      *Previously observed via the protocol probe suite's `t8` scenario B,
+      roughly 1 run in 7 (order-dependent); `t8` still asserts it as a live
+      canary. Not filed in [docs/issues.md](issues.md): that register holds
+      symptoms whose cause is unconfirmed, and this one's mechanism was traced.*
 
 ## Phase 2 — Testing & observability
 

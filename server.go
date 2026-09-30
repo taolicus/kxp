@@ -627,16 +627,32 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 	h.active.Add(-1)
 	m.advance(phaseShoot, phaseDone)
 	m.advance(phaseCountdown, phaseDone)
+	// A side can be re-paired into a *new* match before this teardown runs: an
+	// abandoned handshake re-queues both sides, and requeue -> tryMatch ->
+	// makeMatch overwrites their match pointer. Telling such a side to go idle
+	// would drop the client out of a match it is already playing — the browser
+	// reads the frame as a stateIdle edge out of matched and returns to the
+	// lobby while the server still holds it in the round. So the teardown frame
+	// is per-side and conditional: only a side still in *this* match is told to
+	// go idle. Decided under the lock, because c.match is plain state and an
+	// unlocked read here would be a data race.
+	var teardown [2]bool
 	h.mu.Lock()
-	for _, s := range sides {
+	for i, s := range sides {
 		if s.client != nil && s.client.match == m {
 			s.client.match = nil
+			teardown[i] = true
 		}
 	}
 	h.mu.Unlock()
-	for _, s := range sides {
-		if s.client != nil {
-			s.client.drainMoves()
+	for i, s := range sides {
+		if s.client == nil {
+			continue
+		}
+		// Unconditional: the move channel is this client's own, and a re-paired
+		// client must not start its new round on its old round's buffered pick.
+		s.client.drainMoves()
+		if teardown[i] {
 			s.client.sendEv(evt("state", map[string]any{"state": "idle"}))
 		}
 	}
