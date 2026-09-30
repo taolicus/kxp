@@ -231,6 +231,56 @@ Note: the unchecked items below are postponed to keep feature work moving
       says whether that is the server's doing or the train's. Reporting the
       first as the second is how a contract break hides behind a flaky link.
 
+- [ ] **Tell the player *why* a handshake was cancelled** — an expired readiness
+      gate is currently invisible. The client acks with a fire-and-forget
+      `post('/ready')` (`web/app.js`) that discards its error, and the requeue
+      arrives as a bare `state idle`, so a player whose link was too slow sees
+      "match found" and then silently lands back in the queue with no reason.
+      The server is the only party that knows the ack never arrived, so the
+      signal belongs there: a reason on the teardown frame (`state idle` with
+      `reason: "handshake timeout"`) lets the client say "connection too slow —
+      try again", which is actionable where the current silence is not. A purely
+      client-side fallback is possible and cheaper (no protocol change: we were
+      in the handshake, no ack ever succeeded, we got bounced) but it cannot
+      explain the PvP case, where one slow side cancels the match for *both*
+      players and the fast one also deserves to know why the round vanished.
+
+      Not scoped, and deliberately: this must not read as blame. The server
+      cannot attribute the timeout to a player — it observes an ack that did not
+      arrive, which is equally consistent with a slow upload, a stalled
+      connection, or a device that went to sleep. So the copy states the cause it
+      can actually prove (the connection was not ready in time) and never which
+      player was at fault. Decide the wording before the wire change, and keep
+      it out of the match's *result* — this is a cancelled match, not a loss,
+      and it must not be recorded as one.
+
+- [ ] **Measure whether 8s is the right readiness budget** — the gate's value is
+      unmeasured in both directions, and the current evidence pulls both ways.
+      Against it: the `GATE` verdict had to be built at all, which means the
+      gate is being hit often enough on one mobile link to distort a whole probe
+      run. For it: that is one link and one workload, and the client normally
+      acks within milliseconds of the `matched` handler, so a GATE verdict
+      measures the train, not the budget. Neither the number nor its
+      distribution is known, so nothing can be justified on the present
+      evidence.
+
+      Needs two measurements, not a guess: the server-side distribution of
+      time-from-`matched`-sent to ack-received, and the client-side round-trip of
+      the ack POST itself, over real play rather than a local loopback. Note the
+      dependency: the ack round-trip is exactly what the parked `/ping` rework
+      (v1.3, "C. `/ping` health probe") is meant to measure properly, and issues.md
+      entry 4 is already waiting on it, so this may be cheapest to answer after
+      that lands.
+
+      Weigh the result against a cost already documented above, not against an
+      ideal: raising the budget widens the pre-PUN phase, and that phase is
+      precisely the window in which a drop loses the round outright (issues.md
+      entry 5). The same argument that rejected the fixed 2s `Ready?` step
+      applies here with more force — a larger 8s does not make the gate wrong,
+      but it makes every handshake longer and every drop in it more costly. If
+      the data says 8s is too tight, the cheaper fix is likely to be a
+      longer/better `matched` payload or a lighter ack, not a longer timer.
+
 
 - [ ] **Latency compensation — parked (see issues.md)** — one-way delivery
       latency can flatten an on-time reaction into a `400 too late` for
@@ -447,9 +497,11 @@ Make the system testable and debuggable in production.
       reconnect + reconciliation, the full rejection-code matrix, and
       self-paired PvP including the abandoned-handshake case.
       The design constraint that matters: verdicts are split into PASS / FAIL /
-      INCONCLUSIVE (link dropped, or self-rate-limited), because the suite is
+      INCONCLUSIVE, and an inconclusive verdict always names its reason — link
+      dropped, self-rate-limited, or a readiness gate that expired because the
+      link was too slow to deliver a `/ready` ack in time — because the suite is
       run over unreliable links and a suite that cannot tell a transport fault
-      from a server defect trains you to ignore it — `tall` exits 1 on a real
+      from a server defect trains you to ignore it. `tall` exits 1 on a real
       failure and 2 on an inconclusive one.
       *Not a replacement for `npm run e2e`: rendering, CSS and in-browser
       console errors remain Playwright-only. Client state machine and server
@@ -459,7 +511,8 @@ Make the system testable and debuggable in production.
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
-      available. Node unit tests run under `node --test web/*.test.cjs`.
+      available. Node unit tests run under
+      `node --test web/*.test.cjs tools/lib/*.test.mjs`.
       Playwright e2e (`npm run e2e` with a required `BASE_URL`) runs wherever
       Chromium exists; add it to CI on such a host.
 

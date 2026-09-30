@@ -99,6 +99,12 @@ function stopReadyLoop() {
 // server waits for both sides before the round begins, so a slow network can
 // never drop us straight into an expired window. Re-posts while matched so a
 // lost ack on a flaky link self-heals.
+//
+// The gate is a buffer, not a guarantee, and the cost is a lost round: if the
+// link is too slow to deliver an ack within the server's 8s, it cancels the
+// pending match and sends `state idle`, which drops us back to the lobby with no
+// reason shown. That is the designed behaviour, but it is invisible to the
+// player — worth knowing before treating "matched then bounced" as a mystery.
 function readyLoop() {
   post('/ready');
   clearInterval(readyTimer);

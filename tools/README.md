@@ -85,13 +85,21 @@ Three outcomes, and the difference matters:
 
 - **PASS** — the server behaved.
 - **FAIL** — the server misbehaved. Go read that script's output.
-- **INCONCLUSIVE (link dropped / rate limited)** — *not* a server verdict. The
-  transport failed or this suite out-ran its own rate-limit budget. Re-run when
-  the signal is better.
+- **INCONCLUSIVE** — *not* a server verdict, and the reason is named:
+  - *(link dropped)* — the transport failed.
+  - *(rate limited)* — this suite out-ran its own rate-limit budget.
+  - *(ready gate expired — ack slower than the link allowed)* — the server
+    waited its 8s for a `/ready` ack that the link was too slow to deliver, then
+    did the designed thing and requeued the client. Re-run when the signal is
+    better; `tall` calls these out separately, because a round really was lost.
 
 That separation is the whole design. On a moving train most failures are the
 network, and a suite that cannot tell the difference trains you to ignore it.
-`tall` exits `1` on a real failure and `2` when something was inconclusive.
+`WITHHELD` is a FAIL and means specifically that a frame went missing on a
+stream that was healthy and fully acknowledged — a contract break. A missing
+frame that follows some other failed check is reported as that failure instead,
+so a lost round is not also filed as a protocol bug. `tall` exits `1` on a real
+failure and `2` when something was inconclusive.
 
 ## Running order that makes sense
 
