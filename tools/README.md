@@ -20,11 +20,31 @@ The split is clean:
 - **`npm run unit` / `npm run go`** cover the client state machine and the
   server internals offline, with no network at all.
 
+## Proving you tested what you think you tested
+
+This suite talks to a **deployed** origin, so it can only report on whatever
+binary is currently answering. `t1` therefore checks that `/health`'s
+`build.sha` matches `git rev-parse HEAD` in this checkout, and fails with a fix
+hint if it does not — including when the field is missing entirely, which is
+what a binary predating the check looks like.
+
+Nothing is required to make this work: Go stamps the commit into any binary built
+inside a git work tree, so `go build -o kxp .` is enough. A build from outside a
+work tree has no such metadata and will report `sha: "unknown"`; label it
+deliberately with:
+
+```sh
+go build -ldflags "-X main.buildSHA=$(git rev-parse HEAD)" -o kxp .
+```
+
+`build.modified` is reported separately from `sha`, so a binary built from a
+dirty tree is caught even when the commit matches.
+
 ## Commands
 
 | command | what it does | real matches |
 | --- | --- | --- |
-| `npm run t1` | link characterization: latency, drops, cold start | no |
+| `npm run t1` | link characterization: latency, drops, cold start; **asserts production serves the local HEAD** | no |
 | `npm run t2` | `GET /health`, `/characters`, `/metrics` shapes | no |
 | `npm run t3` | every roster fighter through `POST /character` | no |
 | `npm run t4` | SSE frames, id handshake, clock skew | no |

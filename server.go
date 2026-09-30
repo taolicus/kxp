@@ -778,6 +778,10 @@ func (h *Hub) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"online":        online,
 		"queue":         queue,
 		"activeMatches": h.active.Load(),
+		// Which commit is actually running. The probe suite is pointed at a
+		// deployed origin, so without this a green result cannot be
+		// distinguished from a stale binary still serving traffic.
+		"build": identifyBuild(),
 	})
 }
 
