@@ -16,12 +16,21 @@
 //   QUICK=1 npm run tall            # skip the tests that create real matches
 
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { resolveBase } from './lib/base.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const BASE = (process.env.BASE_URL || 'https://redacted.invalid').replace(/\/+$/, '');
+
+// Resolved here rather than imported from the harness, so a missing origin is a
+// clean one-line message instead of a stack trace out of a module-level throw.
+let BASE;
+try {
+  BASE = resolveBase();
+} catch (err) {
+  console.error(`\n${err.message}\n`);
+  process.exit(3);
+}
 
 const ALL = [
   { script: 't1-reach.mjs', name: 't1', label: 'link characterization', matches: false, why: 'measures the path, not the app' },

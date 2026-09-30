@@ -36,7 +36,28 @@ The split is clean:
 | `npm run tall -- t5 t6` | only the named ones | 3 |
 | `QUICK=1 npm run tall` | skip everything that creates a match | 0 |
 
-`BASE_URL` overrides the default origin (`https://redacted.invalid`).
+## Setting the origin
+
+The suite needs the deployed origin and ships **no default** — it is the address
+of a public, unauthenticated server, and committing it would hand every clone a
+ready-made target list. Same reasoning as the Playwright config's required
+`BASE_URL` (playwright.config.cjs:17-26).
+
+Set it once, outside the repo:
+
+```
+echo 'https://your-host' > tools/.base-url     # gitignored
+```
+
+or per-command:
+
+```
+BASE_URL=https://your-host npm run tall
+```
+
+`tools/.base-url` is consulted only when `BASE_URL` is unset, so the env var
+still works as the quick override. It must be a full `http(s)` origin; anything
+else is rejected up front rather than failing eight probes separately.
 
 ## Reading the verdict
 

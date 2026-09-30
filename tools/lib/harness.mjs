@@ -16,9 +16,12 @@
 //    network. Every script prints its latencies.
 //
 // Nothing here is Playwright-dependent and nothing boots the app locally: these
-// talk to the deployed origin only. BASE_URL overrides the default.
+// talk to the deployed origin only, and the origin is required rather than
+// defaulted (see lib/base.mjs for why it is not committed).
 
-export const BASE = (process.env.BASE_URL || 'https://redacted.invalid').replace(/\/+$/, '');
+import { resolveBase } from './base.mjs';
+
+export const BASE = resolveBase();
 
 // Bounds are sized for a bad link, not for a datacenter. The server's own
 // timing is matched+1s+1s+2s (see docs/protocol.md) and the client arms a 6s

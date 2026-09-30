@@ -3,3 +3,7 @@ web/img/sources/
 node_modules/
 test-results/
 playwright-report/
+
+# The deployed origin the probe suite targets. Required, never committed: it is
+# the address of a public unauthenticated server (see tools/lib/base.mjs).
+tools/.base-url
