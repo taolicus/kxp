@@ -1,0 +1,213 @@
+# AGENTS.md — how to work in this repo
+
+KACHIPUN TOURNAMENT (`kxp`): a single-binary Go RPS game with an embedded web
+UI, SSE push, and POST actions. Server-authoritative rules; the browser renders.
+
+**The house rule: one small slice at a time, and each slice leaves the tree
+green.** A slice is one concern — one fix, one field, one probe, one doc
+paragraph — that can be read, reviewed, tested, deployed, and reverted on its
+own. Anything larger gets split before it gets written. Every slice in this
+repo's history is one commit that a reader can hold in their head.
+
+Read these before you touch anything:
+
+| doc | what it tells you |
+| --- | --- |
+| [docs/environment.md](docs/environment.md) | the dev host (Android/Termux), toolchain, and the four things it cannot verify |
+| [docs/architecture.md](docs/architecture.md) | engine, timing model, matchmaking, SSE lifecycle |
+| [docs/protocol.md](docs/protocol.md) | the wire contract: events, endpoints, client state table, clock handling |
+| [docs/roadmap.md](docs/roadmap.md) | scheduled work by phase, and what has landed |
+| [docs/issues.md](docs/issues.md) | symptoms whose cause is **unconfirmed** — described, not scheduled |
+| [docs/review.md](docs/review.md) | the standing review checklist (56 items) |
+
+## The loop
+
+```sh
+# 1. read the relevant docs + the code they name, end to end, before editing
+# 2. make the smallest change that fully fixes one thing
+# 3. add the test that pins it (see "Test first" below)
+# 4. verify (below), 5. document (below), 6. commit, 7. push
+```
+
+Steps 3–5 belong to the same commit as the code. Docs are not a follow-up
+commit; a documented-later change is a change nobody can verify.
+
+### Pick the slice size
+
+Ask: *could this commit be reverted without stranding the repo?* If reverting
+leaves a feature half-wired, a test asserting behaviour that no longer exists,
+or docs describing code that is gone — the slice is too big. Split it. This is
+why the connectivity work landed as a series of single-trace commits
+(`5694980`, `7eec97c`, `a50628d`, `02047ff`, …) rather than one observability
+rewrite: each one produces evidence, and each is independently deployable.
+
+Do **not** park a half-finished refactor in the tree. Roadmap items exist for
+structural work that is deliberately unscheduled ("One owner for match
+termination") — write the reasoning there, leave the code alone.
+
+### Test first, and prove the test bites
+
+- Add or extend a test **in the same commit** as the change. A behaviour change
+  with no test is not finished.
+- **Check the new test fails against the pre-change code** before you believe
+  it. This repo does this and says so in the commit body ("Verified to fail
+  against the old handler", "checked to *fail* against the old wall-only form,
+  so it cannot silently rot"). A test that passes both before and after pins
+  nothing.
+- Also pin the **negative direction** when you fix a bug, so an over-correction
+  is caught: `finish_test.go` asserts both "the re-paired side gets no frame"
+  and "the normal path still tells both sides to go idle".
+- Deterministic tests only. No sleeps to sequence goroutines, no reliance on
+  wall-clock luck. Inject the clock or drive the state pointers directly — that
+  is how order-dependent races are tested here, since `-race` cannot run on this
+  host (below).
+- When a test cannot be written (the bug is a clock step, a rare interleave),
+  pin the **structural property** instead and say in the comment which live
+  signal remains the canary (`monotonic_test.go`, `t5`).
+
+### Verify
+
+```sh
+gofmt -l .          # must print nothing
+go vet ./...
+go test ./...       # ~60s on this host; batch Go edits, don't re-run per edit
+npm run unit        # web/*.test.cjs + tools/lib/*.test.mjs
+npm run tall        # probes t1–t8 — requires an origin (see below), creates real matches
+npm run e2e         # Playwright — NOT on this host; needs Chromium + BASE_URL
+```
+
+`npm run unit` is the catch-all for client and harness tests (the README's
+shorter `node --test web/kxp.test.cjs web/machine.test.cjs` misses
+`web/app.countdown.test.cjs`).
+
+**This host cannot verify** — state these limits in the commit body and in any
+report, rather than implying coverage that does not exist:
+
+1. **Race detector** — `go test -race` refuses: `race is not supported on
+   android/arm64`. Not configurable. Concurrency changes are hand-checked and
+   argued in a comment.
+2. **Rendering / CSS / console errors** — Playwright-only.
+3. **Deployment** — a local build is not the deployed binary, and "it works
+   here" is never evidence a change is live. `GET /health` reports `build.sha`;
+   probe `t1` asserts it against local `HEAD` and fails loudly on a stale build.
+   That negative case is the point — a green probe run against a stale binary
+   reads as verification and is not.
+4. **Real radio behaviour** — ready-gate budget, PUN-window latency, drop
+   frequency. Unmeasurable here; `docs/issues.md` stays honest because of it.
+
+**Probing the deployed server** (never a local boot for the integration gate):
+
+```sh
+echo 'https://your-host' > tools/.base-url   # gitignored, required, never committed
+BASE_URL=https://your-host npm run tall
+npm run tall -- t5 t6                       # subset
+QUICK=1 npm run tall                        # creates no matches
+```
+
+`npm run t1` first, always: it measures the link, so every later number can be
+read against it. Verdicts are PASS / FAIL / **INCONCLUSIVE**, and an
+inconclusive verdict always names its reason — a suite that cannot tell a
+transport fault from a server defect trains you to ignore it. Do not "fix" an
+INCONCLUSIVE into a FAIL.
+
+### Document in the right place
+
+- **Wire format / events / state table** → [docs/protocol.md](docs/protocol.md).
+- **Internals, invariants, mechanisms** → [docs/architecture.md](docs/architecture.md).
+- **Work that is scheduled, or work that just landed** → [docs/roadmap.md](docs/roadmap.md), with the reasoning, including what you considered and rejected.
+- **A symptom whose cause you cannot confirm** → [docs/issues.md](docs/issues.md): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
+- **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
+- **Host capability claims** → [docs/environment.md](docs/environment.md), re-measured rather than assumed.
+
+Write the *why*, not the *what* — the diff already says what. If a decision had
+a rejected alternative that a future reader would otherwise re-litigate (the
+fixed 2s `Ready?` step; swapping `state` for a `cancelled` event), record it
+where the decision lives.
+
+**One home per work item.** A roadmap item is recorded in full in exactly one
+phase entry, with exactly one status. "Current priorities" is a table of
+contents pointing at those entries, not a second copy — and the README does not
+track status at all, it points at the roadmap and at `issues.md`. The reason is
+not tidiness: when the same slice was tracked in three places, they disagreed
+about whether the bounded SSE connection lifetime had landed, and the copy a
+reader hit first was the stale one. To land something, tick the checkbox in its
+phase; never restate a status somewhere else.
+
+## Invariants to know before you edit
+
+These are load-bearing. Breaking one is a bug even if the tests pass.
+
+- **The server judges; the browser renders.** No rule may be enforced from
+  client-supplied timestamps or UI state. Displayed reaction times are
+  cosmetic (network-neutral, client click times); win/loss is arrival-time
+  authoritative.
+- **Keep the monotonic reading.** The round deadline is a `time.Time` that
+  carries `m=+`, never epoch-ns. `Sub` silently falls back to wall arithmetic
+  when either operand lacks one, so a mid-round clock step mis-times the round.
+- **Wire changes are additive.** A tab open across a deploy must survive: add
+  fields to an existing event rather than introducing a new event type, which
+  an older client drops silently. If a new type is genuinely needed, say why
+  the deploy can guarantee refresh — it currently cannot (ops lives outside
+  this repo).
+- **All game rules server-side; `GET /events` is exempt from rate limiting**;
+  POST endpoints are per-IP token-bucketed; existing clients are never evicted
+  by the resource caps.
+- **The engine (`round.go`) does not know about HTTP.** Sides are neutral
+  `matchParty`; the hub wires callbacks to real clients. Don't leak `Hub`,
+  `Client`, or SSE into the engine.
+- **Phase changes go through `advance(from, to)`** — the edge table plus CAS is
+  what stops a stale goroutine clobbering a newer phase.
+- **Reading `Client.match` needs `h.mu`.** It is plain state; an unlocked read
+  is a race, and `-race` will not catch it for you here.
+- **Protocol probes verify frames on the wire, not client behaviour.** A bug in
+  `app.js` re-arming a timer is invisible to both `go test` and `t1`–`t8`; that
+  gap is why `web/app.countdown.test.cjs` runs the real `app.js` source against
+  a stubbed context. Add a client-behaviour test when you touch client logic.
+
+## Commit and push
+
+One slice = one commit = one push. Push each slice as soon as it is green;
+never accumulate a stack of slices to push at the end, and never mix an
+unrelated change into a slice already in flight.
+
+**Message format** (the repo's convention, used throughout history):
+
+```
+Area: imperative one-line summary
+
+What changed and why, in prose. The mechanism if a bug was involved. What you
+considered and rejected, if it stops a future reader re-litigating it. How it
+was verified — including the negative cases (which test fails against the old
+code) and, explicitly, what could NOT be verified on this host.
+```
+
+Areas in use: `Fix`, `Protocol`, `Testing`, `Observability`, `Probes`, `E2e`,
+`Docs`, `Client`, `Countdown`, `Characters`/`Roster`, `Game screen`. Bodies are
+real prose — a message whose body only restates the diff is a missed chance.
+
+Before each commit and push:
+
+```sh
+git status                     # only intended files staged; no secrets, no origin
+git diff --cached
+git log --oneline -10          # match the area/summary style
+```
+
+- Never commit: the `kxp` binary, `node_modules/`, `web/img/sources/`,
+  `tools/.base-url` (the address of a public unauthenticated server),
+  `test-results/`, `playwright-report/`. All already gitignored — keep it that
+  way.
+- The repo carries **no deployment tooling**: the live server is kept current by
+  an ops script outside the repo (`git pull` + build + `systemctl restart`). Do
+  not add deploy scripts, systemd units, or infra config here.
+- Do not force-push `main`, rewrite published history, or skip hooks.
+- Only commit when asked. If asked to commit, commit the slice you just
+  verified — not whatever else the tree picked up.
+
+## Reporting back
+
+Say what you verified, how, and what remains unverified on this host (the four
+limits above). Quote the actual counts (`go test ./...` ok, `npm run unit` 69/69)
+rather than "tests pass". If you parked or deferred something, say where you
+recorded it and why — a deferred decision with no written reasoning comes back
+as an argument three commits later.
