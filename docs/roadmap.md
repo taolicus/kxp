@@ -548,6 +548,48 @@ Build on a stable foundation without rewriting the core.
 - [x] **Pure game engine** — `round.go`'s `match` no longer touches `Hub`,
       `Client`, or SSE; sides are neutral `matchParty` and the hub wires
       `finish`/`requeue` callbacks back to real clients.
+- [ ] **One owner for match termination** — the engine ends the match; the hub
+      only wires. Today `match.run()` advances the phase and records
+      `abandon`/`requeued`, then `Hub.finishMatch` decides *per side* whether to
+      emit a teardown frame by re-checking `s.match == m` under `h.mu`. That
+      re-check exists only because the two lifecycles overlap (a re-pair can
+      install a newer match before the old one's `finish` runs), and it is what
+      the stale-teardown bug class reduces to. Making the engine the single
+      writer — it produces the termination description (per-side `requeued`,
+      `abandonReason`, terminal frames) and the hub just applies it to concrete
+      clients — collapses two sources of truth into one and retires the
+      conditional-teardown branch.
+
+      Shape: `run()` hands its `finish` callback a single termination record
+      describing the match instance, so the hub no longer needs to re-derive
+      which frames are still valid. `drainMoves()` stays unconditional and in
+      the hub — that one is the client's own channel, not the engine's view.
+
+      **Not urgent and deliberately not scheduled.** The current path is
+      correct and pinned by `finish_test.go`; this is a structural refactor of
+      the finish seam, and the Phase 3 work that actually pays off — series mode
+      (below) — has to add per-round termination *on top of* whatever shape this
+      takes. Do it in that order, not before, or it is paid for twice.
+- [ ] **Dedicated cancellation event instead of additive `state idle` fields** —
+      `state {state:"idle", reason?, requeued?}` overloads one frame with two
+      meanings: "a match finished" and "this handshake was cancelled". The
+      client then has to derive intent from payload and carry a special edge
+      (`matched + waiting`, taken only when `requeued` is true) that exists
+      purely because of that overload. A dedicated `cancelled {reason,
+      requeued}` event would let `state` mean one thing and let the client table
+      say it directly.
+
+      **The additive fields were the right call, though** — see the Phase 1
+      entry "Tell the player *why* a handshake was cancelled": a pre-existing
+      client ignores unknown fields and behaves exactly as before, whereas an
+      unknown *event type* is dropped silently and would strand a tab open
+      across the deploy on the game screen. So this only becomes worth doing if
+      the deploy can guarantee clients refresh, which is currently outside this
+      repo (an ops script, `git pull` + build + restart). Park it as a
+      post-rework cleanup, and fold in the version handshake it would need: a
+      `clientVersion` field on `connected` would let the server emit per-vintage
+      frames and would also give the parked seq/replay work a place to hang
+      compatibility.
 - [ ] **Game-mode architecture** — series-aware `run()`/`resolve()`: a match
       becomes a sequence of rounds, first to 3 decisive wins, draws replayed; a
       round that resolves `void` (no valid move, see item 6) counts as a round

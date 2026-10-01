@@ -49,6 +49,8 @@ two players share. See [architecture](docs/architecture.md) for the internals.
 
 - [architecture.md](docs/architecture.md) — engine, timing model, matchmaking,
   SSE lifecycle, testing.
+- [environment.md](docs/environment.md) — the primary development environment
+  (Android/Termux host), what it can and cannot verify, and the working loop.
 - [protocol.md](docs/protocol.md) — the full wire format: events, endpoints,
   the client state table, and clock handling.
 - [backgrounds.md](docs/backgrounds.md) — match background asset pipeline.
