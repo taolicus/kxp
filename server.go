@@ -915,19 +915,26 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
-	// The phase/deadline check below is best-effort and races the run loop:
-	// the deadline may fire between this check and the buffered send, or the
-	// match may resolve. Either way the accepted move is never silently
-	// corrupted: drainPending counts anything buffered before the deadline
-	// fired, and a move that lands after the run loop captured its snapshot is
-	// just drained at finishMatch (it can only lose a round that had already
-	// effectively closed).
+	// The clock is sampled once, here, and that single reading is both the
+	// late-bound check below and the arrival stamp on the move. Sampling it
+	// twice is what let a pick submitted in the final sliver of the window pass
+	// the check and then be stamped past the deadline, where drainPending counts
+	// it as an on-time tap. resolve judges both ends of the window against the
+	// stamp, so this check is the fast path rather than the only guard.
+	//
+	// The phase/deadline check still races the run loop: the deadline may fire
+	// between it and the buffered send, or the match may resolve. Either way the
+	// accepted move is never silently corrupted: drainPending counts anything
+	// buffered before the deadline fired, and a move that lands after the run
+	// loop captured its snapshot is just drained at finishMatch (it can only
+	// lose a round that had already effectively closed).
 	m := c.match
 	h.mu.Unlock()
 	if m == nil {
 		h.handlerError(w, http.StatusBadRequest, "no active match")
 		return
 	}
+	now := time.Now()
 	switch phase := m.phase.Load(); phase {
 	case phaseCountdown:
 		h.handlerError(w, http.StatusBadRequest, "too early")
@@ -936,12 +943,12 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "match over")
 		return
 	case phaseShoot:
-		if time.Now().After(m.deadline()) {
+		if now.After(m.deadline()) {
 			h.handlerError(w, http.StatusBadRequest, "too late")
 			return
 		}
 	}
-	msg := moveMsg{move: move, arrive: time.Now()}
+	msg := moveMsg{move: move, arrive: now}
 	if req.SawPunAt > 0 && req.ClickedAt > 0 {
 		msg.sawPunAt = req.SawPunAt
 		msg.clickedAt = req.ClickedAt

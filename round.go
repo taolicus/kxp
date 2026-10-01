@@ -574,10 +574,26 @@ func (m *match) resolve() {
 		}
 		ps[i].move = msg.move
 		ps[i].timing = msg.arrive.Sub(m.shootAtTime())
-		ps[i].valid = ps[i].timing >= 0
 		ps[i].clientMs = clientReactionMs(msg)
-		if !ps[i].valid {
+		// Both ends of the announced window are authoritative, not just the near
+		// one: a pick counts only if it landed inside [shootAt, deadline].
+		// handleMove's late check is explicitly best-effort — it reads the clock
+		// before stamping the arrival — so a pick submitted in the final sliver of
+		// the window can pass that check and be stamped past the deadline, where
+		// drainPending counts it as an on-time tap. Judging `>= shootAt` alone let
+		// such a pick win a round on a move the server would have rejected with
+		// `400 too late` a moment later.
+		//
+		// `late` is deliberately not `timeout`: connectivity-safe scoring keys a
+		// no-contest on `timeout`, and a late pick is a deliberate act — like an
+		// early one — that stays a full loss rather than becoming a draw.
+		switch {
+		case msg.arrive.Before(m.shootAtTime()):
 			ps[i].note = "early"
+		case msg.arrive.After(m.deadline()):
+			ps[i].note = "late"
+		default:
+			ps[i].valid = true
 		}
 	}
 

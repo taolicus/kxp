@@ -125,6 +125,7 @@
       const oppMs = d.opponentClientMs != null ? d.opponentClientMs : d.opponentTimingMs;
       if (d.yourNote === 'timeout') lines.push('Timed out \u2014 no pick.');
       else if (d.yourNote === 'early') lines.push(`Disqualified \u2014 ${-d.youTimingMs}ms early.`);
+      else if (d.yourNote === 'late') lines.push('Too late \u2014 the pick window had closed.');
       else {
         const youAlias = d.you ? aliases[d.you] : '\u2014';
         const youMs = d.youClientMs != null ? d.youClientMs : d.youTimingMs;

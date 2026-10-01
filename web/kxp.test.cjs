@@ -248,6 +248,16 @@ test('resultLines: disqualification from an early pick', () => {
   assert.equal(KXP.resultLines(d)[0], 'Disqualified \u2014 120ms early.');
 });
 
+test('resultLines: a pick that landed after the window is not reported as a normal pick', () => {
+  // The server sends no timing for an invalid pick, so the else branch would
+  // render this as an ordinary scored pick with no reaction time at all --
+  // claiming a move counted when the round disqualified it.
+  const d = { yourNote: 'late', you: 'rock', opponent: 'scissors' };
+  const lines = KXP.resultLines(d);
+  assert.equal(lines[0], 'Too late \u2014 the pick window had closed.');
+  assert.ok(lines[1].startsWith('Them:'));
+});
+
 test('resultLines: normal pick prefers client-side reaction timestamps', () => {
   const d = {
     you: 'paper', youClientMs: 210, youTimingMs: 480,

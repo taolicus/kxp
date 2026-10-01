@@ -40,7 +40,7 @@ func TestResolveTimingBoundaries(t *testing.T) {
 		{name: "just-after-pun", aOff: time.Millisecond, bOff: time.Millisecond, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(1), bMs: ms(1)},
 		{name: "just-before-pun", aOff: -time.Millisecond, bOff: 0, aOutcome: "loss", bOutcome: "win", aNote: "early", bNote: "", aMs: nil, bMs: ms(0)},
 		{name: "at-deadline", aOff: shootWindow, bOff: shootWindow, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(shootWindow.Milliseconds()), bMs: ms(shootWindow.Milliseconds())},
-		{name: "after-deadline", aOff: shootWindow + time.Millisecond, bOff: shootWindow, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(shootWindow.Milliseconds() + 1), bMs: ms(shootWindow.Milliseconds())},
+		{name: "after-deadline", aOff: shootWindow + time.Millisecond, bOff: shootWindow, aOutcome: "loss", bOutcome: "win", aNote: "late", bNote: "", aMs: nil, bMs: ms(shootWindow.Milliseconds())},
 		{name: "mid-window", aOff: 50 * time.Millisecond, bOff: 50 * time.Millisecond, aOutcome: "win", bOutcome: "loss", aNote: "", bNote: "", aMs: ms(50), bMs: ms(50)},
 	}
 
@@ -91,6 +91,67 @@ func TestResolveEarlyNeverTimesOut(t *testing.T) {
 	}
 	if ra["youTimingMs"] != nil {
 		t.Errorf("a timing = %v, want nil for early pick", ra["youTimingMs"])
+	}
+}
+
+// TestResolveLatePickCannotWinTheRound is the far end of the window. resolve
+// used to judge only `arrive >= shootAt` and leave the far end to handleMove,
+// whose late check reads the clock and then stamps `arrive` from a second read
+// a few lines later -- so a pick submitted in the final sliver of the window
+// could pass that check, be stamped past the deadline, and be counted by
+// drainPending as an on-time tap. The round then resolved on it.
+//
+// Rock beats scissors, so this is the shape that matters: before the fix the
+// late pick *won* the round, and it now loses. Checked to fail against the
+// one-sided check. The matching "at-deadline" case above pins the boundary from
+// the other side, so this cannot be satisfied by simply rejecting everything
+// past the window.
+func TestResolveLatePickCannotWinTheRound(t *testing.T) {
+	ra, rb := resolveTimed(t, shootWindow+40*time.Millisecond, 500*time.Millisecond)
+
+	if got := ra["outcome"]; got != "loss" {
+		t.Errorf("a outcome = %v, want loss (a pick past the window cannot win)", got)
+	}
+	if got := ra["yourNote"]; got != "late" {
+		t.Errorf("a note = %v, want late", got)
+	}
+	if ra["youTimingMs"] != nil {
+		t.Errorf("a timing = %v, want nil for a disqualified pick", ra["youTimingMs"])
+	}
+	if got := rb["outcome"]; got != "win" {
+		t.Errorf("b outcome = %v, want win", got)
+	}
+	if got := rb["opponentNote"]; got != "late" {
+		t.Errorf("b sees a opponentNote = %v, want late", got)
+	}
+}
+
+// TestResolveLateIsNotATimeout keeps `late` a separate note from `timeout`.
+// Connectivity-safe scoring (planned) scores a no-move `timeout` as a
+// no-contest rather than a loss, and keeps `early` out of that rule because an
+// early pick is a deliberate act. A late pick is the same kind of act, so
+// reporting it as `timeout` would quietly turn it into a draw-scored no-contest
+// once that work lands. Passes against the old code too -- it pins the contract
+// choice, not the original defect.
+func TestResolveLateIsNotATimeout(t *testing.T) {
+	a, b := newClient(), newClient()
+	m := newPartiedMatch(a, b)
+	a.match, b.match = m, m
+	shootAt := time.Now()
+	m.setShootAt(shootAt)
+	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(shootWindow + 10*time.Millisecond)}
+	// b makes no pick at all, so the round has one valid move and one absent
+	// side -- the case the planned void rule keys on.
+	m.resolve()
+
+	ra := waitForEvent(t, a, "result")
+	rb := waitForEvent(t, b, "result")
+
+	if got := ra["yourNote"]; got == "timeout" {
+		t.Error("a late pick reported note=timeout, which connectivity-safe scoring would score as a no-contest")
+	}
+	if got := rb["yourNote"]; got != "timeout" {
+		t.Errorf("a genuine no-pick note = %v, want timeout", got)
 	}
 }
 

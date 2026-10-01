@@ -97,7 +97,7 @@ snapshot.
 | --- | --- |
 | `you`, `opponent` | Moves: `rock`, `paper`, `scissors` (absent on timeout). |
 | `outcome` | `win`, `loss`, `draw`; `void` for a no-valid-move timeout (see "Connectivity-safe scoring" below). |
-| `yourNote`, `opponentNote` | `early`, `timeout`, or `""`. |
+| `yourNote`, `opponentNote` | `early`, `late`, `timeout`, or `""`. |
 | `youTimingMs`, `opponentTimingMs` | Server-side arrival relative to `shootAt` (nil when not valid / timeout). |
 | `youClientMs`, `opponentClientMs` | Client-reported reaction (`clickedAt − sawPunAt`) when present and sane; displayed in preference to the network-inflated `*TimingMs`. |
 | `youCharacter`, `opponentCharacter` | Characters chosen for each side. |
@@ -110,8 +110,11 @@ A round that resolves with a valid move on only one side scores `void` for the
 no-move side when its note is `timeout`: it never counts as a loss against
 that side's record (no win, no streak break) and the UI reports "No contest",
 while the opponent still takes the round win. An *early* pick is a deliberate
-act and stays a full `loss`. If neither side produces a valid move the round
-is a `draw`. `yourNote`/`opponentNote` keep reporting `timeout`/`early`
+act and stays a full `loss`, and so does a `late` pick — one whose arrival fell
+after the window closed, which is reported with note `late` and is deliberately
+*not* folded into `timeout`, so it can never be scored as a no-contest. If
+neither side produces a valid move the round
+is a `draw`. `yourNote`/`opponentNote` keep reporting `timeout`/`early`/`late`
 unchanged.
 
 Decided and scheduled: the engine emits `void` on timeouts, the client
