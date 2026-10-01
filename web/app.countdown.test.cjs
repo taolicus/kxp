@@ -8,7 +8,7 @@
 // app.js re-arms its timer.
 //
 // So this loads the actual app.js source into a stubbed browser context and
-// watches #count. No Playwright needed: the countdown only touches setCount,
+// watches #count. The countdown only touches setCount,
 // timers and Date.now, all of which are stubbed below.
 
 const test = require('node:test');

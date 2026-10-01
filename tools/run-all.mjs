@@ -1,8 +1,7 @@
 // run-all — the whole suite, serially, with one summary.
 //
 // Serially and without aborting: the tests share a real server and a real rate
-// limiter, and a CPU match wants a quiet server (the Playwright config says the
-// same thing about workers, playwright.config.cjs:31). One failing script must
+// limiter, and a CPU match wants a quiet server. One failing script must
 // not hide the state of the rest — on a train the first thing you want to know
 // is which parts still work.
 //

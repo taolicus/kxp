@@ -1,24 +1,23 @@
 # Production probe suite
 
 Small, independent scripts that test the deployed server over the internet.
-No browser, no Playwright, no local boot — just Node and the production origin.
+No browser, no local boot — just Node and the production origin.
 
-## Why this exists separately from the Playwright suite
+## Why these exist
 
-`npm run e2e` (Playwright) needs a Chromium that will not run on Termux. The
-server does not need a browser to be tested, though: everything it exposes is
+The server does not need a browser to be tested: everything it exposes is
 `POST` endpoints plus one `GET /events` SSE stream ([docs/protocol.md](../docs/protocol.md)),
 and Node's streaming `fetch` drives that directly.
 
-The split is clean:
+The split is clear:
 
 - **This suite** proves the *server* works from a phone: the full match loop
   over a real network, the timing of the 2s PUN window, and what happens when
   the link drops mid-round.
-- **`npm run e2e`** proves the *page* works: rendering, CSS, in-browser console
-  errors. Run it on a real machine when you have one.
 - **`npm run unit` / `npm run go`** cover the client state machine and the
   server internals offline, with no network at all.
+- **Rendering, CSS and in-browser console errors** have no automated coverage
+  here; see [environment.md](../docs/environment.md) for what is unverified.
 
 ## Proving you tested what you think you tested
 
@@ -60,8 +59,7 @@ dirty tree is caught even when the commit matches.
 
 The suite needs the deployed origin and ships **no default** — it is the address
 of a public, unauthenticated server, and committing it would hand every clone a
-ready-made target list. Same reasoning as the Playwright config's required
-`BASE_URL` (playwright.config.cjs:17-26).
+ready-made target list.
 
 Set it once, outside the repo:
 

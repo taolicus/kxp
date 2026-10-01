@@ -103,7 +103,6 @@ go vet ./...
 go test ./...       # ~60s on this host; batch Go edits, don't re-run per edit
 npm run unit        # web/*.test.cjs + tools/lib/*.test.mjs
 npm run tall        # probes t1–t8 — requires an origin (see below), creates real matches
-npm run e2e         # Playwright — NOT on this host; needs Chromium + BASE_URL
 ```
 
 `npm run unit` is the catch-all for client and harness tests (the README's
@@ -116,7 +115,7 @@ report, rather than implying coverage that does not exist:
 1. **Race detector** — `go test -race` refuses: `race is not supported on
    android/arm64`. Not configurable. Concurrency changes are hand-checked and
    argued in a comment.
-2. **Rendering / CSS / console errors** — Playwright-only.
+2. **Rendering / CSS / console errors** — No automated coverage on this host.
 3. **Deployment** — a local build is not the deployed binary, and "it works
    here" is never evidence a change is live. `GET /health` reports `build.sha`;
    probe `t1` asserts it against local `HEAD` and fails loudly on a stale build.
@@ -221,8 +220,8 @@ was verified — including the negative cases (which test fails against the old
 code) and, explicitly, what could NOT be verified on this host.
 ```
 
-Areas in use: `Fix`, `Protocol`, `Testing`, `Observability`, `Probes`, `E2e`,
-`Docs`, `Client`, `Countdown`, `Characters`/`Roster`, `Game screen`. Bodies are
+Areas in use: `Fix`, `Protocol`, `Testing`, `Observability`, `Probes`, `Docs`, `Client`, `Countdown`, `Characters`/`Roster`, `Game screen`.
+ Bodies are
 real prose — a message whose body only restates the diff is a missed chance.
 
 Before each commit and push:
@@ -234,9 +233,8 @@ git log --oneline -10          # match the area/summary style
 ```
 
 - Never commit: the `kxp` binary, `node_modules/`, `web/img/sources/`,
-  `tools/.base-url` (the address of a public unauthenticated server),
-  `test-results/`, `playwright-report/`. All already gitignored — keep it that
-  way.
+  `tools/.base-url` (the address of a public unauthenticated server). All
+  already gitignored — keep it that way.
 - The repo carries **no deployment tooling**: the live server is kept current by
   an ops script outside the repo (`git pull` + build + `systemctl restart`). Do
   not add deploy scripts, systemd units, or infra config here.

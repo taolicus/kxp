@@ -68,26 +68,21 @@ node --test web/kxp.test.cjs web/machine.test.cjs
 (`go test -race` isn't supported on the arm64-Android dev device; see the
 roadmap's "Automated test workflow" note if you add CI.)
 
-E2e (core-gameplay Playwright suite) — targets the **deployed (production)
-server directly over the internet**; it never boots the app locally. The
-runner only needs Node >= 20 and Playwright's Chromium, pointed at the
-production origin via a required `BASE_URL`:
+The browser-free probe suite (`tools/t1`–`t8`) is the integration path. It
+targets the **deployed (production) server directly over the internet**; it
+never boots the app locally, needs only Node >= 20, and takes the production
+origin through a required `BASE_URL`:
 
 ```sh
 npm install
-npx playwright install chromium          # one-time browser install
-BASE_URL=https://your-server.example npm run e2e
+npm run t1                                   # measures the link first
+BASE_URL=https://your-server.example npm run tall
 ```
 
-`BASE_URL` is required and must be the deployed server's origin — the suite
-fails fast if it's missing. The three flows drive a real browser against real
-SSE and create real (short-lived) matches by design: (1) a CPU match completes
-end-to-end within a hard bound with zero console/page errors; (2) a PvP match
-resolves with neither side left dead in `matched`/`countdown` — the first
-instance waits **5 seconds** for a real opponent, and only if none joins is a
-second instance launched to pair against; a pairing against a real player is
-valid and run as-is; (3) a reload mid-match never leaves a stuck
-"Waiting for result…" view.
+See [tools/README.md](tools/README.md) for what each probe proves and why the
+origin is required rather than defaulted. The flows create real (short-lived)
+matches by design. Rendering, CSS and in-browser console errors have no
+automated coverage — see [environment.md](docs/environment.md).
 
 ## Status
 

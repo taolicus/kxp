@@ -48,9 +48,11 @@ scheduled — until the connectivity diagnostics traces (Phase 2) confirm a caus
    opponent keeps the round win. → Phase 1.
 7. **Busy affordances** — a pending affordance while a request awaits its SSE
    reply, so a long wait reads as "working" rather than silent. → Phase 3.
-8. **Core-gameplay e2e** — decided and scoped: three Playwright flows that
-   surface game-breaking connectivity failures against the production server.
-   Landed. Phase 2 holds the scope and the runner requirements.
+8. ~~**Core-gameplay e2e**~~ — **withdrawn.** The Playwright suite landed and
+   was then removed as dead weight: it could not run on the only host this
+   project is developed on (no Chromium on arm64 Android/Termux), so it never
+   produced a signal in practice, and the browser-free probe suite covers the
+   same class of failure. See Phase 2 for the removal note.
 
 ## Protocol rework (active)
 
@@ -542,33 +544,26 @@ Make the system testable and debuggable in production.
       needs a real one-way measurement, which is exactly what the parked
       `/ping` probe (Protocol rework Task C) exists to produce. It graduates to
       its own item when Task C lands; until then there is nothing to profile.
-- [x] **Core-gameplay e2e (decided; scoped)** — a small Playwright suite that
-      drives the real browser against the **deployed server over the internet**
-      to surface **game-breaking connectivity failures that resist unit
-      testing**. The suite **never boots the app locally**; a host that can run
-      Node >= 20 and Playwright's Chromium is all it needs. Scope is
-      deliberately narrow — three flows only, no button/stat/styling
-      assertions: (1) a CPU match completes end-to-end within a hard bound with
-      zero console/page errors; (2) a PvP match resolves with neither side left
-      dead in `matched`/`countdown` (asymmetric-SSE class) — the first
-      instance queues and waits **5 seconds** for a real opponent; a real
-      pairing is valid and the more valuable case, so it is run as-is, and only
-      if none appears is a second instance launched so the two queue against
-      each other; (3) reloading mid-match reconciles the client to a live, fair,
-      or lobby state — never a dead view stuck on "Waiting for result…". Full
-      flows create real matches by design.
-      *Landed: `e2e/gameplay.spec.js` + `playwright.config.cjs` +
-      `package.json` (`npm run e2e`, `@playwright/test`). `BASE_URL` is
-      required and selects the production origin; it fails fast if unset. Keyed
-      off a deterministic in-page probe on `renderResult` rather than racing the
-      result banner. The runner is device-agnostic: any Chromium-capable host
-      runs it.*
+- [x] **Core-gameplay e2e (withdrawn)** — a Playwright suite that drove the real
+      browser against the **deployed server** to surface game-breaking
+      connectivity failures that resist unit testing. It landed as
+      `e2e/gameplay.spec.js` + `playwright.config.cjs` + `npm run e2e`, and was
+      then **removed** rather than kept: the only host this project runs on is
+      arm64 Android/Termux, where Chromium cannot be installed, so the suite
+      never actually ran and could not have caught a regression. Keeping an
+      unrunnable suite is worse than not having it — it advertises coverage
+      that does not exist, and every future reader has to re-derive that fact.
+      The coverage it was scoped for is served by the browser-free probes below,
+      which do run here; what is genuinely lost is in-browser rendering, CSS and
+      console-error checking, now recorded as an explicit gap rather than an
+      absent test.
 - [x] **Protocol-level production probes (browser-free)** — the server needs no
       browser to be exercised: every endpoint is a `POST` plus one `GET /events`
       SSE stream, so a plain Node `fetch` client drives real matches directly.
-      Lands the same class of coverage as the Playwright suite on hosts that
-      cannot run Chromium at all (the arm64 Android dev device: no Playwright
-      browser binaries, and Chromium's dependencies are unavailable there).
+      This is the project's **only** integration path, and the reason the
+      Playwright suite was withdrawn: these run on hosts that cannot install a
+      browser at all (the arm64 Android/Termux dev device), so unlike a
+      Chromium-driven suite they actually execute where the work happens.
       Landed `tools/t1`–`t8` + `tools/lib/harness.mjs` + `tools/README.md`
       (`npm run tall`, `npm run tall -- t5 t6`, `QUICK=1 npm run tall`):
       link characterization, read-only endpoint contracts, character
@@ -582,18 +577,20 @@ Make the system testable and debuggable in production.
       run over unreliable links and a suite that cannot tell a transport fault
       from a server defect trains you to ignore it. `tall` exits 1 on a real
       failure and 2 on an inconclusive one.
-      *Not a replacement for `npm run e2e`: rendering, CSS and in-browser
-      console errors remain Playwright-only. Client state machine and server
-      internals stay offline (`npm run unit`, `npm run go`). It already earned
-      its keep — it traced the stale-teardown race filed in Phase 1 and
+      *Known gap: rendering, CSS and in-browser console errors have no
+      automated coverage anywhere in this repo, since the Playwright suite was
+      withdrawn. Client state machine and server internals stay offline
+      (`npm run unit`, `npm run go`). It already earned its keep — it traced the stale-teardown race filed in Phase 1 and
       measured the zero-grace drop behaviour recorded in issues.md entry 5.*
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
       available. Node unit tests run under
-      `node --test web/*.test.cjs tools/lib/*.test.mjs`.
-      Playwright e2e (`npm run e2e` with a required `BASE_URL`) runs wherever
-      Chromium exists; add it to CI on such a host.
+      `node --test web/*.test.cjs tools/lib/*.test.mjs`. The protocol probes
+      (`npm run tall`, browser-free) run on the dev device itself against the
+      deployed origin, so they need no extra host; if a browser-level suite is
+      ever wanted again it has to be a host that can install Chromium, not this
+      one.
 
 ## Phase 3 — Architecture & features
 

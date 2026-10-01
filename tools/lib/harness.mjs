@@ -15,7 +15,7 @@
 //    PUN window is 2s, so we need to know how much of a window survives the
 //    network. Every script prints its latencies.
 //
-// Nothing here is Playwright-dependent and nothing boots the app locally: these
+// Nothing here needs a browser and nothing boots the app locally: these
 // talk to the deployed origin only, and the origin is required rather than
 // defaulted (see lib/base.mjs for why it is not committed).
 

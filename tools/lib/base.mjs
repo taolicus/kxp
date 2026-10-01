@@ -2,10 +2,10 @@
 //
 // The production origin is deliberately NOT in this repository. It is the
 // deployed address of a public, unauthenticated game server, and committing it
-// turns every clone into a ready-made target list for scanners. The same
-// reasoning the Playwright config already applies to its required `BASE_URL`
-// (playwright.config.cjs:17-26) — there is a reason to require it out loud
-// rather than default it quietly.
+// turns every clone into a ready-made target list for scanners. There is a
+// reason to require it out loud rather than default it quietly: a silent
+// default is a probe that runs against whatever host it last saw, which reads
+// as a pass when the real server is untested.
 //
 // Two ways to supply it, in precedence order:
 //

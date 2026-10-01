@@ -52,13 +52,9 @@ it is gitignored.
   server builds its own on its own host (an ops script kept outside this repo
   does `git pull` + build + `systemctl restart`). Only the *source* is shared,
   so "it works here" is never sufficient evidence that a change is live.
-- **Playwright cannot run here.** The npm package is installed but Chromium's
-  browser binaries and Linux dependencies are unavailable on this platform
-  (recorded in the roadmap, Phase 2, protocol-probe entry). `npm run e2e` must
-  run on a Chromium-capable host with `BASE_URL` pointed at the deployed
-  origin.
 - **The browser-free probe suite (`tools/t1`–`t8`) is the on-device
-  integration path.** It needs only Node and talks to a real server over real
+  integration path, and the only one.** It needs only Node and talks to a real
+  server over real
   SSE, so it runs here — and it is designed to run against the *deployed*
   origin rather than a local boot (see `tools/README.md` and the gitignored
   `tools/.base-url`). Treat it as the first integration gate for anything
@@ -70,7 +66,6 @@ it is gitignored.
 go test ./...                                   # Go suite (~60s here; passes)
 node --test web/kxp.test.cjs web/machine.test.cjs web/app.countdown.test.cjs
 npm run tall                                    # probes t1-t8 against the deployed origin
-npm run e2e                                     # Playwright — NOT here; needs a Chromium host
 ```
 
 `go test ./...` takes roughly a minute on this hardware, so batch Go edits
@@ -86,8 +81,10 @@ State these limits in code comments and in any report you give, rather than
 implying coverage that does not exist:
 
 1. **Race-detector findings** — unavailable (see above).
-2. **Rendering, CSS, in-browser console errors** — Playwright-only, so a
-   client-side change can be unit-tested here but not visually confirmed.
+2. **Rendering, CSS, in-browser console errors** — No automated coverage on
+   this host; unit tests cover only the logic (schedule/state). Any change to
+   DOM/CSS/paint requires verification in a browser, but there is no automated
+   browser test here. Treat as unverified unless observed in a real client.
 3. **Deployment** — whether a change is actually live on the public server.
    `/health`'s `build.sha` and probe `t1` exist for exactly this; use them
    before believing any live result.

@@ -1,11 +1,12 @@
 // t8 — PvP between two real clients.
 //
-// The protocol-level equivalent of Playwright flow 2. Two live streams queue,
-// the server pairs them FIFO, they shake hands over POST /ready, and the round
+// Two live streams queue,
+// server pairs them FIFO, they shake hands over POST /ready, and the round
 // has to resolve on BOTH sides with no side left stranded.
 //
-// The thing this is really hunting is the asymmetric case, named as such in the
-// Playwright suite (gameplay.spec.js:10-11): one side drops out and the other is
+// The thing this is really hunting is the asymmetric case: one side drops out
+// and the other is
+
 // left dead in matched/countdown with no idea what happened. Reading the source
 // first suggested the recovery was entirely silent, because m.requeue
 // (server.go:595-607) puts the survivor back in h.queue without sending

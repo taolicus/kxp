@@ -1,10 +1,9 @@
 // t5 — one CPU match, end to end, over the real internet.
 //
-// This is the protocol-level equivalent of Playwright flow 1, and the single
-// most valuable thing to run when the app feels wrong on a phone. A CPU match
-// is the whole game loop in one shot: the ready handshake, the countdown, the
-// PUN window, a scored move, and a result — every frame type the client
-// depends on, in the documented order.
+// This is the whole game loop in one shot and the single most valuable thing
+// to run when the app feels wrong on a phone: the ready handshake, the
+// countdown, the PUN window, a scored move, and a result — every frame type the
+// client depends on, in the documented order.
 //
 // It is also the only probe here that verifies TIMING rather than shape, and
 // timing is the thing a moving train breaks. The server pre-announces the round
