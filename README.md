@@ -92,25 +92,15 @@ valid and run as-is; (3) a reload mid-match never leaves a stuck
 ## Status
 
 Core hardening, testability, and the pure-engine refactor are done, including
-per-IP rate limiting and resource caps — live on the public server. The
-protocol rework's Task A (announced round deadline + per-frame `ts`) has
-landed; the remaining reliability slices (stream seq + replay, `/ping` probe,
-latency compensation, reconnect recovery, ghost online count) are **parked as
-symptom descriptions** in [docs/issues.md](docs/issues.md) until their cause
-is confirmed. Decided and scheduled next are **connectivity diagnostics** (the first
-half — access/error/join-leave logging, `/health` and `/metrics`
-endpoints, and a throttled client-side error beacon over `POST /report` —
-has landed; the bounded SSE
-connection lifetime is still open, all as a surgical incremental slice that
-produces the evidence), **connectivity-safe
-scoring** — a no-valid-move timeout resolves `void`, scored like a draw (no
-streak break, the opponent still wins, "No contest" shown) — **busy
-affordances** (a pending affordance while a request awaits its SSE reply), and
-a **core-gameplay e2e suite** (three Playwright flows that surface
-game-breaking connectivity failures against the production server — landed,
-runs via `BASE_URL=… npm run e2e`).
-Still open are best-of-N modes and the identity/leaderboard features. See
-[roadmap.md](docs/roadmap.md).
+per-IP rate limiting and resource caps — live on the public server.
+
+This file deliberately does not track what is left. Each of those lives in
+exactly one place, so there is one status to keep true:
+
+- [roadmap.md](docs/roadmap.md) — decided and scheduled work, by phase, with
+  what has landed.
+- [issues.md](docs/issues.md) — live symptoms parked until their cause is
+  confirmed.
 
 The live server is kept at the current build by an ops script kept **outside**
 this repo (`git pull` + build + `systemctl restart`); the repository itself
