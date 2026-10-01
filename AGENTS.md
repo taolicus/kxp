@@ -30,7 +30,9 @@ Read these before you touch anything:
 ```
 
 Steps 3–5 belong to the same commit as the code. Docs are not a follow-up
-commit; a documented-later change is a change nobody can verify.
+commit; a documented-later change is a change nobody can verify. Step 7 happens
+before the next task starts, not at the end of the session — see
+[Commit and push](#commit-and-push).
 
 ### Pick the slice size
 
@@ -44,6 +46,34 @@ rewrite: each one produces evidence, and each is independently deployable.
 Do **not** park a half-finished refactor in the tree. Roadmap items exist for
 structural work that is deliberately unscheduled ("One owner for match
 termination") — write the reasoning there, leave the code alone.
+
+### Keep the session small too
+
+Slice size is not only a review concern. A slice small enough to finish, test,
+document, commit, and push inside one context window is what keeps a long
+working session from losing its own thread.
+
+**Compact between tasks, never mid-slice.** `/compact` (alias `/summarize`,
+keybind `ctrl+x c`) frees context by summarising the conversation, and that
+summary is lossy in exactly the place a slice cannot afford: which files are
+staged, what the new test asserts and what it was checked to fail against, which
+line of reasoning ruled out the alternative you rejected, what the commit body
+was going to say. A compacted mid-slice resumes with a paraphrase of work whose
+entire value is that it is exact.
+
+So the boundary is the slice: **finish the slice — verified, documented,
+committed, pushed — and only then compact.** At that point there is nothing to
+lose, because the state that matters lives in git rather than in the
+conversation: the next task starts from a clean tree and a pushed commit, and
+the summary only has to carry the intent forward. `/new` (alias `/clear`) is
+the blunter version of the same move, for when a fresh session is worth more than
+a summary.
+
+Two corollaries. If compaction feels imminent *during* a slice, that slice is
+too big — split it now rather than after the fact. And never let a slice
+straddle a compaction boundary: park it first, committed if it is verified or
+reverted if it is not, so nothing in the tree depends on context that is about
+to be summarised away.
 
 ### Test first, and prove the test bites
 
@@ -166,9 +196,19 @@ These are load-bearing. Breaking one is a bug even if the tests pass.
 
 ## Commit and push
 
-One slice = one commit = one push. Push each slice as soon as it is green;
-never accumulate a stack of slices to push at the end, and never mix an
-unrelated change into a slice already in flight.
+One slice = one commit = one push. **A finished task is pushed when it is
+finished** — not batched with the next one, not held for the end of the session.
+Push each slice as soon as it is green; never accumulate a stack of slices to
+push at the end, and never mix an unrelated change into a slice already in
+flight.
+
+The reason is that a push is the only durable copy of the work, and it is what
+makes every other rule in this file hold. A pushed slice is independently
+reviewable, independently revertable, and independently deployable — and it
+survives a dead session, a lost context, or an interrupted machine. An unpushed
+slice is a claim; a pushed one is a fact. Batching also makes the failure worse
+when it comes: three unpushed slices that all need the same fix is one
+`git bisect` and one revert, not three.
 
 **Message format** (the repo's convention, used throughout history):
 
