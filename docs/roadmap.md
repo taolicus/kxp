@@ -5,93 +5,52 @@ unchecked items are open.
 
 ## Current priorities
 
-Ordered active work. Items outside this list — the remaining Phase 1
-hardening (anonymous abuse prevention) — are deliberately postponed until the
-feature set settles; the risk is accepted while the game is small-scale.
-Per-IP rate limiting and resource limits have been landed in the background
-(see Phase 1) and are live: the public server is kept at the current build by
-an ops script kept outside this repo (`git pull` + build + `systemctl
-restart`).
+Ordered active work, in the order it should be picked up. **This list is a table
+of contents, not a second copy of the status.** Every item below is recorded in
+full — with its one status — in the phase named beside it, so there is exactly
+one place to tick and one place to read. Land a slice by ticking the checkbox in
+its phase; do not restate it here.
 
-The protocol rework's Task A (v1.1, announced round deadline + per-frame `ts`)
-has landed and removed the "skip PUN → You lose" burst-delivery dependency.
-The remaining reliability slices (stream seq + replay, `/ping` probe, latency
-compensation, reconnect recovery, ghost online count) were defined from
-unconfirmed connectivity symptoms: they are **parked as symptom descriptions**
-in [docs/issues.md](issues.md) until the connectivity diagnostics slice (item
-5) confirms a cause.
+Items outside this list — the remaining Phase 1 hardening (anonymous abuse
+prevention) — are deliberately postponed until the feature set settles; the
+risk is accepted while the game is small-scale. Per-IP rate limiting and
+resource limits were landed in the background (Phase 1) and are live: the
+public server is kept at the current build by an ops script kept outside this
+repo (`git pull` + build + `systemctl restart`).
+
+The protocol rework's Task A (v1.1) has landed and removed the "skip PUN → You
+lose" burst-delivery dependency. The remaining reliability slices (stream seq +
+replay, `/ping` probe, latency compensation, reconnect recovery, ghost online
+count) were defined from unconfirmed connectivity symptoms, so they are **parked
+as symptom descriptions** in [docs/issues.md](issues.md) — described, not
+scheduled — until the connectivity diagnostics traces (Phase 2) confirm a cause.
 
 1. **Protocol rework (connectivity)** — Task A landed (v1.1). Tasks B (stream
    seq + replay) and C (`/ping` health probe) are parked in
-   [docs/issues.md](issues.md) pending cause confirmation.
-2. **Character roster & portraits** (Phase 3) — expand the cosmetic fighter
-   roster with user-supplied art and an emoji fallback; select-screen polish.
-3. **Best-of-5 game mode** (Phase 3) — first to 3 decisive rounds, draws
-      replayed; best-of-1 stays the default. Ships for CPU matches first, then
-      PvP (item 4 below). Depends on Protocol rework Task A.
-4. **Best-of-5 for PvP** — re-open the ready handshake per round once the
-      client machine is proven against the CPU.
-5. **Connectivity diagnostics (decided; ships as observability)** — confirm,
-      then *diagnose*, the reliability symptoms that keep surfacing at
-      the boundary (silent-stuck-in-`matched`, reconnect-looking-like-a-loss,
-      weak-link timing, ghost +1 online, drop-forfeit). Ships **surgical and
-      incremental**, one trace at a time, each independently deployable:
-      client join/leave lifecycle logging with the live count, a bounded SSE
-      connection lifetime that reaps vanished devices, a short SSE frame
-      journal, and — once the rework's `/ping` probe data exists — latency
-      profile visibility. **Causes are deliberately UNCONFIRMED; the slice
-      produces the evidence.** The symptoms themselves are described — not
-      scheduled — in [docs/issues.md](issues.md), and graduate into scheduled
-      work only when the cause is confirmed.
-*Landed so far: the access/reject/join-leave logging half, plus the
-       `/metrics` counter endpoint (requests, rejects by code/message,
-       joined/left, dropped events, rate-limited, SSE streams, client error
-       beacons by kind, **reaped connections**), the `/health` probe, and the
-       client-side error beacon (`POST /report`, throttled client-side via
-       `beaconGate`, hooked at SSE errors, fetch failures, machine-rejected
-       transitions, stall-watchdog fires, and rejoin-past-window). **The
-       bounded SSE connection lifetime is also in**: `/events` re-arms a short
-       rolling per-write deadline before every frame, so a write that stalls
-       against a vanished peer (half-open conn) reaps the connection — the
-       client is removed, the online count reconciles down, a `reap client …`
-       line joins the `leave online=N` line, and the `reaped` counter moves.
-       TCP keepalive (15s) arms at the listener so the OS also notices silent
-       idle peers between frames. Each client logs a short **frame journal**
-       (last 16 event types actually flushed) on leave, so a vanished/reaped
-       device's last-seen can be correlated with its reconnect or beacon. The
-       remaining trace — latency profile visibility — waits on the protocol
-       rework's `/ping` probe data.*
+   [docs/issues.md](issues.md) pending cause confirmation. → **Protocol rework
+   (active)** below.
+2. **Character roster & portraits** — expand the cosmetic fighter roster with
+   user-supplied art and an emoji fallback; select-screen polish. → Phase 3.
+3. **Best-of-5 game mode** — first to 3 decisive rounds, draws replayed;
+   best-of-1 stays the default. Depends on Protocol rework Task A. → Phase 3,
+   "Game-mode architecture".
+4. **Best-of-5 for PvP** — re-open the ready handshake per round once the client
+   machine is proven against the CPU. → Phase 3, "Game-mode architecture" (it
+   ships after item 3, CPU first).
+5. **Connectivity diagnostics** — confirm, then *diagnose*, the reliability
+   symptoms that keep surfacing at the boundary. Ships **surgical and
+   incremental**, one trace at a time, each independently deployable; the landed
+   traces and the one still waiting are both in Phase 2. The symptoms themselves
+   are described — not scheduled — in [docs/issues.md](issues.md), and graduate
+   into scheduled work only when their cause is confirmed.
 6. **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
-      (like a draw): no win, no streak break, "No contest" reported, while the
-      opponent keeps the round win. Engine + client + leaderboard adopt it.
-      **Decided and scheduled.**
-7. **Busy affordances** — show a brief pending/disabled affordance on action
-      buttons (Play Online, Instant CPU, rematch, cancel, fighter select, move
-      submit) while their request awaits the SSE reply, so a long wait reads as
-      "working" rather than silent; a failsafe clears it if the reply never
-      comes. Also covers the loading gap while "Waiting for result…".
-      **Decided and scheduled.**
-8. **Core-gameplay e2e (decided; scoped)** — a small Playwright suite that
-      drives the real browser against the **deployed server over the internet**
-      to surface **game-breaking connectivity failures that resist unit
-      testing**. The suite **never boots the app locally**; a host that can run
-      Node >= 20 and Playwright's Chromium is all it needs. Scope is
-      deliberately narrow — three flows only, no button/stat/styling
-      assertions: (1) a CPU match completes end-to-end within a hard bound with
-      zero console/page errors; (2) a PvP match resolves with neither side left
-      dead in `matched`/`countdown` (asymmetric-SSE class) — the first
-      instance queues and waits **5 seconds** for a real opponent; a real
-      pairing is valid and the more valuable case, so it is run as-is, and only
-      if none appears is a second instance launched so the two queue against
-      each other; (3) reloading mid-match reconciles the client to a live,
-      fair, or lobby state — never a dead view stuck on "Waiting for result…".
-      Full flows create real matches by design.
-      *Landed: `e2e/gameplay.spec.js` + `playwright.config.cjs` +
-      `package.json` (`npm run e2e`, `@playwright/test`). `BASE_URL` is
-      required and selects the production origin; it fails fast if unset.
-      Keyed off a deterministic in-page probe on `renderResult` rather than
-      racing the result banner. The runner is device-agnostic: any
-      Chromium-capable host runs it.*
+   (like a draw): no win, no streak break, "No contest" reported, while the
+   opponent keeps the round win. → Phase 1.
+7. **Busy affordances** — a pending affordance while a request awaits its SSE
+   reply, so a long wait reads as "working" rather than silent. → Phase 3.
+8. **Core-gameplay e2e** — decided and scoped: three Playwright flows that
+   surface game-breaking connectivity failures against the production server.
+   Landed. Phase 2 holds the scope and the runner requirements.
 
 ## Protocol rework (active)
 
@@ -312,7 +271,21 @@ Note: the unchecked items below are postponed to keep feature work moving
       high-latency players (win/loss stays arrival-time-authoritative; see
       Phase 4 anti-cheat). Cause **unconfirmed** — parked in
       [docs/issues.md](issues.md), entry 3; ships only after the connectivity
-      diagnostics slice (item 5) measures real pings.
+      diagnostics slice (Phase 2) measures real pings.
+- [ ] **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
+      (like a draw): no win, no streak break, "No contest" reported, while the
+      opponent keeps the round win. Engine + client + leaderboard adopt it.
+      **Decided and scheduled.**
+
+      Not a workaround for a lost round — the round genuinely had only one
+      valid move, and scoring the absent side as a loss makes a connectivity
+      fault indistinguishable from a skill result. Win/loss stays
+      arrival-time-authoritative (see Phase 4 anti-cheat); this changes how an
+      *absent* side scores, not how a present one is timed. Series mode counts
+      a `void` round as a round win for the opposing side (Phase 3,
+      "Game-mode architecture"). Pinned today by
+      [docs/review.md](review.md) item 56, which records the residual
+      no-move path.
 - [x] **Stale `state` teardown after a handshake re-pair** — when a PvP ready
       handshake is abandoned, `readyTimeout`/`readyAbandon` re-queue both sides
       and `m.requeue` calls `tryMatch`, which can re-pair the survivor into a
@@ -485,30 +458,70 @@ Make the system testable and debuggable in production.
 - [ ] **CPU determinism hooks** — inject a deterministic clock and move picker
       for automated tests. Protocol rework Task A's schedule-driven run loop
       (`sleep-until` on an announced `shootAt`) is the hook this needs.
-- [x] **Request/response logging** — structured logs for connection,
-      matchmaking, match lifecycle, and errors. On hold: Protocol rework Task A
-      adds `ts` to the timed frames (lag measurement without a log pipeline);
-      revisit only if evidence after the rework still calls for it.
-      *Landed (observability slice): a per-request access log
-      (`accessLog`, method/path/status/duration), an error log at every
-      `handlerError` (`kxp: reject <code> "<msg>"`), and client join/leave
-      lines carrying the live count. Still open: structured (JSON) output.
-      Exercised by `logging_test.go`.*
-- [ ] **Online-count observability & half-open conns — diagnostics (issues.md
-      entry 4)** — the +1 ghost is a symptom with an unconfirmed cause, so this
-      ships only as *diagnostics*: client join/leave lifecycle logging with the
-      live count, plus a bounded SSE connection lifetime (a short rolling
-      per-write deadline + TCP keepalive) that reaps vanished devices to test
-      the half-open hypothesis. The symptom is described in
-      [docs/issues.md](issues.md), entry 4; any count-rule change waits for
-      the logs.
-      *The join/leave logging half has landed (see Request/response logging
-      above); the bounded SSE lifetime reaping has not.*
-- [x] **Core-gameplay e2e (decided; scoped)** — see Current priorities item 8
-      for the three-flow Playwright scope. Landed (`e2e/gameplay.spec.js` +
-      `playwright.config.cjs` + `npm run e2e`). Tests the deployed server over the
-      internet via a required `BASE_URL`; runs on any Chromium-capable
-      host.
+- [x] **Connectivity diagnostics — the landed traces** — one slice per trace,
+      each independently deployable, producing the evidence the parked
+      connectivity symptoms need before any of them can be scheduled against a
+      confirmed cause ([docs/issues.md](issues.md), entries 1–5). The causes are
+      deliberately **UNCONFIRMED; the slice produces the evidence.** That is the
+      whole design — a suite that cannot tell a transport fault from a server
+      defect trains you to ignore it, so every trace here exists to make the next
+      judgement possible.
+
+      Landed so far: a per-request access log (`accessLog`,
+      method/path/status/duration) and an error log at every `handlerError`
+      (`kxp: reject <code> "<msg>"`), exercised by `logging_test.go`; client
+      join/leave lines carrying the live count; the `/metrics` counter endpoint
+      (requests, rejects by code/message, joined/left, dropped events,
+      rate-limited, SSE streams, client error beacons by kind, **reaped
+      connections**); the `/health` probe; and the client-side error beacon
+      (`POST /report`, throttled client-side via `beaconGate`, hooked at SSE
+      errors, fetch failures, machine-rejected transitions, stall-watchdog
+      fires, and rejoin-past-window).
+
+      **The bounded SSE connection lifetime is in too**: `/events` re-arms a
+      short rolling per-write deadline before every frame, so a write that
+      stalls against a vanished peer (half-open conn) reaps the connection — the
+      client is removed, the online count reconciles down, a `reap client …`
+      line joins the `leave online=N` line, and the `reaped` counter moves. TCP
+      keepalive (15s) arms at the listener so the OS also notices silent idle
+      peers between frames. Each client logs a short **frame journal** (last 16
+      event types actually flushed) on leave, so a vanished/reaped device's
+      last-seen can be correlated with its reconnect or beacon.
+
+      Still open here: structured (JSON) log output — its own item below.
+- [ ] **Structured (JSON) log output** — the diagnostics traces log as
+      human-readable lines, which is the right trade for now: the reader is a
+      person reading one incident, not a pipeline. Structured output is
+      deliberately deferred until something actually consumes it, and
+      Protocol rework Task A already adds `ts` to the timed frames, so lag is
+      measurable without it. Revisit only if evidence after the rework still
+      calls for it.
+- [ ] **Latency profile visibility** — the last remaining trace of the
+      diagnostics slice, and the one that cannot start yet: profiling latency
+      needs a real one-way measurement, which is exactly what the parked
+      `/ping` probe (Protocol rework Task C) exists to produce. It graduates to
+      its own item when Task C lands; until then there is nothing to profile.
+- [x] **Core-gameplay e2e (decided; scoped)** — a small Playwright suite that
+      drives the real browser against the **deployed server over the internet**
+      to surface **game-breaking connectivity failures that resist unit
+      testing**. The suite **never boots the app locally**; a host that can run
+      Node >= 20 and Playwright's Chromium is all it needs. Scope is
+      deliberately narrow — three flows only, no button/stat/styling
+      assertions: (1) a CPU match completes end-to-end within a hard bound with
+      zero console/page errors; (2) a PvP match resolves with neither side left
+      dead in `matched`/`countdown` (asymmetric-SSE class) — the first
+      instance queues and waits **5 seconds** for a real opponent; a real
+      pairing is valid and the more valuable case, so it is run as-is, and only
+      if none appears is a second instance launched so the two queue against
+      each other; (3) reloading mid-match reconciles the client to a live, fair,
+      or lobby state — never a dead view stuck on "Waiting for result…". Full
+      flows create real matches by design.
+      *Landed: `e2e/gameplay.spec.js` + `playwright.config.cjs` +
+      `package.json` (`npm run e2e`, `@playwright/test`). `BASE_URL` is
+      required and selects the production origin; it fails fast if unset. Keyed
+      off a deterministic in-page probe on `renderResult` rather than racing the
+      result banner. The runner is device-agnostic: any Chromium-capable host
+      runs it.*
 - [x] **Protocol-level production probes (browser-free)** — the server needs no
       browser to be exercised: every endpoint is a `POST` plus one `GET /events`
       SSE stream, so a plain Node `fetch` client drives real matches directly.
@@ -592,14 +605,21 @@ Build on a stable foundation without rewriting the core.
       compatibility.
 - [ ] **Game-mode architecture** — series-aware `run()`/`resolve()`: a match
       becomes a sequence of rounds, first to 3 decisive wins, draws replayed; a
-      round that resolves `void` (no valid move, see item 6) counts as a round
-      win for the opposing side.
+      round that resolves `void` (no valid move, see Phase 1 "Connectivity-safe
+      scoring") counts as a round win for the opposing side.
       `result` gains round/series fields (`round`, `youRoundWins`,
       `oppRoundWins`, `roundsTarget`, `seriesOver`); a round result advances
       the client scoreboard and re-enters countdown, a final result ends the
       series. Ships for CPU matches first (ready stays once-per-series); PvP
-      re-opens the ready handshake per round afterward. Builds on the Protocol
-      rework Task A schedule, which ships first.
+      re-opens the ready handshake per round afterward — the two current-priority
+      items 3 and 4 are the two halves of this one entry. Builds on the
+      Protocol rework Task A schedule, which ships first.
+- [ ] **Busy affordances** — show a brief pending/disabled affordance on action
+      buttons (Play Online, Instant CPU, rematch, cancel, fighter select, move
+      submit) while their request awaits the SSE reply, so a long wait reads as
+      "working" rather than silent; a failsafe clears it if the reply never
+      comes. Also covers the loading gap while "Waiting for result…".
+      **Decided and scheduled.**
 - [ ] **Character roster & portraits** — cosmetic expansion of the fighter
       roster (data in `characters.go` + `web/characters.js`; no wire change,
       no gameplay effect). Real art lives at `/img/char/<id>.webp` with an
