@@ -28,7 +28,7 @@ derived from the same instant via `UnixMilli`, so `shootAt` still reaches
 the client as the same server epoch-ms and protocol/clock-skew handling is
 unchanged. The late cutoff is a real behavioural improvement: a mid-round
 clock step could previously reject an on-time move as `too late`, which is
-the *symptom* of [docs/issues.md](issues.md) 3 — but a distinct
+the *symptom* of [docs/issues.md](../issues.md) 3 — but a distinct
 contributor to it, not that entry's latency hypothesis, and not a
 resolution of it. Issue 3 stays open.
 
