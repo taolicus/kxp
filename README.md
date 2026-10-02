@@ -49,8 +49,9 @@ two players share. See [architecture](docs/architecture.md) for the internals.
 
 - [architecture.md](docs/architecture.md) — engine, timing model, matchmaking,
   SSE lifecycle, testing.
-- [environment.md](docs/environment.md) — the primary development environment
-  (Android/Termux host), what it can and cannot verify, and the working loop.
+- [environment.md](docs/environment.md) — the measured development host
+  (Android/Termux), its toolchain, and how to re-measure both. What it can and
+  cannot verify, and the working loop, live in [AGENTS.md](AGENTS.md).
 - [protocol.md](docs/protocol.md) — the full wire format: events, endpoints,
   the client state table, and clock handling.
 - [backgrounds.md](docs/backgrounds.md) — match background asset pipeline.
@@ -82,7 +83,7 @@ BASE_URL=https://your-server.example npm run tall
 See [tools/README.md](tools/README.md) for what each probe proves and why the
 origin is required rather than defaulted. The flows create real (short-lived)
 matches by design. Rendering, CSS and in-browser console errors have no
-automated coverage — see [environment.md](docs/environment.md).
+automated coverage — see the host limits in [AGENTS.md](AGENTS.md).
 
 ## Status
 

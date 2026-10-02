@@ -17,7 +17,7 @@ The split is clear:
 - **`npm run unit` / `npm run go`** cover the client state machine and the
   server internals offline, with no network at all.
 - **Rendering, CSS and in-browser console errors** have no automated coverage
-  here; see [environment.md](../docs/environment.md) for what is unverified.
+  here; see the host limits in [AGENTS.md](../AGENTS.md) for what is unverified.
 
 ## Proving you tested what you think you tested
 

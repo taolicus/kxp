@@ -1,11 +1,17 @@
 # Development environment
 
 **This is the primary development environment for the project.** Every change
-here is written, built, and first verified here; anything that cannot be
-exercised here (see "What this host cannot verify") is verified against the
-deployed server instead. Facts below were measured on this host, not inferred
-from CI config — re-run the commands in "Verifying" if you need to confirm them
-on a new machine.
+here is written, built, and first verified here.
+
+This file is the *measured* host: what it is, what is installed on it, and how
+to re-measure both. It deliberately does **not** carry the rules for verifying a
+change — the commands to run, and the four things this host cannot verify, live
+in `AGENTS.md` ("Verify"), because those apply to every task and are read far
+more often than this page. What is below earns a read only when a task touches
+the build, the toolchain, or a claim about what this machine can do.
+
+Facts here were measured on this host, not inferred from CI config — re-run the
+commands in "Verifying" to confirm them on a new machine.
 
 ## The host
 
@@ -35,63 +41,13 @@ it is gitignored.
 | Go | `go1.27.1` | `GOOS=android`, `GOARCH=arm64`, `CGO_ENABLED=1` |
 | Node | `v24.18.0` | satisfies the `engines.node >= 20` requirement |
 | npm | `11.19.1` | |
-| Playwright | `@playwright/test` installed in `node_modules` | browser binaries live outside the repo |
 
-### Consequences
-
-- **`go test -race` does not work here.** The toolchain refuses immediately:
-  `race is not supported on android/arm64`. This is not a project setting and
-  cannot be worked around. Every concurrency change is therefore hand-checked
-  rather than race-checked, which is why `finishMatch`'s per-side teardown
-  decision is taken under `h.mu` and pinned by tests that drive the pointer
-  states directly (`finish_test.go`). When a change touches shared state
-  (`h.mu`, `c.mu`, the match phase atomics), assume it needs that kind of
-  deliberate argument, and say so in the code comment.
-- **Locally built binaries are not the deployed artifact.** With
-  `GOOS=android`, `go build -o kxp .` produces a binary for this phone. The
-  server builds its own on its own host (an ops script kept outside this repo
-  does `git pull` + build + `systemctl restart`). Only the *source* is shared,
-  so "it works here" is never sufficient evidence that a change is live.
-- **The browser-free probe suite (`tools/t1`–`t8`) is the on-device
-  integration path, and the only one.** It needs only Node and talks to a real
-  server over real
-  SSE, so it runs here — and it is designed to run against the *deployed*
-  origin rather than a local boot (see `tools/README.md` and the gitignored
-  `tools/.base-url`). Treat it as the first integration gate for anything
-  touching the wire format.
-
-## The working loop
-
-```sh
-go test ./...                                   # Go suite (~60s here; passes)
-node --test web/kxp.test.cjs web/machine.test.cjs web/app.countdown.test.cjs
-npm run tall                                    # probes t1-t8 against the deployed origin
-```
-
-`go test ./...` takes roughly a minute on this hardware, so batch Go edits
-before running it rather than re-running per change. `npm run unit` is the
-catch-all for the client and probe-harness tests (`web/*.test.cjs`,
-`tools/lib/*.test.mjs`); the README's shorter `node --test web/kxp.test.cjs
-web/machine.test.cjs` omits `web/app.countdown.test.cjs`, so prefer `npm run
-unit` when you want the full client set.
-
-## What this host cannot verify
-
-State these limits in code comments and in any report you give, rather than
-implying coverage that does not exist:
-
-1. **Race-detector findings** — unavailable (see above).
-2. **Rendering, CSS, in-browser console errors** — No automated coverage on
-   this host; unit tests cover only the logic (schedule/state). Any change to
-   DOM/CSS/paint requires verification in a browser, but there is no automated
-   browser test here. Treat as unverified unless observed in a real client.
-3. **Deployment** — whether a change is actually live on the public server.
-   `/health`'s `build.sha` and probe `t1` exist for exactly this; use them
-   before believing any live result.
-4. **Real mobile radio behaviour** — the ready-handshake budget, the PUN-window
-   latency profile, and drop frequency are all things this host cannot
-   reproduce. `docs/issues.md` keeps them as unconfirmed for that reason;
-   answering them needs measurements from real links, not a faster loop.
+`package.json` declares **no dependencies**, and nothing browser-based is
+installed: there is no Playwright and no Chromium. That is a decision, not an
+omission — the Playwright e2e suite was withdrawn (`31a0384`), and the
+browser-free probe suite is the integration path on this host. The reasoning,
+and what a browser-level suite would require, is recorded against the
+"Automated test workflow" roadmap item.
 
 ## Verifying
 
@@ -103,4 +59,5 @@ go version && go env GOOS GOARCH CGO_ENABLED
 node -v && npm -v
 go test -race -run TestNothingZZZ ./...   # prints "race is not supported on android/arm64"
 nproc && free -m | head -2
+ls node_modules/@playwright 2>/dev/null || echo "no browser harness, as expected"
 ```

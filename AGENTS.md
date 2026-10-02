@@ -15,13 +15,16 @@ Read what the task touches, not the whole repo. A full sweep of the text here is
 bodies, and neither is needed to change behaviour: the docs and the commit that
 landed a change name the one test or probe that is relevant.
 
-**Every task:** [docs/environment.md](docs/environment.md) (the dev host,
-toolchain, and the four things it cannot verify) and
-[docs/architecture.md](docs/architecture.md) (engine, timing model, matchmaking,
-SSE lifecycle).
+**Every task:** [docs/architecture.md](docs/architecture.md) (engine, timing
+model, matchmaking, SSE lifecycle).
 
 **When the task reaches them:**
 
+- a claim about this host — [docs/environment.md](docs/environment.md): the
+  measured host, toolchain, and the commands to re-measure them. Read it when
+  the task touches the build, the toolchain, or a claim about what this machine
+  can do — not every task, because the per-task verification rules it used to
+  carry live in [Verify](#verify) below instead.
 - wire changes — [docs/protocol.md](docs/protocol.md): events, endpoints, the
   client state table, clock handling
 - scheduling or picking up work — [docs/roadmap.md](docs/roadmap.md): the status
@@ -36,7 +39,7 @@ and earns a read only when changing the probes or the verdict logic — then rea
 `tools/lib/harness.mjs` and the one probe involved. Test bodies (21
 `*_test.go`, plus `web/*.test.cjs` and `tools/lib/*.test.mjs`) are another ~27%,
 and the landing commit names the one that matters. `web/style.css` and
-`web/img/` have no coverage on this host (see environment.md), so reading them
+`web/img/` have no coverage on this host (see "Verify" below), so reading them
 cannot be validated here either.
 
 ## The loop
@@ -133,7 +136,11 @@ report, rather than implying coverage that does not exist:
 
 1. **Race detector** — `go test -race` refuses: `race is not supported on
    android/arm64`. Not configurable. Concurrency changes are hand-checked and
-   argued in a comment.
+   argued in a comment: when a change touches shared state (`h.mu`, `c.mu`, the
+   match phase atomics), name that state in the comment and say why the
+   ordering holds. `finishMatch`'s per-side teardown is the worked example — the
+   decision is taken under `h.mu` and pinned by `finish_test.go`, which drives
+   the pointer states directly instead of racing two goroutines.
 2. **Rendering / CSS / console errors** — No automated coverage on this host.
 3. **Deployment** — a local build is not the deployed binary, and "it works
    here" is never evidence a change is live. `GET /health` reports `build.sha`;
