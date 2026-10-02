@@ -31,9 +31,6 @@ SSE lifecycle).
 - re-litigating a landed decision — [docs/decisions/](docs/decisions/): one file
   per decision
 
-**At review time, not while implementing:**
-[docs/review.md](docs/review.md) — the standing review checklist (56 items).
-
 **Deliberately not read as a sweep.** `tools/` is ~24% of the text in this repo
 and earns a read only when changing the probes or the verdict logic — then read
 `tools/lib/harness.mjs` and the one probe involved. Test bodies (21

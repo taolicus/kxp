@@ -208,7 +208,8 @@ Note: the unchecked items below are postponed to keep feature work moving
       *absent* side scores, not how a present one is timed. Series mode counts
       a `void` round as a round win for the opposing side (Phase 3,
       "Game-mode architecture"). Pinned today by
-      [docs/review.md](review.md) item 56, which records the residual
+      the "Connectivity-safe scoring (planned)" section in
+      [docs/protocol.md](protocol.md), which records the residual
       no-move path.
 - [x] **Stale `state` teardown after a handshake re-pair** — when a PvP ready
       handshake is abandoned, `readyTimeout`/`readyAbandon` re-queue both sides
@@ -330,6 +331,20 @@ Make the system testable and debuggable in production.
       deployed origin, so they need no extra host; if a browser-level suite is
       ever wanted again it has to be a host that can install Chromium, not this
       one.
+
+- [ ] **Externalised operational settings** — `-addr` (`main.go:23`) is the only
+      flag; every other operating value is a compile-time constant or package
+      `var` — `shootWindow` (`round.go:11`), `readyTimeout` (`round.go:30`),
+      `sseWriteDeadline` (`server.go:43`), `maxBodyBytes` (`server.go:18`), the
+      rate-limit defaults (`ratelimit.go:13`). An operator who needs a different
+      value therefore has no route to one short of a rebuild and restart, and
+      tuning has to be a code change rather than a config change. Carried over
+      from the retired review checklist, where it was the only item not already
+      implemented, documented elsewhere, or tracked here. Decide flag vs env;
+      keep today's values as the defaults; and keep the engine reading one
+      authoritative value, since a second source of timing truth is the failure
+      the monotonic deadline already had to be fixed for (see "Monotonic PUN
+      deadline" above, and "CPU determinism hooks" below).
 
 ## Phase 3 — Architecture & features
 
