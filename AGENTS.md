@@ -9,16 +9,38 @@ paragraph — that can be read, reviewed, tested, deployed, and reverted on its
 own. Anything larger gets split before it gets written. Every slice in this
 repo's history is one commit that a reader can hold in their head.
 
-Read these before you touch anything:
+Read what the task touches, not the whole repo. A full sweep of the text here is
+~452KB; the engine, hub, client, and the three files that always apply are
+~122KB of it — 27%. Almost all the difference is the probe suite and the test
+bodies, and neither is needed to change behaviour: the docs and the commit that
+landed a change name the one test or probe that is relevant.
 
-| doc | what it tells you |
-| --- | --- |
-| [docs/environment.md](docs/environment.md) | the dev host (Android/Termux), toolchain, and the four things it cannot verify |
-| [docs/architecture.md](docs/architecture.md) | engine, timing model, matchmaking, SSE lifecycle |
-| [docs/protocol.md](docs/protocol.md) | the wire contract: events, endpoints, client state table, clock handling |
-| [docs/roadmap.md](docs/roadmap.md) | scheduled work by phase, and what has landed |
-| [docs/issues.md](docs/issues.md) | symptoms whose cause is **unconfirmed** — described, not scheduled |
-| [docs/review.md](docs/review.md) | the standing review checklist (56 items) |
+**Every task:** [docs/environment.md](docs/environment.md) (the dev host,
+toolchain, and the four things it cannot verify) and
+[docs/architecture.md](docs/architecture.md) (engine, timing model, matchmaking,
+SSE lifecycle).
+
+**When the task reaches them:**
+
+- wire changes — [docs/protocol.md](docs/protocol.md): events, endpoints, the
+  client state table, clock handling
+- scheduling or picking up work — [docs/roadmap.md](docs/roadmap.md): the status
+  of record, one checkbox per item, not a history
+- a symptom that looks familiar — [docs/issues.md](docs/issues.md): entries are
+  **unconfirmed** by definition
+- re-litigating a landed decision — [docs/decisions/](docs/decisions/): one file
+  per decision
+
+**At review time, not while implementing:**
+[docs/review.md](docs/review.md) — the standing review checklist (56 items).
+
+**Deliberately not read as a sweep.** `tools/` is ~24% of the text in this repo
+and earns a read only when changing the probes or the verdict logic — then read
+`tools/lib/harness.mjs` and the one probe involved. Test bodies (21
+`*_test.go`, plus `web/*.test.cjs` and `tools/lib/*.test.mjs`) are another ~27%,
+and the landing commit names the one that matters. `web/style.css` and
+`web/img/` have no coverage on this host (see environment.md), so reading them
+cannot be validated here either.
 
 ## The loop
 
