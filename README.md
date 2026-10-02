@@ -55,7 +55,10 @@ two players share. See [architecture](docs/architecture.md) for the internals.
 - [protocol.md](docs/protocol.md) — the full wire format: events, endpoints,
   the client state table, and clock handling.
 - [backgrounds.md](docs/backgrounds.md) — match background asset pipeline.
-- [roadmap.md](docs/roadmap.md) — planned work by phase.
+- [tasks/open/](docs/tasks/open/) — specified work not yet landed, one file per
+  item, `priority` integer in the frontmatter.
+- [roadmap.md](docs/roadmap.md) — what has landed, by phase, and why the phases
+  are ordered as they are.
 - [issues/](docs/issues/) — observed reliability symptoms parked until
   their cause is confirmed, one file per symptom.
 
@@ -93,8 +96,9 @@ per-IP rate limiting and resource caps — live on the public server.
 This file deliberately does not track what is left. Each of those lives in
 exactly one place, so there is one status to keep true:
 
-- [roadmap.md](docs/roadmap.md) — decided and scheduled work, by phase, with
-  what has landed.
+- [tasks/open/](docs/tasks/open/) — decided and scheduled work, one file per
+  item.
+- [roadmap.md](docs/roadmap.md) — what has landed, by phase.
 - [issues/](docs/issues/) — live symptoms parked until their cause is
   confirmed.
 

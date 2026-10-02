@@ -1,61 +1,26 @@
 # Roadmap
 
-Planned work for KACHIPUN TOURNAMENT, by phase. Checked items are implemented;
-unchecked items are open.
+The phase structure of KACHIPUN TOURNAMENT, and what has landed in each phase.
+**Open work does not live here.** It is in [docs/tasks/open/](tasks/open/), one
+file per item, ordered by the `priority` integer in that file's frontmatter — so
+the next thing to pick up is a sort of that directory, not a list held in prose
+here.
 
-## Current priorities
+A checkbox in this file therefore means only one thing: this landed. That is a
+deliberate narrowing. The file previously carried unchecked entries too, which
+made it claim to schedule work whose next action was unknown, and once priority
+moved into task frontmatter it was also a second, hand-maintained priority list.
+The "Current priorities" section it carried is gone for that reason; the ordering
+it expressed is now the `priority` field, and the prose explaining each item's
+urgency moved with the item. Symptoms, questions, and decisions stay in
+[docs/issues/](issues/); the reasoning behind each landed entry stays in
+[docs/decisions/](decisions/).
 
-Ordered active work, in the order it should be picked up. **This list is a table
-of contents, not a second copy of the status.** Every item below is recorded in
-full — with its one status — in the phase named beside it, so there is exactly
-one place to tick and one place to read. Land a slice by ticking the checkbox in
-its phase; do not restate it here.
-
-Items outside this list — the remaining Phase 1 hardening (anonymous abuse
-prevention) — are deliberately postponed until the feature set settles; the
-risk is accepted while the game is small-scale. Per-IP rate limiting and
-resource limits were landed in the background (Phase 1) and are live: the
-public server is kept at the current build by an ops script kept outside this
-repo (`git pull` + build + `systemctl restart`).
-
-The protocol rework's Task A (v1.1) has landed and removed the "skip PUN → You
-lose" burst-delivery dependency. The remaining reliability slices (stream seq +
-replay, `/ping` probe, latency compensation, reconnect recovery) were defined
-from unconfirmed connectivity symptoms and are recorded **as symptom
-descriptions** in [docs/issues/](issues/) — described, not scheduled — until the
-connectivity diagnostics traces (Phase 2) confirm a cause. Their draft specs
-remain in [docs/protocol.md](protocol.md), "Rework", marked parked, and each is
-cited from the prospective-fix section of the issue it would fix, so there is one
-copy of each proposal rather than two.
-
-1. **Protocol rework (connectivity)** — Task A landed (v1.1). Tasks B (stream
-   seq + replay) and C (`/ping` health probe) are recorded as prospective fixes
-   in [docs/issues/](issues/) pending cause confirmation; the draft specs are in
-   [docs/protocol.md](protocol.md). → **Protocol rework (active)** below.
-2. **Character roster & portraits** — expand the cosmetic fighter roster with
-   user-supplied art and an emoji fallback; select-screen polish. → Phase 3.
-3. **Best-of-5 game mode** — first to 3 decisive rounds, draws replayed;
-   best-of-1 stays the default. Depends on Protocol rework Task A. → Phase 3,
-   "Game-mode architecture".
-4. **Best-of-5 for PvP** — re-open the ready handshake per round once the client
-   machine is proven against the CPU. → Phase 3, "Game-mode architecture" (it
-   ships after item 3, CPU first).
-5. **Connectivity diagnostics** — confirm, then *diagnose*, the reliability
-   symptoms that keep surfacing at the boundary. Ships **surgical and
-   incremental**, one trace at a time, each independently deployable; the landed
-   traces and the one still waiting are both in Phase 2. The symptoms themselves
-   are described — not scheduled — in [docs/issues/](issues/), and graduate
-   into scheduled work only when their cause is confirmed.
-6. **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
-   (like a draw): no win, no streak break, "No contest" reported, while the
-   opponent keeps the round win. → Phase 1.
-7. **Busy affordances** — a pending affordance while a request awaits its SSE
-   reply, so a long wait reads as "working" rather than silent. → Phase 3.
-8. ~~**Core-gameplay e2e**~~ — **withdrawn.** The Playwright suite landed and
-   was then removed as dead weight: it could not run on the only host this
-   project is developed on (no Chromium on arm64 Android/Termux), so it never
-   produced a signal in practice, and the browser-free probe suite covers the
-   same class of failure. See Phase 2 for the removal note.
+Every phase below is complete. That is not a claim that the project is finished —
+it is what moving 18 open entries out of the file looks like, and a reader who
+knows that will not mistake an empty phase for an abandoned one. Phase 4 in
+particular has no entries left at all: its planned work is six files in
+[docs/tasks/open/](tasks/open/) carrying `phase: 4`.
 
 ## Protocol rework (active)
 
@@ -84,8 +49,6 @@ scheduled, and a box to tick would say it was.
 ## Phase 1 — Core hardening
 
 Correctness and safety issues that affect reliability on a public server.
-Note: the unchecked items below are postponed to keep feature work moving
-(see Current priorities).
 
 - [x] **Latency-fair reaction timing** — the *displayed* reaction is
       network-neutral (client click timestamps); win/loss stays
@@ -125,8 +88,6 @@ Note: the unchecked items below are postponed to keep feature work moving
       `/queue`), and active matches (`maxMatches`, hit on `/cpu`); over-cap
       requests get `503`. Existing clients are never rejected, so the caps
       only bite new growth.
-- [ ] **Anonymous abuse prevention** — enforce a max number of anonymous
-      clients per IP or time window.
 - [x] **Deterministic deadline enforcement** — the run loop drains each side's
       channel when the shoot timer fires (`drainPending`), so an on-time tap is
       never dropped by a scheduler coin-flip; moves after the deadline are
@@ -158,22 +119,6 @@ Note: the unchecked items below are postponed to keep feature work moving
 
       → rationale: [decisions/handshake-cancel-reason.md](decisions/handshake-cancel-reason.md)
 
-
-- [ ] **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
-      (like a draw): no win, no streak break, "No contest" reported, while the
-      opponent keeps the round win. Engine + client + leaderboard adopt it.
-      **Decided and scheduled.**
-
-      Not a workaround for a lost round — the round genuinely had only one
-      valid move, and scoring the absent side as a loss makes a connectivity
-      fault indistinguishable from a skill result. Win/loss stays
-      arrival-time-authoritative (see Phase 4 anti-cheat); this changes how an
-      *absent* side scores, not how a present one is timed. Series mode counts
-      a `void` round as a round win for the opposing side (Phase 3,
-      "Game-mode architecture"). Pinned today by
-      the "Connectivity-safe scoring (planned)" section in
-      [docs/protocol.md](protocol.md), which records the residual
-      no-move path.
 - [x] **Stale `state` teardown after a handshake re-pair** — when a PvP ready
       handshake is abandoned, `readyTimeout`/`readyAbandon` re-queue both sides
       and `m.requeue` calls `tryMatch`, which can re-pair the survivor into a
@@ -230,9 +175,6 @@ Make the system testable and debuggable in production.
 - [x] **Game-state transition tests** — `TestAllowedTransitionTable` walks the
       full valid/invalid edge set, with `TestAdvanceRejectsWrongFrom` and
       `TestAdvanceWinsOnlyOnce` covering rejection and idempotency.
-- [ ] **CPU determinism hooks** — inject a deterministic clock and move picker
-      for automated tests. Protocol rework Task A's schedule-driven run loop
-      (`sleep-until` on an announced `shootAt`) is the hook this needs.
 - [x] **Connectivity diagnostics — the landed traces** — one slice per trace,
       each independently deployable, producing the evidence the parked
       connectivity symptoms need before any of them can be scheduled against a
@@ -244,18 +186,6 @@ Make the system testable and debuggable in production.
 
       → rationale: [decisions/connectivity-diagnostics-traces.md](decisions/connectivity-diagnostics-traces.md)
 
-- [ ] **Structured (JSON) log output** — the diagnostics traces log as
-      human-readable lines, which is the right trade for now: the reader is a
-      person reading one incident, not a pipeline. Structured output is
-      deliberately deferred until something actually consumes it, and
-      Protocol rework Task A already adds `ts` to the timed frames, so lag is
-      measurable without it. Revisit only if evidence after the rework still
-      calls for it.
-- [ ] **Latency profile visibility** — the last remaining trace of the
-      diagnostics slice, and the one that cannot start yet: profiling latency
-      needs a real one-way measurement, which is exactly what the parked
-      `/ping` probe (Protocol rework Task C) exists to produce. It graduates to
-      its own item when Task C lands; until then there is nothing to profile.
 - [x] **Core-gameplay e2e (withdrawn)** — a Playwright suite that drove the real
       browser against the **deployed server** to surface game-breaking
       connectivity failures that resist unit testing. It landed as
@@ -295,20 +225,6 @@ Make the system testable and debuggable in production.
       ever wanted again it has to be a host that can install Chromium, not this
       one.
 
-- [ ] **Externalised operational settings** — `-addr` (`main.go:23`) is the only
-      flag; every other operating value is a compile-time constant or package
-      `var` — `shootWindow` (`round.go:11`), `readyTimeout` (`round.go:30`),
-      `sseWriteDeadline` (`server.go:43`), `maxBodyBytes` (`server.go:18`), the
-      rate-limit defaults (`ratelimit.go:13`). An operator who needs a different
-      value therefore has no route to one short of a rebuild and restart, and
-      tuning has to be a code change rather than a config change. Carried over
-      from the retired review checklist, where it was the only item not already
-      implemented, documented elsewhere, or tracked here. Decide flag vs env;
-      keep today's values as the defaults; and keep the engine reading one
-      authoritative value, since a second source of timing truth is the failure
-      the monotonic deadline already had to be fixed for (see "Monotonic PUN
-      deadline" above, and "CPU determinism hooks" below).
-
 ## Phase 3 — Architecture & features
 
 Build on a stable foundation without rewriting the core.
@@ -316,95 +232,11 @@ Build on a stable foundation without rewriting the core.
 - [x] **Pure game engine** — `round.go`'s `match` no longer touches `Hub`,
       `Client`, or SSE; sides are neutral `matchParty` and the hub wires
       `finish`/`requeue` callbacks back to real clients.
-- [ ] **One owner for match termination** — the engine ends the match; the hub
-      only wires. Today `match.run()` advances the phase and records
-      `abandon`/`requeued`, then `Hub.finishMatch` decides *per side* whether to
-      emit a teardown frame by re-checking `s.match == m` under `h.mu`. That
-      re-check exists only because the two lifecycles overlap (a re-pair can
-      install a newer match before the old one's `finish` runs), and it is what
-      the stale-teardown bug class reduces to. Making the engine the single
-      writer — it produces the termination description (per-side `requeued`,
-      `abandonReason`, terminal frames) and the hub just applies it to concrete
-      clients — collapses two sources of truth into one and retires the
-      conditional-teardown branch.
-
-      Shape: `run()` hands its `finish` callback a single termination record
-      describing the match instance, so the hub no longer needs to re-derive
-      which frames are still valid. `drainMoves()` stays unconditional and in
-      the hub — that one is the client's own channel, not the engine's view.
-
-      **Not urgent and deliberately not scheduled.** The current path is
-      correct and pinned by `finish_test.go`; this is a structural refactor of
-      the finish seam, and the Phase 3 work that actually pays off — series mode
-      (below) — has to add per-round termination *on top of* whatever shape this
-      takes. Do it in that order, not before, or it is paid for twice.
-- [ ] **Dedicated cancellation event instead of additive `state idle` fields** —
-      `state {state:"idle", reason?, requeued?}` overloads one frame with two
-      meanings: "a match finished" and "this handshake was cancelled". The
-      client then has to derive intent from payload and carry a special edge
-      (`matched + waiting`, taken only when `requeued` is true) that exists
-      purely because of that overload. A dedicated `cancelled {reason,
-      requeued}` event would let `state` mean one thing and let the client table
-      say it directly.
-
-      **The additive fields were the right call, though** — see the Phase 1
-      entry "Tell the player *why* a handshake was cancelled": a pre-existing
-      client ignores unknown fields and behaves exactly as before, whereas an
-      unknown *event type* is dropped silently and would strand a tab open
-      across the deploy on the game screen. So this only becomes worth doing if
-      the deploy can guarantee clients refresh, which is currently outside this
-      repo (an ops script, `git pull` + build + restart). Park it as a
-      post-rework cleanup, and fold in the version handshake it would need: a
-      `clientVersion` field on `connected` would let the server emit per-vintage
-      frames and would also give the parked seq/replay work a place to hang
-      compatibility.
-- [ ] **Game-mode architecture** — series-aware `run()`/`resolve()`: a match
-      becomes a sequence of rounds, first to 3 decisive wins, draws replayed; a
-      round that resolves `void` (no valid move, see Phase 1 "Connectivity-safe
-      scoring") counts as a round win for the opposing side.
-      `result` gains round/series fields (`round`, `youRoundWins`,
-      `oppRoundWins`, `roundsTarget`, `seriesOver`); a round result advances
-      the client scoreboard and re-enters countdown, a final result ends the
-      series. Ships for CPU matches first (ready stays once-per-series); PvP
-      re-opens the ready handshake per round afterward — the two current-priority
-      items 3 and 4 are the two halves of this one entry. Builds on the
-      Protocol rework Task A schedule, which ships first.
-- [ ] **Busy affordances** — show a brief pending/disabled affordance on action
-      buttons (Play Online, Instant CPU, rematch, cancel, fighter select, move
-      submit) while their request awaits the SSE reply, so a long wait reads as
-      "working" rather than silent; a failsafe clears it if the reply never
-      comes. Also covers the loading gap while "Waiting for result…".
-      **Decided and scheduled.**
-- [ ] **Character roster & portraits** — cosmetic expansion of the fighter
-      roster (data in `characters.go` + `web/characters.js`; no wire change,
-      no gameplay effect). Real art lives at `/img/char/<id>.webp` with an
-      emoji fallback (`img.art.missing`); `tools/gen-char.sh` converts
-      user-supplied sources from `web/img/sources/char/`. Select-screen polish
-      (thumbnails, selected ring, hover).
-- [ ] **Player names** — defined model for assignment, validation, and display.
-- [ ] **Multiple-tab handling** — deduplicate or isolate sessions from the same
-      browser.
 
 ## Phase 4 — Public features
 
 Features that depend on identity, persistence, or ranking.
 
-- [ ] **Leaderboard** — server-authoritative with anti-cheat (ignore
-      client-submitted timestamps for ranking, cap CPU streaks). A `void`
-      connectivity timeout scores like a draw — never a loss.
-- [ ] **Lobby / room architecture** — private room creation, joining,
-      discovery, and access control.
-- [ ] **Send challenge** — a player creates a match and gets a shareable link
-      (`/play?challenge=...` or similar) that any guest can open to join that
-      specific match directly, bypassing the global queue; the host side shows
-      a waiting + cancel state until the challenger joins.
-- [ ] **Tournament model** — bracket/round structure for multi-match
-      competition.
-- [ ] **Solo campaign** — Mortal Kombat–style tower climbing with progression.
-      Client-side only: 5-floor ladder against roster fighters, stock bot on
-      every floor, boss on the final floor, loss restarts the tower, best
-      floor persisted in `localStorage`. Fights run under the mode selector
-      (best-of-5 default; draws replayed).
 - [x] **Random fight backgrounds** — each match picks one of five stages at
       random. Implemented client-side: `app.js` keeps a `BGS` roster and
       `randomizeBg()` sets `--bg-anim`/`--bg-static` on the document (the

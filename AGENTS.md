@@ -27,8 +27,11 @@ model, matchmaking, SSE lifecycle).
   carry live in [Verify](#verify) below instead.
 - wire changes — [docs/protocol.md](docs/protocol.md): events, endpoints, the
   client state table, clock handling
-- scheduling or picking up work — [docs/roadmap.md](docs/roadmap.md): the status
-  of record, one checkbox per item, not a history
+- scheduling or picking up work — [docs/tasks/open/](docs/tasks/open/): one file
+  per specified build, `priority` integer in the frontmatter, lower is more urgent
+- what a phase was for, and what already landed in it —
+  [docs/roadmap.md](docs/roadmap.md): the status of record for landed work, and
+  the reason the phases are ordered as they are
 - a symptom that looks familiar — [docs/issues/](docs/issues/): entries are
   **unconfirmed** by definition
 - re-litigating a landed decision — [docs/decisions/](docs/decisions/): one file
@@ -169,7 +172,14 @@ INCONCLUSIVE into a FAIL.
 
 - **Wire format / events / state table** → [docs/protocol.md](docs/protocol.md).
 - **Internals, invariants, mechanisms** → [docs/architecture.md](docs/architecture.md).
-- **A work item's status** — scheduled, parked, or landed → [docs/roadmap.md](docs/roadmap.md), as exactly one checkbox in its phase entry.
+- **A work item's status** — its own file in [docs/tasks/open/](docs/tasks/open/)
+  if the next action is a specified build, or [docs/issues/](docs/issues/) if the
+  next action is to find out or decide. The directory *is* the status; see "One
+  home per work item" below.
+- **A scheduled item's urgency** → the `priority` integer in that task's
+  frontmatter. Never in a directory name and never in a prose list.
+- **A landed item** → [docs/roadmap.md](docs/roadmap.md), as one checkbox in its
+  phase entry. A checkbox there means this landed and nothing else.
 - **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → [docs/decisions/](docs/decisions/), one file per decision, linked from the item's roadmap entry.
 - **A symptom whose cause you cannot confirm** → [docs/issues/](docs/issues/): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
 - **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
@@ -180,18 +190,30 @@ a rejected alternative that a future reader would otherwise re-litigate (the
 fixed 2s `Ready?` step; swapping `state` for a `cancelled` event), record it
 where the decision lives.
 
-**One home per work item.** A work item has exactly one **status**, recorded as
-exactly one checkbox in exactly one phase entry. That is the invariant, and the
-stale-copy incident below is what it is protecting against. A landed item's
-*reasoning* lives in `docs/decisions/`; that is a second **file**, not a second
-**status** — the roadmap entry keeps the pointer, so the copy a reader hits first
-is still the only copy of the status. "Current priorities" is a table of contents
-pointing at those entries, not a second copy — and the README does not track
-status at all, it points at the roadmap and at `docs/issues/`. The reason is not
-tidiness: when the same slice was tracked in three places, they disagreed about
-whether the bounded SSE connection lifetime had landed, and the copy a reader hit
-first was the stale one. To land something, tick the checkbox in its phase; never
-restate a status somewhere else.
+**One home per work item.** A work item has exactly one home, and the home
+*is* its status: a file in `docs/tasks/open/` means specified and not landed, a
+file in `docs/issues/` means the cause is not confirmed, a checkbox in the
+roadmap means it landed. Nothing is recorded in two of the three, and no item
+carries a status word anywhere else. That is the invariant, and the stale-copy
+incident below is what it protects against.
+
+Two consequences worth stating because they look like exceptions and are not. A
+landed item's *reasoning* lives in `docs/decisions/` — that is a second **file**
+about the item, not a second **status**; the roadmap entry keeps the pointer, so
+the copy a reader hits first is still the only copy of the status. And a task's
+`priority` is metadata, not a place: a task is not "unimportant" because it sits
+at priority 17, so it stays in `open/` and gets no third directory to reflect
+that. The README tracks no status at all — it points at the roadmap and at
+`docs/tasks/open/`.
+
+The reason is not tidiness: when the same slice was tracked in three places, they
+disagreed about whether the bounded SSE connection lifetime had landed, and the
+copy a reader hit first was the stale one. Three separate copies have since been
+caught — `review.md` against the roadmap, `review.md` against `protocol.md`, and
+"Leaderboard identity" recorded twice at different levels of progress. To land
+something, tick its roadmap checkbox; to schedule something, create the task
+file; to park something, create the issue file. Never restate a status somewhere
+else.
 
 ## Invariants to know before you edit
 
