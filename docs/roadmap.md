@@ -153,44 +153,7 @@ Note: the unchecked items below are postponed to keep feature work moving
       they start immediately") was the gap: the one match with no sync barrier
       was the one that started instantly.
 
-      Considered and **rejected**: inserting a fixed `Ready?` 2s step ahead of
-      KA. It does not buy sync — the client does all of its setup in one shot
-      when the first `countdown` arrives (`planRound` → arm `punTimer`), which
-      is microseconds, so there is nothing incremental to give a slow client
-      more time for. It does cost something real: it widens the pre-PUN phase
-      from ~3.2s to ~5.2s, and that phase is precisely the window in which a
-      drop loses the round outright (see issues.md entry 5). Buying a
-      hypothetical benefit with a certain 67% increase in drop exposure. The
-      handshake gives the same buffer *verified* rather than hoped-for, and
-      self-timed — a slow client waits as long as it needs, a fast one pays
-      nothing.
-
-      New failure mode, accepted: a CPU match whose human never acks is now
-      cancelled and re-queued after 8s, where before it could not happen. The
-      2s ack re-post plus the `pending` snapshot flag (which routes a
-      reconnecting client back through `matched` and re-arms its acks) cover
-      the realistic cases.
-
-            Verified: `go test ./...` and 38/38 client unit tests green. `-race` is
-      **not runnable on this platform** (android/arm64 under Termux), so the
-      `ackReady` CAS/close path is hand-checked, not race-checked.
-
-      **The probe suite caught the deploy gap, then mislabelled it.** `t5`, `t6`
-      and `t7` drive CPU matches and never sent `/ready` (only `t8`, the PvP
-      probe, did). Against the gated server they sat in the handshake for 8s,
-      timed out, and never saw a `countdown` — and the harness reported all
-      three as `INCONCLUSIVE (link dropped)`, because any frame timeout matched
-      the network-error pattern. So the first post-deploy run read as a train
-      problem, on a link that was in fact fine: t1–t4 and t8 all passed around
-      it. The tell was the 8s duration, matching `readyTimeout` exactly.
-
-      Fixed on both sides. The three probes now ack (t5 asserts the gate is
-      *held* before the ack, making it the live regression test for this
-      change), and `classify()` now separates a frame withheld on a **healthy**
-      stream — `WITHHELD`, a FAIL — from one lost on a broken link. The general
-      lesson: a timeout means "did not arrive", and only the stream's own health
-      says whether that is the server's doing or the train's. Reporting the
-      first as the second is how a contract break hides behind a flaky link.
+      → rationale: [decisions/cpu-ready-gate.md](decisions/cpu-ready-gate.md)
 
 - [x] **Tell the player *why* a handshake was cancelled** — an expired readiness
       gate was invisible. The client acked with a fire-and-forget
@@ -198,47 +161,7 @@ Note: the unchecked items below are postponed to keep feature work moving
       arrived as a bare `state idle`, so a player whose link was too slow saw
       "match found" and then silently landed back in the queue with no reason.
 
-      Reading the requeue path end to end first turned up a worse bug than the
-      missing message: `makeMatch` wired the *same* requeue closure for CPU and
-      PvP, so a CPU handshake timeout put the player into the **PvP queue** for a
-      human opponent they never asked for. `requeueSide(1)` correctly no-ops for
-      the bot, but side 0 never checked the mode. Fixed at the source (the
-      closure captures `cpu` and declines to queue), and pinned by
-      `TestCPUReadyTimeoutReturnsHumanToLobby`, which asserts the human is *not*
-      on the queue — the inverse of the test it replaced.
-
-      The second half was the invisible queue. `requeue` sets `queueing` and
-      calls `tryMatch`, but the client was told `state idle`, so a re-queued
-      player sat in a lobby that looked idle while the server held them in the
-      queue: no Searching view, no Cancel, and re-matched again within the gate
-      window. So the teardown frame now carries `reason` and `requeued`, and
-      `requeued` is present only when the server actually queued that side.
-
-      **Additive on purpose, and that was not the obvious choice.** Swapping the
-      event type for `waiting` would have reused the frame `/queue` already
-      sends — but `waiting` has no `matched -> waiting` edge in the client
-      machine, and adding it does not help a client that predates the change. A
-      tab open across a deploy would strand itself on the game screen with a
-      rejected transition. Keeping the frame as `state idle` and adding fields
-      means an old client ignores them and behaves exactly as before. The client
-      needed one new edge (`matched + waiting = waiting`) to avoid a lobby flash,
-      which is safe precisely because the wire format did not change.
-
-      Not scoped, and deliberately: no blame. The server cannot attribute a
-      timeout to a player — it observes an ack that did not arrive, which is
-      equally consistent with a slow upload, a stalled connection, or a device
-      that slept. The copy states the cause it can prove ("Connection wasn't
-      ready in time — match cancelled") and never which player was at fault, and
-      it must not read as a loss: no `result` is emitted, so nothing is scored
-      (pinned by `TestFinishedMatchTeardownCarriesNoReason` and the CPU test).
-
-      Also `readyAbandon` was folded in, as decided: the survivor of an opponent
-      disconnect now learns `opponent-left` through the same field.
-
-      *Landed: `abandon`/`requeued` on the engine match, mode-aware requeue in
-      `makeMatch`, the reason on the teardown frame, the client notice above
-      whichever view is showing, and t5 asserting a finished match's teardown
-      stays bare. Verified to fail against the pre-change payload.*
+      → rationale: [decisions/handshake-cancel-reason.md](decisions/handshake-cancel-reason.md)
 
 - [ ] **Measure whether 8s is the right readiness budget** — the gate's value is
       unmeasured in both directions, and the current evidence pulls both ways.
@@ -266,7 +189,6 @@ Note: the unchecked items below are postponed to keep feature work moving
       but it makes every handshake longer and every drop in it more costly. If
       the data says 8s is too tight, the cheaper fix is likely to be a
       longer/better `matched` payload or a lighter ack, not a longer timer.
-
 
 - [ ] **Latency compensation — parked (see issues.md)** — one-way delivery
       latency can flatten an on-time reaction into a `400 too late` for
@@ -303,105 +225,17 @@ Note: the unchecked items below are postponed to keep feature work moving
       it in a live match (see the `matched` row in
       [docs/protocol.md](protocol.md)).
 
-      **Fixed.** The teardown frame is now per-side and conditional: only a side
-      still in *this* match is told to go idle, decided under `h.mu` because
-      `Client.match` is plain state and an unlocked read would be a data race
-      (and `-race` cannot run on the arm64 dev device). `drainMoves` stays
-      unconditional — that channel is the client's own, and a re-paired client
-      must not open its new round on the old round's buffered pick.
-
-      Three unit tests in `finish_test.go` drive the pointer states directly,
-      because the live race is order-dependent and a clean probe run is not proof
-      of absence: a re-paired side gets no frame, an already-removed side
-      (`match == nil`) gets no frame, and the normal path still tells **both**
-      sides to go idle — that last one is the guard against over-correcting into
-      stranding every finished client. The two bug-catching tests are the
-      first and second; the third passes against both servers, since it exists
-      to catch an over-correction rather than the original defect.
-      *Previously observed via the protocol probe suite's `t8` scenario B,
-      roughly 1 run in 7 (order-dependent); `t8` still asserts it as a live
-      canary. Not filed in [docs/issues.md](issues.md): that register holds
-      symptoms whose cause is unconfirmed, and this one's mechanism was traced.*
+      → rationale: [decisions/stale-teardown-guard.md](decisions/stale-teardown-guard.md)
 
 - [x] **Monotonic PUN deadline** — the announced deadline is held as a
       `time.Time`, not epoch-ns.
 
-      **Found as a flake, not a reading.** `TestCountdownCarriesAnnouncedPlan`
-      failed once across ~9 full runs with `youTimingMs = 13299` — a move that
-      arrived ~300ms after the deadline reported as 13.3s late, inside a test
-      whose own wall time was 1.21s. That internal contradiction is the
-      fingerprint: the test's duration is measured monotonically, so the two
-      numbers could not both be right.
-
-      **Mechanism.** `m.shootAt` was stored as `UnixNano` and rebuilt with
-      `time.Unix`, which has no monotonic reading. Three judgements in one round
-      compare it against a `time.Now()` that *does* have one — arrival timing in
-      `resolve`, the KA/CHI/PUN sleeps in `run`, and the `too late` cutoff in
-      `handleMove`. `time.Time.Sub` uses the monotonic reading only when both
-      operands carry it and **silently falls back to wall arithmetic** otherwise,
-      so a device that steps its wall clock mid-round (network change, NTP resync)
-      mis-times all three by exactly the size of the step. It was never observed
-      on stationary hardware, and the movement that produced it is exactly the
-      condition the test could not hold fixed.
-
-      **Fixed** by storing the deadline as a `time.Time` that keeps its monotonic
-      reading, set once from `time.Now()` at countdown start. The wire value is
-      derived from the same instant via `UnixMilli`, so `shootAt` still reaches
-      the client as the same server epoch-ms and protocol/clock-skew handling is
-      unchanged. The late cutoff is a real behavioural improvement: a mid-round
-      clock step could previously reject an on-time move as `too late`, which is
-      the *symptom* of [docs/issues.md](issues.md) 3 — but a distinct
-      contributor to it, not that entry's latency hypothesis, and not a
-      resolution of it. Issue 3 stays open.
-
-      **Testing.** A clock step cannot be injected, so `monotonic_test.go` pins
-      the structural property instead: the stored deadline must retain its
-      monotonic reading, which `time.Time.String` renders as a trailing `m=+`.
-      That guard was checked to *fail* against the old wall-only form, so it
-      cannot silently rot. Two further tests pin the wire value and an ordinary
-      arrival judgement. Five consecutive full runs clean. Residual risk: the
-      live trigger is unproven, so `t5` remains the live canary.
+      → rationale: [decisions/monotonic-pun-deadline.md](decisions/monotonic-pun-deadline.md)
 
 - [x] **Both ends of the pick window are authoritative** — `resolve` judged only
       the near end, `arrive >= shootAt`, and left the far end to `handleMove`.
 
-      **The gap.** `handleMove`'s late check reads the clock, then stamps
-      `arrive` from a *second* read a few lines later. A pick submitted in the
-      final sliver of the window can pass the check and be stamped past the
-      deadline, and `drainPending` counts it as an on-time tap. `resolve` then
-      called it valid and let it **win the round** on a move the server would
-      have rejected with `400 too late` a moment later. The handler's own
-      comment claimed the accepted move was "never silently corrupted"; the
-      reasoning behind that ("drainPending counts anything buffered before the
-      deadline fired") assumes buffered means before the deadline, which is
-      exactly what the double read can violate. Confirmed by driving the engine
-      directly: a rock against scissors arriving 40ms after the deadline
-      resolved as `win` before this change.
-
-      **Fixed at both ends.** The handler samples the clock once, so the
-      late-bound check and the arrival stamp cannot disagree; and `resolve` now
-      judges `arrive` against the whole announced window, `[shootAt, deadline]`,
-      so the authority that decides the round does not depend on a caller having
-      checked correctly. A pick stamped at the instant the window closes is not
-      *after* it and still counts, which the boundary test pins — the client
-      renders the window as closing at that same instant, so rejecting it would
-      take the boundary away from a player who was inside it.
-
-      **`late`, deliberately not `timeout`.** Connectivity-safe scoring (Phase 1)
-      keys a no-contest on the `timeout` note, and it keeps `early` out of that
-      rule because an early pick is a deliberate act that stays a full loss. A
-      late pick is the same kind of act, so it gets its own note rather than
-      being folded into `timeout` — otherwise the planned `void` work would
-      silently convert it into a draw-scored no-contest. Pinned by a test that
-      fails if `late` is ever reported as `timeout`.
-
-      **Testing.** Driven directly against `resolve` with hand-set arrival
-      instants — no run loop, no channels, no sleeping, since the judgement is a
-      pure function of the two arrivals. The disqualification test was checked
-      to *fail* against the old one-sided check (it resolved `win`); the
-      at-the-deadline guard passes both before and after by design, existing to
-      catch an over-correction; the `late`-is-not-`timeout` test also passes
-      both, pinning the contract choice rather than the original defect.
+      → rationale: [decisions/pick-window-both-ends.md](decisions/pick-window-both-ends.md)
 
 ## Phase 2 — Testing & observability
 
@@ -411,80 +245,14 @@ Make the system testable and debuggable in production.
       the reason a run failed, which is why one intermittent live failure took
       three attempts to diagnose.
 
-      **`run-all` threw the output away.** It pipes each script's stdout, greps
-      it for a verdict, and discards the rest — then tells the reader "FAIL means
-      the server misbehaved, go and read that output". That output no longer
-      existed. A failing script's full log is now printed under the summary.
-
-      **`script()` dropped the checks too.** Worse: a script's reporter lives
-      inside the body, so any throw before `rep.print()` discarded every check
-      already recorded. The t5 run that started this had already recorded
-      `/ready accepted = 400 "no active match"` — which names the cause outright
-      — and threw on the next line waiting for a countdown. All of it was lost,
-      leaving a bare `WITHHELD: timeout waiting for 'countdown'` and no way to
-      tell a server bug from a slow ack. The reporter is now retained and its
-      checks printed before any verdict.
-
-      **The verdict itself was wrong.** With the checks visible it was clear the
-      server had behaved correctly: the 8s readiness gate expired while the
-      client's ack was still in flight, so it requeued the human and sent
-      `state idle`. The probe then waited 30s for a countdown that was never
-      going to come and reported a *contract break*. A withheld frame is only the
-      server's fault when every precondition for it held, so a withheld frame
-      following a failed check is now reported as that failure. `WITHHELD` is
-      unchanged when all checks pass, which is the missing-`/ready`-ack bug it
-      was added to catch — both directions are covered.
-
-      **A distinct `GATE` verdict.** Collapsing the gate expiry into a generic
-      failure — or into generic link noise — both lose information, so it is its
-      own outcome: `INCONCLUSIVE (ready gate expired — ack slower than the link
-      allowed)`, exit 2. A gate expiry is recorded by `expectReadyAck` only for
-      the rejection that actually means it (`400 no active match`); every other
-      `/ready` rejection stays an ordinary failure, because those *are* the
-      server's. `tall` calls the case out separately from other inconclusive runs,
-      since it is not merely unjudgeable — a round really was lost to the network.
-      Precedence is server failure > gate expiry > pass, so an inconclusive link
-      can never mask a defect found in the same run, and it lives in a pure
-      `classifyThrow` with tests in both directions. The first version nested the
-      gate branch inside a condition unreachable when the verdict was GATE, so a
-      real expiry was still reported as a contract break; the live re-check caught
-      it after the unit tests had already passed.
-
-      **Server fix found on the way.** The live failure was not a server bug, but
-      the adjacent window was: `advance(phaseCountdown, phaseDone)` runs before
-      `finishMatch` clears `c.match`, and an ack landing in that window was
-      answered `200 {}` — claiming a countdown for a match that will never run
-      one. Now `409 ready gate closed`. Checked to fail against the old handler.
+      → rationale: [decisions/probe-keeps-evidence.md](decisions/probe-keeps-evidence.md)
 
 - [x] **Deploy identity on `/health`** — the live suite now proves *which* build
       it tested. `/health` reports `build {sha, modified, source}`; `t1` asserts
       it against the local HEAD and fails with a fix hint on absent, unknown,
       mismatched, or dirty.
 
-      **The gap this closed.** The suite points at a deployed origin, and the
-      origin reported no version of itself. Every live result was therefore
-      conditional on an assumption nobody could check — that the deploy had
-      actually happened and restarted. A green suite against a stale binary is
-      *worse* than no suite, because it reads as verification. This is the same
-      failure shape as the probe origin defaulting to the wrong host earlier in
-      Phase 2: a suite that looks authoritative while measuring the wrong thing.
-      The suite cannot detect its own misconfiguration, so the check had to be
-      explicit and had to run first.
-
-      **No build script.** The identity comes from Go's automatic VCS stamping,
-      so a plain `go build -o kxp .` inside the work tree identifies itself with
-      no deploy-time discipline to forget. `modified` is reported separately from
-      `sha` so a dirty tree cannot masquerade as its commit. `buildSHA` is a
-      `-ldflags -X` escape hatch for builds outside a work tree; `go test` does
-      not stamp test binaries, so the parser is unit-tested from synthetic
-      settings instead, and only a real binary on the deployed origin exercises
-      the stamped path end to end.
-
-      **Verified** by building locally and confirming the served sha equals
-      `git rev-parse HEAD` byte for byte, and by running `t1` against the
-      then-deployed binary — which predates this change — and watching it fail
-      with `ABSENT` instead of passing. That negative case is the real proof: the
-      check reports a stale build rather than green-lighting it.
+      → rationale: [decisions/deploy-identity-health.md](decisions/deploy-identity-health.md)
 
 - [x] **Timing edge-case tests** — exactly-at-PUN, just-after-PUN,
       at-deadline, and after-deadline boundary cases.
@@ -510,28 +278,8 @@ Make the system testable and debuggable in production.
       defect trains you to ignore it, so every trace here exists to make the next
       judgement possible.
 
-      Landed so far: a per-request access log (`accessLog`,
-      method/path/status/duration) and an error log at every `handlerError`
-      (`kxp: reject <code> "<msg>"`), exercised by `logging_test.go`; client
-      join/leave lines carrying the live count; the `/metrics` counter endpoint
-      (requests, rejects by code/message, joined/left, dropped events,
-      rate-limited, SSE streams, client error beacons by kind, **reaped
-      connections**); the `/health` probe; and the client-side error beacon
-      (`POST /report`, throttled client-side via `beaconGate`, hooked at SSE
-      errors, fetch failures, machine-rejected transitions, stall-watchdog
-      fires, and rejoin-past-window).
+      → rationale: [decisions/connectivity-diagnostics-traces.md](decisions/connectivity-diagnostics-traces.md)
 
-      **The bounded SSE connection lifetime is in too**: `/events` re-arms a
-      short rolling per-write deadline before every frame, so a write that
-      stalls against a vanished peer (half-open conn) reaps the connection — the
-      client is removed, the online count reconciles down, a `reap client …`
-      line joins the `leave online=N` line, and the `reaped` counter moves. TCP
-      keepalive (15s) arms at the listener so the OS also notices silent idle
-      peers between frames. Each client logs a short **frame journal** (last 16
-      event types actually flushed) on leave, so a vanished/reaped device's
-      last-seen can be correlated with its reconnect or beacon.
-
-      Still open here: structured (JSON) log output — its own item below.
 - [ ] **Structured (JSON) log output** — the diagnostics traces log as
       human-readable lines, which is the right trade for now: the reader is a
       person reading one incident, not a pipeline. Structured output is
@@ -570,18 +318,9 @@ Make the system testable and debuggable in production.
       round-trip, SSE frame/id/skew contract, a timed CPU match, mid-match
       reconnect + reconciliation, the full rejection-code matrix, and
       self-paired PvP including the abandoned-handshake case.
-      The design constraint that matters: verdicts are split into PASS / FAIL /
-      INCONCLUSIVE, and an inconclusive verdict always names its reason — link
-      dropped, self-rate-limited, or a readiness gate that expired because the
-      link was too slow to deliver a `/ready` ack in time — because the suite is
-      run over unreliable links and a suite that cannot tell a transport fault
-      from a server defect trains you to ignore it. `tall` exits 1 on a real
-      failure and 2 on an inconclusive one.
-      *Known gap: rendering, CSS and in-browser console errors have no
-      automated coverage anywhere in this repo, since the Playwright suite was
-      withdrawn. Client state machine and server internals stay offline
-      (`npm run unit`, `npm run go`). It already earned its keep — it traced the stale-teardown race filed in Phase 1 and
-      measured the zero-grace drop behaviour recorded in issues.md entry 5.*
+
+      → rationale: [decisions/browser-free-probes.md](decisions/browser-free-probes.md)
+
 - [x] **Automated test workflow** — `go test ./...` target; `go test -race` is not
       runnable on the arm64 Android dev device ("race is not supported on
       android/arm64"), so wire it into CI whenever a suitable host is
