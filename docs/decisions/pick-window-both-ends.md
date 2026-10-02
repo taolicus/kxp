@@ -1,8 +1,9 @@
 # Both ends of the pick window are authoritative
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 1 — Core hardening** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[pick-window-both-ends.md](../tasks/closed/pick-window-both-ends.md)** (Phase 1). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 **The gap.** `handleMove`'s late check reads the clock, then stamps
 `arrive` from a *second* read a few lines later. A pick submitted in the

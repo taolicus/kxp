@@ -1,8 +1,9 @@
 # Tell the player *why* a handshake was cancelled
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 1 — Core hardening** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[handshake-cancel-reason.md](../tasks/closed/handshake-cancel-reason.md)** (Phase 1). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 Reading the requeue path end to end first turned up a worse bug than the
 missing message: `makeMatch` wired the *same* requeue closure for CPU and

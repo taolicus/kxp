@@ -1,8 +1,9 @@
 # Monotonic PUN deadline
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 1 — Core hardening** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[monotonic-pun-deadline.md](../tasks/closed/monotonic-pun-deadline.md)** (Phase 1). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 **Found as a flake, not a reading.** `TestCountdownCarriesAnnouncedPlan`
 failed once across ~9 full runs with `youTimingMs = 13299` — a move that

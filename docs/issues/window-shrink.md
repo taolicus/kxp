@@ -22,5 +22,5 @@ the cause/latency is actually measured.
 Two questions are already open against this entry and are recorded as their own
 entries rather than folded in here: whether the ready-gate budget of 8s is
 correct ([readiness-budget](readiness-budget.md)), and how long the latency
-profile trace has to wait for a real one-way measurement — that one is a roadmap
-task, "Latency profile visibility" in Phase 2.
+profile trace has to wait for a real one-way measurement — that one is
+[latency-profile-visibility](../tasks/open/latency-profile-visibility.md).

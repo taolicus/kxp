@@ -119,7 +119,8 @@ unchanged.
 
 Decided and scheduled: the engine emits `void` on timeouts, the client
 scorebook treats it like a draw, and the leaderboard applies the same rule
-server-side (see the roadmap).
+server-side (see
+[connectivity-safe-scoring.md](tasks/open/connectivity-safe-scoring.md)).
 
 ## HTTP endpoints
 
@@ -189,8 +190,8 @@ made the player's ability to act depend on burst delivery of the `shoot` frame
 over a single unacknowledged SSE stream: a ~2s stall at that moment (or a lost
 frame, unrecoverable faster than a reconnect) produced "skip PUN → Waiting for
 result → You lose" with no chance to act. Task A removed that dependency;
-Tasks B/C exist as parked drafts, not scheduled work (see the roadmap and
-[docs/issues/](issues/)).
+Tasks B/C exist as parked drafts, not scheduled work (see
+[docs/roadmap.md](roadmap.md), "Protocol rework", and [docs/issues/](issues/)).
 
 ### v1.1 — announced deadline + per-frame `ts` (implemented)
 

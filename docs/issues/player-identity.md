@@ -40,5 +40,8 @@ radius rather than as separate items:
 Deciding this first is what keeps those four from each inventing its own notion
 of a player.
 
-**Prospective fix (not scheduled)** — not scheduled; it gates four Phase 4
-features rather than being one of them.
+**Prospective fix (not scheduled)** — this gates five tasks rather than being one
+of them: the four above, plus [player-names](../tasks/open/player-names.md).
+[Solo campaign](../tasks/open/solo-campaign.md) is the one Phase 4 task it does
+*not* gate, because it persists to `localStorage` like the arcade ladder and will
+be retrofitted onto whatever is chosen here.

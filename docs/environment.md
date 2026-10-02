@@ -44,10 +44,10 @@ it is gitignored.
 
 `package.json` declares **no dependencies**, and nothing browser-based is
 installed: there is no Playwright and no Chromium. That is a decision, not an
-omission — the Playwright e2e suite was withdrawn (`31a0384`), and the
-browser-free probe suite is the integration path on this host. The reasoning,
-and what a browser-level suite would require, is recorded against the
-"Automated test workflow" roadmap item.
+omission — the Playwright e2e suite was withdrawn, and the browser-free probe
+suite is the integration path on this host. The reasoning, and what a
+browser-level suite would require, is in
+[automated-test-workflow.md](tasks/closed/automated-test-workflow.md).
 
 ## Verifying
 

@@ -1,8 +1,9 @@
 # A failing probe keeps its evidence
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 2 — Testing & observability** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[probe-keeps-evidence.md](../tasks/closed/probe-keeps-evidence.md)** (Phase 2). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 **`run-all` threw the output away.** It pipes each script's stdout, greps
 it for a verdict, and discards the rest — then tells the reader "FAIL means

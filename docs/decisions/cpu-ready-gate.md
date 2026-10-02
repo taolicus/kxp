@@ -1,8 +1,9 @@
 # CPU ready gate
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 1 — Core hardening** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[cpu-ready-gate.md](../tasks/closed/cpu-ready-gate.md)** (Phase 1). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 Considered and **rejected**: inserting a fixed `Ready?` 2s step ahead of
 KA. It does not buy sync — the client does all of its setup in one shot

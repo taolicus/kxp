@@ -1,8 +1,9 @@
 # Protocol-level production probes (browser-free)
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 2 — Testing & observability** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[browser-free-probes.md](../tasks/closed/browser-free-probes.md)** (Phase 2). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 The design constraint that matters: verdicts are split into PASS / FAIL /
 INCONCLUSIVE, and an inconclusive verdict always names its reason — link

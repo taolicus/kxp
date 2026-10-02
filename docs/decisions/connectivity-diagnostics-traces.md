@@ -1,8 +1,9 @@
 # Connectivity diagnostics — the landed traces
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 2 — Testing & observability** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[connectivity-diagnostics-traces.md](../tasks/closed/connectivity-diagnostics-traces.md)** (Phase 2). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 Landed so far: a per-request access log (`accessLog`,
 method/path/status/duration) and an error log at every `handlerError`

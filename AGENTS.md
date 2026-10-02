@@ -29,9 +29,12 @@ model, matchmaking, SSE lifecycle).
   client state table, clock handling
 - scheduling or picking up work — [docs/tasks/open/](docs/tasks/open/): one file
   per specified build, `priority` integer in the frontmatter, lower is more urgent
-- what a phase was for, and what already landed in it —
-  [docs/roadmap.md](docs/roadmap.md): the status of record for landed work, and
-  the reason the phases are ordered as they are
+- what a phase was for, and what landed in it —
+  [docs/roadmap.md](docs/roadmap.md): the phase structure and a link per landed
+  item, which is why the phases are ordered as they are
+- why a landed item is the way it is —
+  [docs/tasks/closed/](docs/tasks/closed/): one file per landed item, each linking
+  its rationale in [docs/decisions/](docs/decisions/)
 - a symptom that looks familiar — [docs/issues/](docs/issues/): entries are
   **unconfirmed** by definition
 - re-litigating a landed decision — [docs/decisions/](docs/decisions/): one file
@@ -173,14 +176,17 @@ INCONCLUSIVE into a FAIL.
 - **Wire format / events / state table** → [docs/protocol.md](docs/protocol.md).
 - **Internals, invariants, mechanisms** → [docs/architecture.md](docs/architecture.md).
 - **A work item's status** — its own file in [docs/tasks/open/](docs/tasks/open/)
-  if the next action is a specified build, or [docs/issues/](docs/issues/) if the
-  next action is to find out or decide. The directory *is* the status; see "One
-  home per work item" below.
+  if the next action is a specified build, [docs/issues/](docs/issues/) if the
+  next action is to find out or decide, and [docs/tasks/closed/](docs/tasks/closed/)
+  once it has landed. The directory *is* the status; see "One home per work item"
+  below.
 - **A scheduled item's urgency** → the `priority` integer in that task's
   frontmatter. Never in a directory name and never in a prose list.
-- **A landed item** → [docs/roadmap.md](docs/roadmap.md), as one checkbox in its
-  phase entry. A checkbox there means this landed and nothing else.
-- **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → [docs/decisions/](docs/decisions/), one file per decision, linked from the item's roadmap entry.
+- **A landed item** → [docs/tasks/closed/](docs/tasks/closed/), one file per item.
+  The file keeps the phase it ran in by its position under
+  [docs/roadmap.md](docs/roadmap.md), which holds the phase structure and a link
+  per item and no status of its own.
+- **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → [docs/decisions/](docs/decisions/), one file per decision, linked from the closed task file.
 - **A symptom whose cause you cannot confirm** → [docs/issues/](docs/issues/): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
 - **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
 - **Host capability claims** → [docs/environment.md](docs/environment.md), re-measured rather than assumed.
@@ -192,28 +198,32 @@ where the decision lives.
 
 **One home per work item.** A work item has exactly one home, and the home
 *is* its status: a file in `docs/tasks/open/` means specified and not landed, a
-file in `docs/issues/` means the cause is not confirmed, a checkbox in the
-roadmap means it landed. Nothing is recorded in two of the three, and no item
-carries a status word anywhere else. That is the invariant, and the stale-copy
-incident below is what it protects against.
+file in `docs/issues/` means the cause is not confirmed, a file in
+`docs/tasks/closed/` means it landed. Nothing is recorded in two of the three,
+and no item carries a status word anywhere else — no checkbox, no "done", no
+"planned". That is the invariant, and the stale-copy incident below is what it
+protects against.
 
 Two consequences worth stating because they look like exceptions and are not. A
 landed item's *reasoning* lives in `docs/decisions/` — that is a second **file**
-about the item, not a second **status**; the roadmap entry keeps the pointer, so
-the copy a reader hits first is still the only copy of the status. And a task's
-`priority` is metadata, not a place: a task is not "unimportant" because it sits
-at priority 17, so it stays in `open/` and gets no third directory to reflect
-that. The README tracks no status at all — it points at the roadmap and at
-`docs/tasks/open/`.
+about the item, not a second **status**; the closed task file keeps the pointer,
+so the copy a reader hits first is still the only copy of the status. And a
+task's `priority` is metadata, not a place: a task is not "unimportant" because
+it sits at priority 17, so it stays in `open/` and gets no third directory to
+reflect that. The README tracks no status at all — it points at the three
+registers. `docs/roadmap.md` is not one of them: it is a table of contents by
+phase and carries no status word, which is why it can be read without being able
+to contradict a file.
 
 The reason is not tidiness: when the same slice was tracked in three places, they
 disagreed about whether the bounded SSE connection lifetime had landed, and the
-copy a reader hit first was the stale one. Three separate copies have since been
-caught — `review.md` against the roadmap, `review.md` against `protocol.md`, and
-"Leaderboard identity" recorded twice at different levels of progress. To land
-something, tick its roadmap checkbox; to schedule something, create the task
-file; to park something, create the issue file. Never restate a status somewhere
-else.
+copy a reader hit first was the stale one. Four separate copies have since been
+caught — `review.md` against the roadmap, `review.md` against `protocol.md`,
+"Leaderboard identity" recorded twice at different levels of progress, and
+`tools/README.md` still calling the stale-teardown fix "Phase 1, unchecked" long
+after it landed. To land something, `git mv` its task file to
+`docs/tasks/closed/`; to schedule something, create the task file; to park
+something, create the issue file. Never restate a status somewhere else.
 
 ## Invariants to know before you edit
 

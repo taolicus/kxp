@@ -1,8 +1,9 @@
 # Stale `state` teardown after a handshake re-pair
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 1 — Core hardening** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[stale-teardown-guard.md](../tasks/closed/stale-teardown-guard.md)** (Phase 1). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 **Fixed.** The teardown frame is now per-side and conditional: only a side
 still in *this* match is told to go idle, decided under `h.mu` because

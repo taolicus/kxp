@@ -55,10 +55,11 @@ two players share. See [architecture](docs/architecture.md) for the internals.
 - [protocol.md](docs/protocol.md) — the full wire format: events, endpoints,
   the client state table, and clock handling.
 - [backgrounds.md](docs/backgrounds.md) — match background asset pipeline.
-- [tasks/open/](docs/tasks/open/) — specified work not yet landed, one file per
-  item, `priority` integer in the frontmatter.
-- [roadmap.md](docs/roadmap.md) — what has landed, by phase, and why the phases
-  are ordered as they are.
+- [tasks/](docs/tasks/) — work items: what is specified and not yet landed
+  ([open/](docs/tasks/open/), `priority` integer in the frontmatter) and what has
+  landed ([closed/](docs/tasks/closed/)).
+- [roadmap.md](docs/roadmap.md) — why the phases are ordered as they are, with a
+  link per landed item.
 - [issues/](docs/issues/) — observed reliability symptoms parked until
   their cause is confirmed, one file per symptom.
 
@@ -70,7 +71,8 @@ node --test web/kxp.test.cjs web/machine.test.cjs
 ```
 
 (`go test -race` isn't supported on the arm64-Android dev device; see the
-roadmap's "Automated test workflow" note if you add CI.)
+[automated-test-workflow.md](docs/tasks/closed/automated-test-workflow.md)
+if you add CI.)
 
 The browser-free probe suite (`tools/t1`–`t8`) is the integration path. It
 targets the **deployed (production) server directly over the internet**; it
@@ -98,7 +100,7 @@ exactly one place, so there is one status to keep true:
 
 - [tasks/open/](docs/tasks/open/) — decided and scheduled work, one file per
   item.
-- [roadmap.md](docs/roadmap.md) — what has landed, by phase.
+- [tasks/closed/](docs/tasks/closed/) — what has landed.
 - [issues/](docs/issues/) — live symptoms parked until their cause is
   confirmed.
 

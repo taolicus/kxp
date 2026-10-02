@@ -1,8 +1,9 @@
 # Deploy identity on `/health`
 
-Landed. Status and summary live in the roadmap entry under
-**Phase 2 — Testing & observability** — [roadmap.md](../roadmap.md). This file holds the
-rationale: what was considered, what was rejected, and why.
+Landed. Status and summary live in the closed-task file
+**[deploy-identity-health.md](../tasks/closed/deploy-identity-health.md)** (Phase 2). This
+file holds the rationale: what was considered, what was rejected, and
+why.
 
 **The gap this closed.** The suite points at a deployed origin, and the
 origin reported no version of itself. Every live result was therefore
