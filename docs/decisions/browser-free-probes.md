@@ -15,4 +15,5 @@ failure and 2 on an inconclusive one.
 automated coverage anywhere in this repo, since the Playwright suite was
 withdrawn. Client state machine and server internals stay offline
 (`npm run unit`, `npm run go`). It already earned its keep — it traced the stale-teardown race filed in Phase 1 and
-measured the zero-grace drop behaviour recorded in issues.md entry 5.*
+measured the zero-grace drop behaviour recorded in
+[docs/issues/drop-loss.md](../issues/drop-loss.md).*

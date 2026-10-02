@@ -29,7 +29,7 @@ model, matchmaking, SSE lifecycle).
   client state table, clock handling
 - scheduling or picking up work — [docs/roadmap.md](docs/roadmap.md): the status
   of record, one checkbox per item, not a history
-- a symptom that looks familiar — [docs/issues.md](docs/issues.md): entries are
+- a symptom that looks familiar — [docs/issues/](docs/issues/): entries are
   **unconfirmed** by definition
 - re-litigating a landed decision — [docs/decisions/](docs/decisions/): one file
   per decision
@@ -148,7 +148,7 @@ report, rather than implying coverage that does not exist:
    That negative case is the point — a green probe run against a stale binary
    reads as verification and is not.
 4. **Real radio behaviour** — ready-gate budget, PUN-window latency, drop
-   frequency. Unmeasurable here; `docs/issues.md` stays honest because of it.
+   frequency. Unmeasurable here; `docs/issues/` stays honest because of it.
 
 **Probing the deployed server** (never a local boot for the integration gate):
 
@@ -171,7 +171,7 @@ INCONCLUSIVE into a FAIL.
 - **Internals, invariants, mechanisms** → [docs/architecture.md](docs/architecture.md).
 - **A work item's status** — scheduled, parked, or landed → [docs/roadmap.md](docs/roadmap.md), as exactly one checkbox in its phase entry.
 - **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → [docs/decisions/](docs/decisions/), one file per decision, linked from the item's roadmap entry.
-- **A symptom whose cause you cannot confirm** → [docs/issues.md](docs/issues.md): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
+- **A symptom whose cause you cannot confirm** → [docs/issues/](docs/issues/): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
 - **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
 - **Host capability claims** → [docs/environment.md](docs/environment.md), re-measured rather than assumed.
 
@@ -187,7 +187,7 @@ stale-copy incident below is what it is protecting against. A landed item's
 **status** — the roadmap entry keeps the pointer, so the copy a reader hits first
 is still the only copy of the status. "Current priorities" is a table of contents
 pointing at those entries, not a second copy — and the README does not track
-status at all, it points at the roadmap and at `issues.md`. The reason is not
+status at all, it points at the roadmap and at `docs/issues/`. The reason is not
 tidiness: when the same slice was tracked in three places, they disagreed about
 whether the bounded SSE connection lifetime had landed, and the copy a reader hit
 first was the stale one. To land something, tick the checkbox in its phase; never

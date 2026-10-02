@@ -160,7 +160,7 @@ Tracked in the docs rather than here, so they live with the rest of the plan:
 
 - **Stale `state` teardown after a handshake re-pair** — Phase 1, unchecked.
   `t8` scenario B surfaced it.
-- **Zero drop grace** — `docs/issues.md` entry 5. `t6` measured it: a 120ms gap
+- **Zero drop grace** — `docs/issues/drop-loss.md`. `t6` measured it: a 120ms gap
   loses the round, recovery is clean.
 - **Clock skew ~4.8s** on the dev device, against a 2s PUN window. Not a defect
   — the client corrects for it — but it means the skew correction is

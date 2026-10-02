@@ -3,7 +3,7 @@
 Version: 1.1. All payloads are JSON. Numbers are seconds unless stated.
 (Timed frames carry `ts`, server epoch-ms at construction. v1.1 shipped the
 announced-deadline schedule; the v1.2–v1.3 drafts below are **parked** as
-symptom descriptions in docs/issues.md until their cause is confirmed — see
+symptom descriptions in docs/issues/ until their cause is confirmed — see
 "Rework" near the end.)
 
 The server speaks two things: a single persistent Server-Sent Events (SSE)
@@ -190,7 +190,7 @@ over a single unacknowledged SSE stream: a ~2s stall at that moment (or a lost
 frame, unrecoverable faster than a reconnect) produced "skip PUN → Waiting for
 result → You lose" with no chance to act. Task A removed that dependency;
 Tasks B/C exist as parked drafts, not scheduled work (see the roadmap and
-[docs/issues.md](issues.md)).
+[docs/issues/](issues/)).
 
 ### v1.1 — announced deadline + per-frame `ts` (implemented)
 
@@ -231,10 +231,11 @@ Tasks B/C exist as parked drafts, not scheduled work (see the roadmap and
   above is unchanged). `handleMove` judges lateness against the announced
   `deadline()`.
 
-### v1.2 — stream sequence numbers + replay (parked — see issues.md)
+### v1.2 — stream sequence numbers + replay (parked — see docs/issues/)
 
 Draft spec; not scheduled. Defined from the unconfirmed stuck-in-`matched` /
-reconnect-recovery symptoms (issues.md entries 1–2).
+reconnect-recovery symptoms ([`silent-stuck`](issues/silent-stuck.md),
+[`reconnect-loss`](issues/reconnect-loss.md)).
 
 - Every frame is written with its SSE `id:` (a per-stream monotonic seq); a
   reconnecting client presents the browser's `Last-Event-ID` (or a `?seq=`
@@ -243,10 +244,10 @@ reconnect-recovery symptoms (issues.md entries 1–2).
   snapshot reconciliation applies. Replaces the reconnect-then-snapshot
   recovery whose backoff is slower than the 2s window.
 
-### v1.3 — `/ping` health probe (parked — see issues.md)
+### v1.3 — `/ping` health probe (parked — see docs/issues/)
 
 Draft spec; not scheduled. Measurement for the weak-link window-shrink symptom
-(issues.md entry 3).
+([`window-shrink`](issues/window-shrink.md)).
 
 - `POST /ping` → `{clientTs, serverTs}` lets the client probe one-way latency
   while in lobby/matched, surface a weak-connection indicator, and back out of

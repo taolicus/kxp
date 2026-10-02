@@ -56,8 +56,8 @@ two players share. See [architecture](docs/architecture.md) for the internals.
   the client state table, and clock handling.
 - [backgrounds.md](docs/backgrounds.md) — match background asset pipeline.
 - [roadmap.md](docs/roadmap.md) — planned work by phase.
-- [issues.md](docs/issues.md) — observed reliability symptoms parked until
-  their cause is confirmed.
+- [issues/](docs/issues/) — observed reliability symptoms parked until
+  their cause is confirmed, one file per symptom.
 
 ## Testing
 
@@ -95,7 +95,7 @@ exactly one place, so there is one status to keep true:
 
 - [roadmap.md](docs/roadmap.md) — decided and scheduled work, by phase, with
   what has landed.
-- [issues.md](docs/issues.md) — live symptoms parked until their cause is
+- [issues/](docs/issues/) — live symptoms parked until their cause is
   confirmed.
 
 The live server is kept at the current build by an ops script kept **outside**

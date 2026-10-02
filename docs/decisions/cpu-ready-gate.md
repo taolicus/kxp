@@ -10,7 +10,7 @@ when the first `countdown` arrives (`planRound` → arm `punTimer`), which
 is microseconds, so there is nothing incremental to give a slow client
 more time for. It does cost something real: it widens the pre-PUN phase
 from ~3.2s to ~5.2s, and that phase is precisely the window in which a
-drop loses the round outright (see issues.md entry 5). Buying a
+drop loses the round outright (see [docs/issues/drop-loss.md]). Buying a
 hypothetical benefit with a certain 67% increase in drop exposure. The
 handshake gives the same buffer *verified* rather than hoped-for, and
 self-timed — a slow client waits as long as it needs, a fast one pays

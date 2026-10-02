@@ -22,12 +22,12 @@ The protocol rework's Task A (v1.1) has landed and removed the "skip PUN → You
 lose" burst-delivery dependency. The remaining reliability slices (stream seq +
 replay, `/ping` probe, latency compensation, reconnect recovery, ghost online
 count) were defined from unconfirmed connectivity symptoms, so they are **parked
-as symptom descriptions** in [docs/issues.md](issues.md) — described, not
+as symptom descriptions** in [docs/issues/](issues/) — described, not
 scheduled — until the connectivity diagnostics traces (Phase 2) confirm a cause.
 
 1. **Protocol rework (connectivity)** — Task A landed (v1.1). Tasks B (stream
    seq + replay) and C (`/ping` health probe) are parked in
-   [docs/issues.md](issues.md) pending cause confirmation. → **Protocol rework
+   [docs/issues/](issues/) pending cause confirmation. → **Protocol rework
    (active)** below.
 2. **Character roster & portraits** — expand the cosmetic fighter roster with
    user-supplied art and an emoji fallback; select-screen polish. → Phase 3.
@@ -41,7 +41,7 @@ scheduled — until the connectivity diagnostics traces (Phase 2) confirm a caus
    symptoms that keep surfacing at the boundary. Ships **surgical and
    incremental**, one trace at a time, each independently deployable; the landed
    traces and the one still waiting are both in Phase 2. The symptoms themselves
-   are described — not scheduled — in [docs/issues.md](issues.md), and graduate
+   are described — not scheduled — in [docs/issues/](issues/), and graduate
    into scheduled work only when their cause is confirmed.
 6. **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
    (like a draw): no win, no streak break, "No contest" reported, while the
@@ -59,7 +59,7 @@ scheduled — until the connectivity diagnostics traces (Phase 2) confirm a caus
 The reaction opportunity must not depend on burst delivery of a single `shoot`
 frame over one unacknowledged SSE stream. Task A shipped and landed that
 removal. The remaining B/C slices are parked as symptom descriptions in
-[docs/issues.md](issues.md) until the diagnostics slice confirms a cause;
+[docs/issues/](issues/) until the diagnostics slice confirms a cause;
 their draft specs remain in protocol.md, "Rework", marked parked.
 
 - [x] **A. Announced deadline + `ts` (v1.1)** — the countdown frame pre-announces
@@ -75,16 +75,17 @@ their draft specs remain in protocol.md, "Rework", marked parked.
       is now an `atomic.Int64`, closing a read/write race opened by snapshots
       reading it during countdown. Exercised by `TestCountdownCarriesAnnouncedPlan`,
       `TestSnapshotCarriesCountdownPlan`, and `planRound` unit tests.
-- [ ] **B. Sequence numbers + replay (v1.2) — parked (see issues.md)** — SSE
+- [ ] **B. Sequence numbers + replay (v1.2) — parked (see docs/issues/)** — SSE
       `id:` per-stream seq with replay after `Last-Event-ID`, snapshot
       fallback past the ring. Draft spec in protocol.md. Speculative fix for
       the stuck-in-`matched` and reconnect-recovery symptoms; cause
-      **unconfirmed** — parked in [docs/issues.md](issues.md), entries 1–2;
+      **unconfirmed** — parked in [`silent-stuck`](issues/silent-stuck.md),
+      [`reconnect-loss`](issues/reconnect-loss.md);
       graduates only if diagnostics confirm dropped/unrecoverable frames.
-- [ ] **C. `/ping` health probe (v1.3) — parked (see issues.md)** — one-way
+- [ ] **C. `/ping` health probe (v1.3) — parked (see docs/issues/)** — one-way
       latency probe + weak-connection indicator + backout. Draft spec in
       protocol.md. Measurement/fix for the weak-link window shrink; cause
-      **unconfirmed** — parked in [docs/issues.md](issues.md), entry 3.
+      **unconfirmed** — parked in [`window-shrink`](issues/window-shrink.md).
 
 ## Phase 1 — Core hardening
 
@@ -177,24 +178,27 @@ Note: the unchecked items below are postponed to keep feature work moving
       time-from-`matched`-sent to ack-received, and the client-side round-trip of
       the ack POST itself, over real play rather than a local loopback. Note the
       dependency: the ack round-trip is exactly what the parked `/ping` rework
-      (v1.3, "C. `/ping` health probe") is meant to measure properly, and issues.md
-      entry 4 is already waiting on it, so this may be cheapest to answer after
+      (v1.3, "C. `/ping` health probe") is meant to measure properly, and
+      [`ghost-connection`](issues/ghost-connection.md) is already waiting on it,
+      so this may be cheapest to answer after
       that lands.
 
       Weigh the result against a cost already documented above, not against an
       ideal: raising the budget widens the pre-PUN phase, and that phase is
-      precisely the window in which a drop loses the round outright (issues.md
-      entry 5). The same argument that rejected the fixed 2s `Ready?` step
+      precisely the window in which a drop loses the round outright
+      ([`drop-loss`](issues/drop-loss.md)). The same argument that rejected the
+      fixed 2s `Ready?` step
       applies here with more force — a larger 8s does not make the gate wrong,
       but it makes every handshake longer and every drop in it more costly. If
       the data says 8s is too tight, the cheaper fix is likely to be a
       longer/better `matched` payload or a lighter ack, not a longer timer.
 
-- [ ] **Latency compensation — parked (see issues.md)** — one-way delivery
+- [ ] **Latency compensation — parked (see docs/issues/)** — one-way delivery
       latency can flatten an on-time reaction into a `400 too late` for
       high-latency players (win/loss stays arrival-time-authoritative; see
       Phase 4 anti-cheat). Cause **unconfirmed** — parked in
-      [docs/issues.md](issues.md), entry 3; ships only after the connectivity
+      [`window-shrink`](issues/window-shrink.md); ships only after the
+      connectivity
       diagnostics slice (Phase 2) measures real pings.
 - [ ] **Connectivity-safe scoring** — a no-valid-move timeout resolves as `void`
       (like a draw): no win, no streak break, "No contest" reported, while the
@@ -273,7 +277,7 @@ Make the system testable and debuggable in production.
 - [x] **Connectivity diagnostics — the landed traces** — one slice per trace,
       each independently deployable, producing the evidence the parked
       connectivity symptoms need before any of them can be scheduled against a
-      confirmed cause ([docs/issues.md](issues.md), entries 1–5). The causes are
+      confirmed cause ([docs/issues/](issues/)). The causes are
       deliberately **UNCONFIRMED; the slice produces the evidence.** That is the
       whole design — a suite that cannot tell a transport fault from a server
       defect trains you to ignore it, so every trace here exists to make the next
@@ -448,11 +452,12 @@ Features that depend on identity, persistence, or ranking.
       every floor, boss on the final floor, loss restarts the tower, best
       floor persisted in `localStorage`. Fights run under the mode selector
       (best-of-5 default; draws replayed).
-- [ ] **Reconnection — parked (see issues.md)** — a mid-match TCP drop
+- [ ] **Reconnection — parked (see docs/issues/)** — a mid-match TCP drop
       instantly forfeits via `opponent-left`, with the dropped player seeing no
       result; resume-vs-grace is undecided and the drop rate is unmeasured.
-      Cause/policy **unconfirmed** — parked in [docs/issues.md](issues.md),
-      entry 5; re-evaluate once diagnostics measure how often drops actually
+      Cause/policy **unconfirmed** — parked in
+      [`drop-loss`](issues/drop-loss.md); re-evaluate once diagnostics measure how
+      often drops actually
       occur.
 - [x] **Random fight backgrounds** — each match picks one of five stages at
       random. Implemented client-side: `app.js` keeps a `BGS` roster and

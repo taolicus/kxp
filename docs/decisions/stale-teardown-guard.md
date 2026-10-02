@@ -21,5 +21,5 @@ first and second; the third passes against both servers, since it exists
 to catch an over-correction rather than the original defect.
 *Previously observed via the protocol probe suite's `t8` scenario B,
 roughly 1 run in 7 (order-dependent); `t8` still asserts it as a live
-canary. Not filed in [docs/issues.md](../issues.md): that register holds
+canary. Not filed in [docs/issues/](../issues/): that register holds
 symptoms whose cause is unconfirmed, and this one's mechanism was traced.*

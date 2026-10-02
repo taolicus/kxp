@@ -770,7 +770,8 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 	// as "the countdown is coming". On a slow link the ack itself can outlast
 	// the 8s gate, and answering 200 there tells a waiting client to sit still
 	// for a frame that can never arrive — the silent-stuck shape in
-	// docs/issues.md 1, reached by telling the client it succeeded. 409 says the
+	// docs/issues/silent-stuck.md, reached by telling the client it succeeded.
+	// 409 says the
 	// gate is gone, which the client can act on.
 	if p := m.phase.Load(); p != phaseCountdown {
 		h.handlerError(w, http.StatusConflict, "ready gate closed")
