@@ -1,13 +1,17 @@
 # Issues — observed symptoms awaiting a confirmed cause
 
-A register of **live connectivity symptoms with no confirmed root cause yet**.
-Each entry is a *description of what was observed* together with the current
-working hypothesis; nothing here is a scheduled task. An entry does not return
-to the roadmap as work until its cause is actually confirmed (see the "proves
-the cause" gate on each).
+A register of **live symptoms with no confirmed root cause yet**, plus the
+**open questions** those symptoms have raised and the repo has not answered.
+Each entry is a *description of what was observed* — or, for a question, a
+statement of what is unknown — together with the current working hypothesis.
+Nothing here is a scheduled task: an entry does not become work until it is
+actually understood, and the "proves the cause" (or, for a question, the
+evidence or the decision) is the gate.
 
-Confirmed-correctness fixes that are *decided* regardless — e.g.
-connectivity-safe `void` scoring — live in the roadmap, not here.
+Decided-correctness fixes that are *decided* regardless — e.g.
+connectivity-safe `void` scoring — live in the roadmap, not here. So does
+anything with a known approach that merely has low priority; that is a task, and
+[docs/tasks/open/](../tasks/open/) holds those.
 
 Being in this directory *is* an entry's status: ungraduated. Nothing per-entry
 restates it, so a reader cannot find a second copy to disagree with.
@@ -24,16 +28,20 @@ moment an entry is inserted or removed.
 - [`ghost-connection`](ghost-connection.md) — "online now" counts one higher than reality
 - [`drop-loss`](drop-loss.md) — a dropped connection forfeits the round outright
 - [`game-screen-hiccup`](game-screen-hiccup.md) — restarting after a long idle
+- [`readiness-budget`](readiness-budget.md) — *question:* is 8s the right ready-gate budget?
+- [`player-identity`](player-identity.md) — *question:* which player-identity model?
 
 ## How an entry graduates
 
-An entry becomes a roadmap task when (a) the connectivity diagnostics slice
-narrows the cause to something concrete and (b) the specific mitigation is then
-proven to address it. Parked here means: the cause is not yet known well enough
-to build against.
+An entry becomes a task when the next action is **build X**, and a
+[decision](../decisions/) or a measured number is all that stands between it and
+the work items. A symptom whose cause is still unconfirmed cannot: the whole
+point is that nobody yet knows what to build. So an entry leaves here when its
+"proves the cause" line is satisfied, or when what it needs is a decision
+rather than evidence — in which case the decision is recorded here as its own
+entry, the way `player-identity` carries the blast radius of the four Phase 4
+features that share it.
 
----
-
-Entries move out of this register only when the Observability roadmap slice
-(often next to each "proves the cause" line) supplies the confirming evidence.
-Until then the roadmap shows only decided work and the diagnostic slice itself.
+Entries move out of this register when the Observability roadmap slice supplies
+the confirming evidence. Until then the roadmap shows only decided work and the
+diagnostic slice itself.

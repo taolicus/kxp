@@ -27,3 +27,9 @@ is a lost round, not a wedge. Still missing for this entry: real-world drop
 
 **Prospective fix (not scheduled)** — reconnection/grace race later; re-evaluate
 only after drop data exists.
+
+The undecided part is resume-vs-grace: whether a dropped player should resume the
+match or be granted a forfeit grace. Both are unknown until the drop frequency
+above is measured, so this stays here rather than becoming a scheduled task.
+Widening any pre-PUN phase makes this window costlier — see
+[readiness-budget](readiness-budget.md) for the argument in the ready-gate case.
