@@ -143,7 +143,8 @@ INCONCLUSIVE into a FAIL.
 
 - **Wire format / events / state table** → [docs/protocol.md](docs/protocol.md).
 - **Internals, invariants, mechanisms** → [docs/architecture.md](docs/architecture.md).
-- **Work that is scheduled, or work that just landed** → [docs/roadmap.md](docs/roadmap.md), with the reasoning, including what you considered and rejected.
+- **A work item's status** — scheduled, parked, or landed → [docs/roadmap.md](docs/roadmap.md), as exactly one checkbox in its phase entry.
+- **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → [docs/decisions/](docs/decisions/), one file per decision, linked from the item's roadmap entry.
 - **A symptom whose cause you cannot confirm** → [docs/issues.md](docs/issues.md): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
 - **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
 - **Host capability claims** → [docs/environment.md](docs/environment.md), re-measured rather than assumed.
@@ -153,14 +154,18 @@ a rejected alternative that a future reader would otherwise re-litigate (the
 fixed 2s `Ready?` step; swapping `state` for a `cancelled` event), record it
 where the decision lives.
 
-**One home per work item.** A roadmap item is recorded in full in exactly one
-phase entry, with exactly one status. "Current priorities" is a table of
-contents pointing at those entries, not a second copy — and the README does not
-track status at all, it points at the roadmap and at `issues.md`. The reason is
-not tidiness: when the same slice was tracked in three places, they disagreed
-about whether the bounded SSE connection lifetime had landed, and the copy a
-reader hit first was the stale one. To land something, tick the checkbox in its
-phase; never restate a status somewhere else.
+**One home per work item.** A work item has exactly one **status**, recorded as
+exactly one checkbox in exactly one phase entry. That is the invariant, and the
+stale-copy incident below is what it is protecting against. A landed item's
+*reasoning* lives in `docs/decisions/`; that is a second **file**, not a second
+**status** — the roadmap entry keeps the pointer, so the copy a reader hits first
+is still the only copy of the status. "Current priorities" is a table of contents
+pointing at those entries, not a second copy — and the README does not track
+status at all, it points at the roadmap and at `issues.md`. The reason is not
+tidiness: when the same slice was tracked in three places, they disagreed about
+whether the bounded SSE connection lifetime had landed, and the copy a reader hit
+first was the stale one. To land something, tick the checkbox in its phase; never
+restate a status somewhere else.
 
 ## Invariants to know before you edit
 
