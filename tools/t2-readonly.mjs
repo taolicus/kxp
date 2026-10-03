@@ -1,6 +1,6 @@
 // t2 — read-only endpoint contracts.
 //
-// Checks the three GET endpoints against docs/protocol.md:93-106. These are the
+// Checks the three GET endpoints against docs/features/protocol.md:93-106. These are the
 // cheapest probes on the server (exempt from rate limiting) and the ones a
 // half-restarted deploy breaks first, so this is the right thing to run when
 // the app misbehaves and you do not yet know why.

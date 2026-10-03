@@ -43,18 +43,20 @@ A single Go binary serves an embedded web UI and enforces every game rule
 server-side — the browser is a renderer only. Matches progress
 `idle → countdown → shoot (PUN) → done`; the server judges every pick by
 arrival time relative to `shootAt`, so the client can't game the result the
-two players share. See [architecture](docs/architecture.md) for the internals.
+two players share. See [architecture](docs/features/architecture.md) for the internals.
 
 ## Docs
 
-- [architecture.md](docs/architecture.md) — engine, timing model, matchmaking,
-  SSE lifecycle, testing.
+- [features/](docs/features/) — durable knowledge about the system as it now
+  stands. [architecture](docs/features/architecture.md) (engine, timing model,
+  matchmaking, SSE lifecycle, testing),
+  [protocol](docs/features/protocol.md) (the full wire format: events, endpoints,
+  the client state table, clock handling),
+  [character selection](docs/features/character-selection.md),
+  [backgrounds](docs/features/backgrounds.md) (asset pipeline).
 - [environment.md](docs/environment.md) — the measured development host
   (Android/Termux), its toolchain, and how to re-measure both. What it can and
   cannot verify, and the working loop, live in [AGENTS.md](AGENTS.md).
-- [protocol.md](docs/protocol.md) — the full wire format: events, endpoints,
-  the client state table, and clock handling.
-- [backgrounds.md](docs/backgrounds.md) — match background asset pipeline.
 - [tasks/](docs/tasks/) — work items: what is specified and not yet landed
   ([open/](docs/tasks/open/), `priority` integer in the frontmatter) and what has
   landed ([closed/](docs/tasks/closed/)).

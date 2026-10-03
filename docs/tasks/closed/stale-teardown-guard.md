@@ -11,6 +11,6 @@ depending on goroutine interleaving — the two frames are emitted within the sa
 millisecond. Client impact: the browser reads that trailing `state` as a
 `stateIdle` edge out of `matched` and drops to the lobby while the server still
 holds it in a live match (see the `matched` row in
-[docs/protocol.md](../../protocol.md)).
+[docs/features/protocol.md](../../features/protocol.md)).
 
 → rationale: [decisions/stale-teardown-guard.md](../../decisions/stale-teardown-guard.md)

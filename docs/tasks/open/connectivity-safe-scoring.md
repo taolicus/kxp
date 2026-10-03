@@ -27,6 +27,6 @@ opposing side — see [game-mode-architecture](game-mode-architecture.md).
 ## Notes
 
 - The residual no-move path is recorded by the "Connectivity-safe scoring
-  (planned)" section in [docs/protocol.md](../../protocol.md).
+  (planned)" section in [docs/features/protocol.md](../../features/protocol.md).
 - An accepted `void`/late-grace rate profile is one of the two ways
   [window-shrink](../../issues/window-shrink.md) would be proved or disproved.

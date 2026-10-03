@@ -24,5 +24,5 @@ Builds on the Protocol rework Task A schedule, which shipped first.
 
 ## Notes
 
-- `docs/architecture.md` describes the current single-round `run()`/`resolve()`
+- `docs/features/architecture.md` describes the current single-round `run()`/`resolve()`
   shape this replaces.

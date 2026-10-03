@@ -24,7 +24,7 @@ import { resolveBase } from './base.mjs';
 export const BASE = resolveBase();
 
 // Bounds are sized for a bad link, not for a datacenter. The server's own
-// timing is matched+1s+1s+2s (see docs/protocol.md) and the client arms a 6s
+// timing is matched+1s+1s+2s (see docs/features/protocol.md) and the client arms a 6s
 // stall watchdog, so anything under ~10s of slack is not a real bound.
 export const BOUNDS = {
   connect: 30000,   // TCP+TLS+first SSE frame

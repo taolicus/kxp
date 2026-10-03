@@ -120,7 +120,7 @@ unchanged.
 Decided and scheduled: the engine emits `void` on timeouts, the client
 scorebook treats it like a draw, and the leaderboard applies the same rule
 server-side (see
-[connectivity-safe-scoring.md](tasks/open/connectivity-safe-scoring.md)).
+[connectivity-safe-scoring.md](../tasks/open/connectivity-safe-scoring.md)).
 
 ## HTTP endpoints
 
@@ -191,7 +191,7 @@ over a single unacknowledged SSE stream: a ~2s stall at that moment (or a lost
 frame, unrecoverable faster than a reconnect) produced "skip PUN → Waiting for
 result → You lose" with no chance to act. Task A removed that dependency;
 Tasks B/C exist as parked drafts, not scheduled work (see
-[docs/roadmap.md](roadmap.md), "Protocol rework", and [docs/issues/](issues/)).
+[docs/roadmap.md](../roadmap.md), "Protocol rework", and [docs/issues/](../issues)).
 
 ### v1.1 — announced deadline + per-frame `ts` (implemented)
 
@@ -235,8 +235,8 @@ Tasks B/C exist as parked drafts, not scheduled work (see
 ### v1.2 — stream sequence numbers + replay (parked — see docs/issues/)
 
 Draft spec; not scheduled. Defined from the unconfirmed stuck-in-`matched` /
-reconnect-recovery symptoms ([`silent-stuck`](issues/silent-stuck.md),
-[`reconnect-loss`](issues/reconnect-loss.md)).
+reconnect-recovery symptoms ([`silent-stuck`](../issues/silent-stuck.md),
+[`reconnect-loss`](../issues/reconnect-loss.md)).
 
 - Every frame is written with its SSE `id:` (a per-stream monotonic seq); a
   reconnecting client presents the browser's `Last-Event-ID` (or a `?seq=`
@@ -248,7 +248,7 @@ reconnect-recovery symptoms ([`silent-stuck`](issues/silent-stuck.md),
 ### v1.3 — `/ping` health probe (parked — see docs/issues/)
 
 Draft spec; not scheduled. Measurement for the weak-link window-shrink symptom
-([`window-shrink`](issues/window-shrink.md)).
+([`window-shrink`](../issues/window-shrink.md)).
 
 - `POST /ping` → `{clientTs, serverTs}` lets the client probe one-way latency
   while in lobby/matched, surface a weak-connection indicator, and back out of

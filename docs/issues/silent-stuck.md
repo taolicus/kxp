@@ -21,7 +21,7 @@ triggered) while a diagnostic journal shows the frame was actually delivered.
 backout.
 
 *Draft spec for the replay half exists:* the "v1.2 — stream sequence numbers +
-replay" section in [docs/protocol.md](../protocol.md), marked parked. It
+replay" section in [docs/features/protocol.md](../features/protocol.md), marked parked. It
 graduates only if diagnostics confirm frames are actually being dropped or
 arriving unrecoverably. The same fix also addresses
 [reconnect-loss](reconnect-loss.md).

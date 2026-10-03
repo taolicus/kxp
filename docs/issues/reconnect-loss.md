@@ -21,7 +21,7 @@ recovery), a short result-acceptance grace, or `/ping`-measured reintent.
 
 *Draft specs exist for two of the three:* the "v1.2 — stream sequence numbers +
 replay" and "v1.3 — `/ping` health probe" sections in
-[docs/protocol.md](../protocol.md), both marked parked. They are also the
+[docs/features/protocol.md](../features/protocol.md), both marked parked. They are also the
 prospective fixes for [silent-stuck](silent-stuck.md) and
 [window-shrink](window-shrink.md), so neither is scheduled until diagnostics
 confirm a cause. The reconnection/grace race is tracked on

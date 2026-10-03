@@ -10,12 +10,16 @@ own. Anything larger gets split before it gets written. Every slice in this
 repo's history is one commit that a reader can hold in their head.
 
 Read what the task touches, not the whole repo. A full sweep of the text here is
-~452KB; the engine, hub, client, and the three files that always apply are
-~122KB of it — 27%. Almost all the difference is the probe suite and the test
-bodies, and neither is needed to change behaviour: the docs and the commit that
-landed a change name the one test or probe that is relevant.
+~453KB; the engine, hub, client, and the two files that apply to most tasks are
+~95KB of it — 21%. Those are `round.go` (the engine), `server.go` (which holds
+both the hub and the client type), `web/app.js`, and
+[docs/features/architecture.md](docs/features/architecture.md) +
+[docs/features/protocol.md](docs/features/protocol.md). Almost all the difference
+is the probe suite (24%) and the test bodies (27%), and neither is needed to change
+behaviour: the docs and the commit that landed a change name the one test or probe
+that is relevant.
 
-**Every task:** [docs/architecture.md](docs/architecture.md) (engine, timing
+**Every task:** [docs/features/architecture.md](docs/features/architecture.md) (engine, timing
 model, matchmaking, SSE lifecycle).
 
 **When the task reaches them:**
@@ -25,8 +29,14 @@ model, matchmaking, SSE lifecycle).
   the task touches the build, the toolchain, or a claim about what this machine
   can do — not every task, because the per-task verification rules it used to
   carry live in [Verify](#verify) below instead.
-- wire changes — [docs/protocol.md](docs/protocol.md): events, endpoints, the
-  client state table, clock handling
+- wire changes — [docs/features/protocol.md](docs/features/protocol.md): events,
+  endpoints, the client state table, clock handling
+- the internals, or a feature that already ships —
+  [docs/features/](docs/features/): durable knowledge about the system as it now
+  stands; one file per subject ([architecture](docs/features/architecture.md),
+  [protocol](docs/features/protocol.md),
+  [character selection](docs/features/character-selection.md),
+  [backgrounds](docs/features/backgrounds.md))
 - scheduling or picking up work — [docs/tasks/open/](docs/tasks/open/): one file
   per specified build, `priority` integer in the frontmatter, lower is more urgent
 - what a phase was for, and what landed in it —
@@ -173,8 +183,9 @@ INCONCLUSIVE into a FAIL.
 
 ### Document in the right place
 
-- **Wire format / events / state table** → [docs/protocol.md](docs/protocol.md).
-- **Internals, invariants, mechanisms** → [docs/architecture.md](docs/architecture.md).
+- **Wire format / events / state table** → [docs/features/protocol.md](docs/features/protocol.md).
+- **Internals, invariants, mechanisms** → [docs/features/architecture.md](docs/features/architecture.md).
+- **How a shipped feature works, or how to add one to it** → [docs/features/](docs/features/), one file per subject. Durable knowledge about the system as it stands; per [workflow.md](workflow.md) it is never moved in from a task.
 - **A work item's status** — its own file in [docs/tasks/open/](docs/tasks/open/)
   if the next action is a specified build, [docs/issues/](docs/issues/) if the
   next action is to find out or decide, and [docs/tasks/closed/](docs/tasks/closed/)

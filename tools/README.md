@@ -6,7 +6,7 @@ No browser, no local boot — just Node and the production origin.
 ## Why these exist
 
 The server does not need a browser to be tested: everything it exposes is
-`POST` endpoints plus one `GET /events` SSE stream ([docs/protocol.md](../docs/protocol.md)),
+`POST` endpoints plus one `GET /events` SSE stream ([docs/features/protocol.md](../docs/features/protocol.md)),
 and Node's streaming `fetch` drives that directly.
 
 The split is clear:

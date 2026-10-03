@@ -203,7 +203,7 @@ await script('t8 · PvP between two clients', async () => {
   // (server.go:637-642). The survivor can therefore see `matched` (new match)
   // and then `state` (stale teardown). In the browser that is a `stateIdle`
   // edge out of `matched`, which the client handles by going to the lobby
-  // (docs/protocol.md:118) while the server still has it in a live match.
+  // (docs/features/protocol.md:118) while the server still has it in a live match.
   // Self-healing — the next handshake timeout re-pairs and re-sends `matched` —
   // but it is a real frame-ordering inconsistency, so it is reported with its
   // timestamps rather than asserted as pass/fail.

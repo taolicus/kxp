@@ -24,7 +24,7 @@
 //                lobby able to start a fresh match.
 //
 // The failure this exists to catch is the original protocol's defect
-// (docs/protocol.md:146): "skip PUN → Waiting for result → You lose", a client
+// (docs/features/protocol.md:146): "skip PUN → Waiting for result → You lose", a client
 // with no way to act and no way out. So the load-bearing assertion is that
 // after any drop the client reaches a resolved, playable state.
 //

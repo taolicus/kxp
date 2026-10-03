@@ -34,7 +34,7 @@ frame over one unacknowledged SSE stream. Task A shipped and landed that removal
 Tasks B (stream seq + replay) and C (`/ping` health probe) were never scheduled.
 They were defined from unconfirmed connectivity symptoms and are recorded as
 prospective fixes on the symptom each would address in [docs/issues/](issues/),
-with their draft specs parked in [protocol.md](protocol.md). There is no entry for
+with their draft specs parked in [protocol.md](features/protocol.md). There is no entry for
 either here or in [tasks/open/](tasks/open/), on purpose: naming the work is not
 the same as knowing what to build, which is what an issue is.
 
