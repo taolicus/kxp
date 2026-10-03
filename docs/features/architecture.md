@@ -193,8 +193,12 @@ testable and reusable without a hub or a wire.
 - `go test ./...` runs the Go suite: HTTP/SSE integration
   tests for the full CPU and PvP match flows, concurrent-move submissions,
   mid-match disconnects, and endpoint validation, alongside the unit tests.
-- Client pure logic (the PUN-window plan, stats, and result lines) is tested
-  with `node --test web/kxp.test.cjs`; the client state machine with
-  `node --test web/machine.test.cjs`.
+- Client and harness tests run under `npm run unit`, which globs
+  `web/*.test.cjs` and `tools/lib/*.test.mjs`: client pure logic (the PUN-window
+  plan, stats, result lines), the client state machine, and the countdown arming
+  that runs the real `app.js` against a stubbed context. Invoke the script rather
+  than the individual files — the set is a glob, and the third file is the one
+  that closes the gap probes cannot.
 - `go test -race` is not supported on the device this is developed on (arm64
-  Android); see the Roadmap note under "Automated test workflow" if you add CI.
+  Android); see [automated-test-workflow](../tasks/closed/automated-test-workflow.md)
+  if you add CI.

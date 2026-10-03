@@ -20,11 +20,15 @@ For the machine itself, see [environment.md](environment.md).
 | `npm run unit` | client state machine, countdown arming, probe harness | rendering, CSS, console errors |
 | `npm run tall` | the deployed server over real SSE and HTTP | anything this machine cannot observe |
 
-`npm run unit` is the catch-all for client and harness tests. The shorter
-`node --test web/kxp.test.cjs web/machine.test.cjs` that appears in the README
-misses `web/app.countdown.test.cjs`, which is the test that runs the real
-`app.js` source against a stubbed context — see
-[the gap probes cannot close](#the-gap-probes-cannot-close) below.
+`npm run unit` is the catch-all for client and harness tests, and the gate column
+above mirrors the run list in `AGENTS.md` ("Verify") — adding a gate means adding
+it in both places. Name the script, not the files it globs: the shorter
+`node --test web/kxp.test.cjs web/machine.test.cjs` form misses
+`web/app.countdown.test.cjs`, which is the test that runs the real `app.js` source
+against a stubbed context — see [the gap probes cannot close](#the-gap-probes-cannot-close)
+below. Both `README.md` and `docs/features/architecture.md` prescribed that
+shorter form until this commit, which is the shape of drift a link checker cannot
+see: a path in prose is not a path.
 
 ## The gap probes cannot close
 

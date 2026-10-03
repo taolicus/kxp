@@ -74,9 +74,16 @@ two players share. See [architecture](docs/features/architecture.md) for the int
 ## Testing
 
 ```sh
-go test ./...              # Go suite
-node --test web/kxp.test.cjs web/machine.test.cjs
+npm run links     # internal doc paths resolve, and each #fragment names a heading
+go test ./...     # Go suite
+npm run unit      # web/*.test.cjs + tools/lib/*.test.mjs
 ```
+
+`npm run unit` is the way to run the client and harness tests; the three files it
+globs are not a list to reproduce by hand, and one of them
+(`web/app.countdown.test.cjs`) runs the real `app.js` against a stubbed context,
+which nothing else covers. Pass a subset to check part of the doc tree:
+`npm run links -- AGENTS.md docs/features`.
 
 (`go test -race` isn't supported on the arm64-Android dev device; see the
 [automated-test-workflow.md](docs/tasks/closed/automated-test-workflow.md)
@@ -96,16 +103,9 @@ BASE_URL=https://your-server.example npm run tall
 See [tools/README.md](tools/README.md) for what each probe proves and why the
 origin is required rather than defaulted. The flows create real (short-lived)
 matches by design. Rendering, CSS and in-browser console errors have no
-automated coverage — see the host limits in [AGENTS.md](AGENTS.md).
-
-`npm run links` checks that every internal documentation link still resolves,
-and that each `#fragment` it names is a heading that exists — a renamed file
-leaves the rest of the tree pointing at nothing otherwise:
-
-```sh
-npm run links                             # whole tree
-npm run links -- AGENTS.md docs/features  # a subset
-```
+automated coverage — see the host limits in [AGENTS.md](AGENTS.md). What each
+gate does and does not cover is in
+[docs/development/verification.md](docs/development/verification.md).
 
 ## Status
 
