@@ -54,6 +54,25 @@ left to show — the count jumped straight to PUN and the player never saw a
 countdown at all, despite the pick window being open. A third beat absorbs that
 lag.
 
+That absorption is bounded rather than general, and the bound is worth stating
+because it separates "a third beat helps" from "a third beat is enough". The
+server announces `shootAt` three seconds ahead and sends `READY` at that same
+instant, so the lead before the deadline equals the countdown length and there is
+no margin beyond it. Delivery latency therefore eats the countdown from the
+front, one beat per second: up to a second of lag still shows all three beats,
+two shows `KA`/`CHI`, three shows `CHI` alone, and three or more leaves nothing to
+paint, so the client goes from `MATCH FOUND` straight to **PUN!** with the window
+open. This is a property of the schedule and not of the client — `countdownSlot`
+is right to report no beat once `msUntilPun <= 0`, since painting one there would
+flash a beat with no time behind it, and once a client knows `shootAt` it paints
+the remaining beats on its own timers. Widening the tolerance means spending
+seconds before PUN, and that trade-off is held open in
+[`countdown-margin.md`](../tasks/open/countdown-margin.md). The envelope is pinned
+by "app.js loses exactly one countdown beat per second of first-frame delay" in
+`web/app.countdown.test.cjs`, so changing the schedule has to move that table on
+purpose. The three-beat schedule itself landed in `8a859f7`; the bounded
+envelope was measured against a production report afterwards.
+
 The schedule is **announced, not recomputed**. The server sets `shootAt` once at
 countdown start and the run loop sleeps to the announced slots, never re-minting
 the deadline, so every client judges the same instant regardless of when its

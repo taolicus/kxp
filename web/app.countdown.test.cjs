@@ -17,6 +17,10 @@ const assert = require('node:assert');
 const { runInContext } = require('node:vm');
 
 const { loadApp } = require('./appHarness.cjs');
+const SM = require('./machine.js');
+
+// The three beat labels, in the order the server sends them.
+const BEATS = ['READY', 'KA', 'CHI'];
 
 // announce replays what the server does: the first countdown frame opens the
 // gate, and the later beats carry the same shootAt (which app.js dedupes).
@@ -83,4 +87,68 @@ test('app.js dedupes the repeated countdown frames', () => {
   const painted = app.runUntil(shootAt);
   assert.deepEqual(painted, ['READY', 'KA', 'CHI'], 'duplicate frames do not restart or skip');
   assert.equal(app.count(), 'CHI', 'count settles on the last beat before PUN');
+});
+
+// lateFrame replays the whole path a real client takes when its link is slow:
+// connect, get matched, then have the first countdown frame turn up `lag` ms
+// after the server announced the schedule. It drives the real state machine
+// because the symptom is a transition sequence, not just a count label --
+// MATCH FOUND with no countdown between it and PUN is what the player sees.
+function lateFrame(lag, shootAt) {
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  runInContext('transition("matched", {})', app.ctx);
+  app.setClock(1700000000000 + lag); // the first frame lands this late
+  app.fire('countdown', { n: 'READY', shootAt, windowMs: 2000 });
+  return app;
+}
+
+test('app.js loses exactly one countdown beat per second of first-frame delay', () => {
+  // The delivery-lag envelope, pinned at its exact boundary.
+  //
+  // round.go announces shootAt three seconds ahead and sends the first beat at
+  // that same instant, so the lead equals the countdown length and there is no
+  // margin: a link that takes one second to deliver the first frame loses
+  // exactly one beat, and one that takes three has nothing left to paint.
+  //
+  // countdownSlot is correct to report no beat once msUntilPun <= 0 -- kxp.js
+  // does that deliberately, so a late frame cannot flash a beat with no time
+  // behind it. The cliff is therefore a property of the server's schedule, not
+  // a bug in the client, and this test exists to make the envelope explicit:
+  // changing the schedule has to move this table on purpose.
+  const shootAt = 1700000003000;
+  for (const [lag, want] of [
+    [0, ['READY', 'KA', 'CHI']],
+    [1000, ['KA', 'CHI']],
+    [2000, ['CHI']],
+    [2999, ['CHI']],
+    [3000, []],
+    [3500, []],
+  ]) {
+    const app = lateFrame(lag, shootAt);
+    // Collapse repeats: runUntil samples after every timer, and not every timer
+    // repaints, so consecutive equal samples are one paint observed twice.
+    const beats = app
+      .runUntil(shootAt + 2500)
+      .filter((p) => BEATS.includes(p))
+      .filter((p, i, all) => p !== all[i - 1]);
+    assert.deepEqual(beats, want, `first frame +${lag}ms late`);
+  }
+});
+
+test('a client that misses the whole countdown is still told to shoot', () => {
+  // The other half of the symptom. Losing the beats must not also lose the pick
+  // window: whatever buys the margin back, a client whose first frame arrives
+  // after the deadline still has to reach shoot and still has to be given the
+  // PUN cue, or a margin fix would trade a silent round for a client that never
+  // learns the window opened at all.
+  const shootAt = 1700000003000;
+  const app = lateFrame(3500, shootAt);
+  app.runUntil(shootAt + 2500);
+  assert.ok(
+    app.transitions.some(([from, ev]) => from === 'countdown' && ev === 'shoot'),
+    'still transitions into shoot'
+  );
+  assert.match(app.count(), /PUN/i, 'and still paints the PUN cue');
 });
