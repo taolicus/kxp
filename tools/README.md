@@ -16,6 +16,12 @@ The split is clear:
   the link drops mid-round.
 - **`npm run unit` / `npm run go`** cover the client state machine and the
   server internals offline, with no network at all.
+- **`npm run links`** checks the documentation's internal link graph: every
+  relative path exists and every `#fragment` names a heading that does. It is
+  not part of this suite — it never touches the network — but it lives here
+  because it is the third thing that can be checked mechanically, and the
+  failure it catches (a renamed file leaving twenty documents pointing at
+  nothing) is invisible in review and to every other gate.
 - **Rendering, CSS and in-browser console errors** have no automated coverage
   here; see the host limits in [AGENTS.md](../AGENTS.md) for what is unverified.
 

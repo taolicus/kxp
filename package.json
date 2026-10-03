@@ -8,6 +8,7 @@
   },
   "scripts": {
     "unit": "node --test web/*.test.cjs tools/lib/*.test.mjs",
+    "links": "node tools/check-links.mjs",
     "go": "go test ./...",
     "t1": "node tools/t1-reach.mjs",
     "t2": "node tools/t2-readonly.mjs",

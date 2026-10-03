@@ -98,6 +98,15 @@ origin is required rather than defaulted. The flows create real (short-lived)
 matches by design. Rendering, CSS and in-browser console errors have no
 automated coverage — see the host limits in [AGENTS.md](AGENTS.md).
 
+`npm run links` checks that every internal documentation link still resolves,
+and that each `#fragment` it names is a heading that exists — a renamed file
+leaves the rest of the tree pointing at nothing otherwise:
+
+```sh
+npm run links                             # whole tree
+npm run links -- AGENTS.md docs/features  # a subset
+```
+
 ## Status
 
 Core hardening, testability, and the pure-engine refactor are done, including
