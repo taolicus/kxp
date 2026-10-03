@@ -17,9 +17,10 @@ the opponent slot, and the result line).
   - `characters.go` — the source of truth (id, name, emoji), served to the
     client by `GET /characters` and used for validation + CPU random pick.
   - `web/characters.js` — fetches that roster at startup (`loadRoster`) and
-    renders the picker; it no longer bundles its own copy. Fighter art is
-    placeholder emoji for now; the `emoji` field will be swapped for real
-    artwork later.
+    renders the picker; it no longer bundles its own copy. Fighter art ships as
+    placeholder emoji: the `emoji` field carries a single glyph per fighter,
+    not an image asset. See [backgrounds](backgrounds.md) for the one asset
+    pipeline that does use real images.
 - Roster contents (ids, names, emojis) are intentionally **not** documented
   here — `characters.go` + the `GET /characters` endpoint are the source of
   truth. Pair the roster with the UI in the app itself.

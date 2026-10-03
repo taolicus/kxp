@@ -11,9 +11,14 @@ arrival-authoritative); the *effective* window simply shrinks with latency.
 Whether this is common or significant in real play is unknown.
 
 **Proves the cause** — an accepted `void`/late-grace rate profile from live
-diagnostics, or `/ping`-measured one-way latency vs window. The `/ping` probe
-that produces the second measurement has a parked draft spec: the "v1.3 —
-`/ping` health probe" section in [docs/features/protocol.md](../features/protocol.md).
+diagnostics, or `/ping`-measured one-way latency vs window.
+
+*Draft spec for the measurement, kept here because this is the symptom it
+exists to measure.* `POST /ping` → `{clientTs, serverTs}` lets the client probe
+one-way latency while in lobby/matched, surface a weak-connection indicator, and
+back out of a match before it begins on a degrading link. It is also the
+measurement [reconnect-loss](reconnect-loss.md) would need, but it buys nothing
+here until this entry's cause is confirmed.
 
 **Prospective fix (not scheduled)** — small server-side acceptance grace and/or
 `clickedAt`-based cutoff (loses must stay arrival-authoritative), only after

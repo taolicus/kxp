@@ -20,8 +20,14 @@ triggered) while a diagnostic journal shows the frame was actually delivered.
 `id:`/`Last-Event-ID` path, and/or an "opponent found but stalled" client
 backout.
 
-*Draft spec for the replay half exists:* the "v1.2 — stream sequence numbers +
-replay" section in [docs/features/protocol.md](../features/protocol.md), marked parked. It
-graduates only if diagnostics confirm frames are actually being dropped or
-arriving unrecoverably. The same fix also addresses
-[reconnect-loss](reconnect-loss.md).
+*Draft spec for the replay half, kept here because this is the symptom that
+defined it.* Stream sequence numbers + replay: every frame is written with its
+SSE `id:` (a per-stream monotonic seq); a reconnecting client presents the
+browser's `Last-Event-ID` (or a `?seq=` query) and the server replays missed
+frames from a small per-client ring buffer. Past the ring, or when the match has
+already finished, the existing snapshot reconciliation applies. It replaces the
+reconnect-then-snapshot recovery, whose backoff is slower than the 2s window.
+It also addresses [reconnect-loss](reconnect-loss.md).
+
+It graduates only if diagnostics confirm frames are actually being dropped, or
+arriving unrecoverably.

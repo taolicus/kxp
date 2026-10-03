@@ -1,10 +1,10 @@
 # KACHIPUN game protocol
 
 Version: 1.1. All payloads are JSON. Numbers are seconds unless stated.
-(Timed frames carry `ts`, server epoch-ms at construction. v1.1 shipped the
-announced-deadline schedule; the v1.2–v1.3 drafts below are **parked** as
-symptom descriptions in docs/issues/ until their cause is confirmed — see
-"Rework" near the end.)
+Timed frames carry `ts`, server epoch-ms at construction, so delivery lag is
+distinguishable from clock skew at the client for the first time. The schedule
+is the announced-deadline one described under
+[Match lifecycle](#match-lifecycle).
 
 The server speaks two things: a single persistent Server-Sent Events (SSE)
 stream per client (`GET /events`, pull-only) and plain `POST` endpoints for
@@ -43,6 +43,33 @@ has finished setting the round up. A slow client waits as long as it needs (up
 to the 8s timeout) and a fast one pays nothing. A CPU match gates on its single
 human exactly this way; the bot is not a participant and is never waited for.
 
+### Why three beats precede PUN
+
+`READY` → `KA` → `CHI` is three beats to `shoot`, not two, and `READY` is
+deliberately leading slack rather than a countdown digit. It is the player's
+first warning that a round has begun, and it arrives over the same connection
+that may still be waking from radio idle or sitting in a buffering proxy. With
+only the KA-CHI-PUN rhythm, a link that had lost ~2s of delivery had no beat
+left to show — the count jumped straight to PUN and the player never saw a
+countdown at all, despite the pick window being open. A third beat absorbs that
+lag.
+
+The schedule is **announced, not recomputed**. The server sets `shootAt` once at
+countdown start and the run loop sleeps to the announced slots, never re-minting
+the deadline, so every client judges the same instant regardless of when its
+frames arrive. The client therefore paints from the announced deadline rather
+than from `n`: on receipt it resolves which beat is genuinely showing
+(`countdownSlot` in `web/kxp.js`) and arms a single timer to advance to the next,
+so a frame that arrives after its own beat degrades to the next beat instead of
+painting one with no time behind it — that flash would be overwritten in the same
+tick and cost the countdown outright. The `READY`/`KA`/`CHI` offsets live in one
+table shared by that logic and `countdownBeats` in `round.go`, and the two must
+stay in step.
+
+Because the window is scheduled client-side against the announced `shootAt`, a
+late or dropped `shoot` frame is harmless — the client has already acted on the
+deadline — so `shoot` is advisory rather than load-bearing. Landed in `e01bbcd`.
+
 ### Cancelled handshakes
 
 A handshake that does not complete is *cancelled*, never lost: no `result` is
@@ -80,7 +107,7 @@ snapshot.
 
 | event | payload | meaning |
 | --- | --- | --- |
-| `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`countdown`/`shoot`/`done`) and opponent fields only when `ingame`; `shootAt`+`windowMs` only when `phase=shoot` (epoch-ms); `pending=true` only while a PvP handshake is still open. Used to reconcile on reconnect. |
+| `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`countdown`/`shoot`/`done`) and opponent fields only when `ingame`; `shootAt`+`windowMs` whenever `phase` is `countdown` or `shoot` (`server.go:509`) — carrying the plan during countdown is what lets a client reconnect *inside* the window rather than being left without a deadline; `pending=true` only while a PvP handshake is still open. Used to reconcile on reconnect. |
 | `online` | `{count}` | Number of other clients currently connected. |
 | `waiting` | `{}` | Entered the queue. |
 | `matched` | `{opponentName, opponentCharacter}` | Opponent found; every client should start `POST /ready`. |
@@ -103,24 +130,6 @@ snapshot.
 | `youCharacter`, `opponentCharacter` | Characters chosen for each side. |
 | `opponentName` | `CPU` or `Opponent`. |
 | `mode` | `online` or `cpu`. |
-
-### Connectivity-safe scoring (planned)
-
-A round that resolves with a valid move on only one side scores `void` for the
-no-move side when its note is `timeout`: it never counts as a loss against
-that side's record (no win, no streak break) and the UI reports "No contest",
-while the opponent still takes the round win. An *early* pick is a deliberate
-act and stays a full `loss`, and so does a `late` pick — one whose arrival fell
-after the window closed, which is reported with note `late` and is deliberately
-*not* folded into `timeout`, so it can never be scored as a no-contest. If
-neither side produces a valid move the round
-is a `draw`. `yourNote`/`opponentNote` keep reporting `timeout`/`early`/`late`
-unchanged.
-
-Decided and scheduled: the engine emits `void` on timeouts, the client
-scorebook treats it like a draw, and the leaderboard applies the same rule
-server-side (see
-[connectivity-safe-scoring.md](../tasks/open/connectivity-safe-scoring.md)).
 
 ## HTTP endpoints
 
@@ -182,74 +191,3 @@ still shows the true server-side remaining time instead of a collapsed one. On
 `shoot` it plays out only the remaining `windowMs − ((now + skew) − shootAt)`
 and never shows an unwinnable PUN. Win/loss is decided exclusively by server
 arrival time; client times are cosmetic.
-
-## Rework
-
-Implemented and parked slices of the protocol rework. The original protocol
-made the player's ability to act depend on burst delivery of the `shoot` frame
-over a single unacknowledged SSE stream: a ~2s stall at that moment (or a lost
-frame, unrecoverable faster than a reconnect) produced "skip PUN → Waiting for
-result → You lose" with no chance to act. Task A removed that dependency;
-Tasks B/C exist as parked drafts, not scheduled work (see
-[docs/roadmap.md](../roadmap.md), "Protocol rework", and [docs/issues/](../issues)).
-
-### v1.1 — announced deadline + per-frame `ts` (implemented)
-
-- The server pre-announces the round schedule at countdown start. The first
-  countdown frame (and each later one, idempotently) carries
-  `{n, shootAt, windowMs, ts}` where `shootAt` is the announced, already-fixed
-  deadline; the run loop sleeps to the announced slots (READY at S−3s, KA at
-  S−2s, CHI at S−1s) and advances to `shoot` at `S` **without re-minting
-  `shootAt`**.
-- Three beats precede PUN, not two. `READY` is leading slack: the countdown is
-  the player's first warning that a round has begun, and it arrives over the
-  same connection that may still be waking from radio idle or a buffering
-  proxy. With only the two beats of the KA-CHI-PUN rhythm, a link that lost
-  ~2s of delivery had no beat left to show — the count jumped straight to PUN
-  and the player never saw a countdown at all, despite the pick window being
-  open. A third beat absorbs that lag.
-- The client paints from the announced deadline, not from `n`. On receipt it
-  resolves which beat is genuinely showing (`countdownSlot` in `web/kxp.js`)
-  and arms one timer to advance to the next, so a frame delayed past its own
-  beat degrades to the next beat instead of painting one with no time behind it
-  — that flash would be overwritten in the same tick and cost the countdown
-  outright. `READY`/`KA`/`CHI` offsets live in one table shared by that logic
-  and `countdownBeats` in `round.go`; the two must stay in step.
-- The client schedules the countdown locally against the announced `shootAt`; a
-  late or dropped `shoot`/`countdown` frame is harmless (already acted upon), so
-  `shoot` demotes to advisory. `connected` snapshots carry the plan
-  (`shootAt`+`windowMs`) when `phase=countdown` — only once announced, so a
-  mid-handshake snapshot cannot leak a deadline — and keep the existing
-  `shootAt`/`windowMs` on `phase=shoot` for rejoin.
-- `countdown`, `shoot`, `matched`, `result`, and `waiting` all gain a `ts`
-  field (server epoch-ms at construction), making delivery lag vs clock skew
-  measurable at the client for the first time.
-- Server plumbing: `shootAt` moved from a plain `time.Time` to an
-  `atomic.Pointer[time.Time]` so snapshots can read it during countdown without
-  racing the run goroutine; it is held as a `time.Time` so it retains a
-  monotonic reading for the server's own arrival-timing and deadline maths,
-  while the wire value is derived from that instant via `UnixMilli` (epoch-ms
-  above is unchanged). `handleMove` judges lateness against the announced
-  `deadline()`.
-
-### v1.2 — stream sequence numbers + replay (parked — see docs/issues/)
-
-Draft spec; not scheduled. Defined from the unconfirmed stuck-in-`matched` /
-reconnect-recovery symptoms ([`silent-stuck`](../issues/silent-stuck.md),
-[`reconnect-loss`](../issues/reconnect-loss.md)).
-
-- Every frame is written with its SSE `id:` (a per-stream monotonic seq); a
-  reconnecting client presents the browser's `Last-Event-ID` (or a `?seq=`
-  query) and the server replays missed frames from a small per-client ring
-  buffer. Past the ring, or when the match already finished, the existing
-  snapshot reconciliation applies. Replaces the reconnect-then-snapshot
-  recovery whose backoff is slower than the 2s window.
-
-### v1.3 — `/ping` health probe (parked — see docs/issues/)
-
-Draft spec; not scheduled. Measurement for the weak-link window-shrink symptom
-([`window-shrink`](../issues/window-shrink.md)).
-
-- `POST /ping` → `{clientTs, serverTs}` lets the client probe one-way latency
-  while in lobby/matched, surface a weak-connection indicator, and back out of
-  a match before it begins on a degrading link.

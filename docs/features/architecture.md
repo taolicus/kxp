@@ -49,20 +49,11 @@ client estimates phone/server clock skew from the `now` field of the
 The client schedules KA/CHI/PUN against the announced plan, so a stalled or
 dropped `shoot` frame no longer destroys the window; every timed frame carries
 a server `ts` (epoch-ms) making delivery lag vs clock skew measurable
-(protocol v1.1, landed). A per-stream seq with reconnect replay and a `/ping`
-probe (v1.2–v1.3 drafts) are parked as symptom descriptions in
-docs/issues/ until the cause behind the residual recovery/latency symptoms
-is confirmed.
-
-## Scoring (planned)
-
-A round that resolves with a valid move on only one side scores the no-move
-side as `void` when it timed out — no win, no streak break, "No contest" in
-the UI — while the opponent still takes the win. `early` picks (deliberate,
-invalid) remain a full `loss`; a both-way no-move stays a `draw`. The void
-handling lives in `resolve()` and the client scorebook; the leaderboard
-applies the same rule server-side so a connection drop never reads as a
-streak-breaking loss.
+(protocol v1.1, landed). The residual recovery and weak-link symptoms it did
+not remove are recorded in [docs/issues/](../issues/) — in particular
+[reconnect-loss](../issues/reconnect-loss.md) and
+[window-shrink](../issues/window-shrink.md), each of which carries its own
+prospective fix, with the causes still unconfirmed.
 
 ## Matchmaking
 
