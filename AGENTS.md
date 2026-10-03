@@ -73,6 +73,17 @@ commit; a documented-later change is a change nobody can verify. Step 7 happens
 before the next task starts, not at the end of the session — see
 [Commit and push](#commit-and-push).
 
+Two rules govern what you pick up and how far you take it:
+
+- **Check [docs/tasks/open/](docs/tasks/open/) and the feature docs before
+  implementing.** If the task is under-specified, investigate and update the task
+  file rather than opening the code and assuming. An assumption made here is
+  invisible to whoever picks it up next.
+- **An unrelated discovery becomes a new issue, not extra scope.** Record it in
+  [docs/issues/](docs/issues/) — or the task file, if it is a named prerequisite —
+  and leave the current slice alone. Quietly widening a slice is how one commit
+  stops being independently revertable.
+
 ### Pick the slice size
 
 Ask: *could this commit be reverted without stranding the repo?* If reverting

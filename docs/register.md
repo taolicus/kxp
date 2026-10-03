@@ -35,6 +35,19 @@ durable knowledge about the implemented system, which is not a work item and nev
 becomes one: when completed work establishes durable knowledge, the knowledge goes
 in `features/` and the work record stays in `tasks/closed/`.
 
+## What makes a task specified
+
+The line between an issue and a task is not urgency, it is whether the next
+action is a build. So a task in [tasks/open/](tasks/open/) has to carry enough to
+be picked up without a conversation: the **required context, the constraints, and
+the acceptance criteria** for the slice. If a task is under-specified, the answer
+is to investigate it and update the file, not to open the code and assume — an
+assumption made there is invisible to whoever picks the task up next.
+
+An issue need not be actionable at all. "A match sometimes stalls after the
+opponent is found" is a complete entry precisely because nobody yet knows what to
+build.
+
 ## Why there is no `decisions/` register
 
 The rationale for how something works belongs **in** the file that describes it,
