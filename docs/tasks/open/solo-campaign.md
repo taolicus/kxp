@@ -1,5 +1,4 @@
 ---
-priority: 16
 phase: 4
 depends-on: [game-mode-architecture]
 gated-on: []

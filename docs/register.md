@@ -71,8 +71,8 @@ needs:
 
 | Field | Meaning |
 | --- | --- |
-| `priority` | integer, lower is more urgent. Contiguous from 1. |
-| `phase` | the roadmap phase this came from; provenance, not priority. |
+| `phase` | the roadmap phase this came from. Provenance and coarse
+  sequencing, not a rank. |
 | `depends-on` | other open tasks that must land first. Empty list, not omitted. |
 | `gated-on` | *issues* that must be resolved first. Empty list, not omitted. |
 
@@ -82,24 +82,31 @@ decision that does not exist yet, so the thing it waits on is an issue — see
 [latency-profile-visibility](tasks/open/latency-profile-visibility.md) for the
 shape of one.
 
-Priority is metadata rather than a directory, so that moving a file between
-`open/` and `closed/` is the only lifecycle act and can never imply a priority
-change. [tasks/closed/](tasks/closed/) files have no frontmatter at all: priority
-is meaningless once something has landed, and `phase` is recorded by the ordering
-of the table of contents in [docs/roadmap.md](roadmap.md), which groups them the
-way the work was actually sequenced.
+There is no priority field and no band, and that is a decision rather than an
+omission. An integer ordering written into a file at rest is a snapshot of one
+moment's judgement that looks like current information, and it went stale the
+way such things always do: it was set once when the tasks were created, never
+revised, and the five tasks it ranked last were exactly the five
+[docs/roadmap.md](roadmap.md) describes in prose as *unscheduled rather than
+low-priority*. The tree said both things at once and only one was true.
 
-## Seeing what is scheduled, in priority order
+It was also never load-bearing. Nothing read it, and the work that actually
+happened was not drawn from it. A rank in the tree invites an agent to defer to a
+stale ordering instead of deriving urgency from the issue register, from what is
+unblocked, and from what the owner wants today — all of which change, and none of
+which a number can.
 
-There is deliberately no index file for the open tasks. It would be a second copy
-of the `priority` fields, and the one thing in this tree that can silently drift.
-Print it instead:
+Urgency is therefore a per-session judgement made from current state, and the
+fields that survive are the ones that change when their subject changes.
+`depends-on` and `gated-on` are the live signal: the useful question is which tasks
+have no unmet dependency and no gate, and it is answerable without a rank.
+[latency-profile-visibility](tasks/open/latency-profile-visibility.md) is the only
+gated task, waiting on two unconfirmed issues — which is a fact about the world,
+whereas "priority 11" would only have been a fact about a list.
 
-```sh
-for f in docs/tasks/open/*.md; do
-  printf '%s\t%s\n' "$(sed -n 's/^priority: //p' "$f")" "$(sed -n 's/^# //p' "$f")"
-done | sort -n
-```
+There is deliberately no index file for the open tasks either. It would be a
+second copy of the frontmatter, and a second copy is the one thing in this tree
+that can silently drift. Eighteen titles is a screen; print them or read them.
 
 ## How an entry graduates
 
@@ -119,8 +126,7 @@ timer.
 ## Moving a task
 
 When an issue's cause is confirmed, `git mv` the file to
-[tasks/open/](tasks/open/), add the frontmatter, and give it the next free
-`priority`. When a task lands, `git mv` it to [tasks/closed/](tasks/closed/) and
+[tasks/open/](tasks/open/) and add the frontmatter. When a task lands, `git mv` it to [tasks/closed/](tasks/closed/) and
 drop the frontmatter. Both are the same move — the content travels with it, so the
 context recorded when the task was scheduled is still there when someone asks why
 it was done that way.

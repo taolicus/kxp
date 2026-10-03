@@ -12,18 +12,18 @@ its only status:
 | [issues/](issues/) | symptoms, questions, and decisions with no confirmed cause | the directory |
 
 The lists below are tables of contents — phase, then title, then a link. They
-carry no status word and no priority. Priority is the `priority` integer in an
-open task's frontmatter, so the next thing to pick up is a sort of
-[tasks/open/](tasks/open/), not a list maintained here. The reasoning behind any
-landed item is in the [docs/features/](features/) file that owns the invariant it
-constrains, linked from the item itself.
+carry no status word and no priority. There is no priority anywhere: urgency is
+decided per session from current state, so the next thing to pick up is a reading
+of [tasks/open/](tasks/open/) and not a list maintained here. The reasoning behind
+any landed item is in the [docs/features/](features/) file that owns the invariant
+it constrains, linked from the item itself.
 
 This file used to carry the item bodies as checkboxes, which was wrong twice
 over and both errors surfaced as stale text before anyone noticed they were
 errors. A checkbox says "landed" and "not yet scheduled" in the same syntax, so
-seven entries blocked on unconfirmed causes read as scheduled work. And once
-priority moved into task frontmatter, the ordered list here became a second copy
-of that ordering. The bodies moved to [tasks/closed/](tasks/closed/); the phase
+seven entries blocked on unconfirmed causes read as scheduled work. And when the
+items below were ordered, that list was a second copy of a priority that existed
+only to be copied. The bodies moved to [tasks/closed/](tasks/closed/); the phase
 structure stayed, because why these phases in this order is worth more than the
 absence of the work that ran.
 
@@ -97,5 +97,5 @@ deliberately the last phase: every item in it needs an identity primitive
 that has not been chosen yet ([player-identity](issues/player-identity.md)),
 so scheduling any of them now would mean scheduling work whose first step
 is still an open question. They are specified, so they are tasks rather
-than issues, and they are unscheduled rather than low-priority — six
+than issues, and they are unscheduled rather than low-priority — five
 files in [tasks/open/](tasks/open/) carrying `phase: 4`.

@@ -38,7 +38,7 @@ model, matchmaking, SSE lifecycle).
   [character selection](docs/features/character-selection.md),
   [backgrounds](docs/features/backgrounds.md))
 - scheduling or picking up work — [docs/tasks/open/](docs/tasks/open/): one file
-  per specified build, `priority` integer in the frontmatter, lower is more urgent
+  per specified build, `phase` and dependencies in the frontmatter
 - what a phase was for, and what landed in it —
   [docs/roadmap.md](docs/roadmap.md): the phase structure and a link per landed
   item, which is why the phases are ordered as they are
@@ -206,8 +206,6 @@ INCONCLUSIVE into a FAIL.
   next action is to find out or decide, and [docs/tasks/closed/](docs/tasks/closed/)
   once it has landed. The directory *is* the status; see "One home per work item"
   below.
-- **A scheduled item's urgency** → the `priority` integer in that task's
-  frontmatter. Never in a directory name and never in a prose list.
 - **A landed item** → [docs/tasks/closed/](docs/tasks/closed/), one file per item.
   The file keeps the phase it ran in by its position under
   [docs/roadmap.md](docs/roadmap.md), which holds the phase structure and a link
@@ -248,9 +246,8 @@ the only copy of the status. (It was a separate `docs/decisions/` register until
 it was folded in: every decision there was cited by exactly one file — its own
 closed task — so the reasoning was reachable from the plan and invisible from the
 system docs that encode the constraint.) And a
-task's `priority` is metadata, not a place: a task is not "unimportant" because
-it sits at priority 17, so it stays in `open/` and gets no third directory to
-reflect that. The README tracks no status at all — it points at the registers and
+there is no third directory for scheduling, because a task is not "unimportant"
+because it has not landed yet — it stays in `open/` until it does. The README tracks no status at all — it points at the registers and
 at [docs/register.md](docs/register.md), which is where their rules live.
 `docs/roadmap.md` is not one of them: it is a table of contents by
 phase and carries no status word, which is why it can be read without being able

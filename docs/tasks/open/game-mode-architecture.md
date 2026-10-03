@@ -1,5 +1,4 @@
 ---
-priority: 2
 phase: 3
 depends-on: [connectivity-safe-scoring]
 gated-on: []

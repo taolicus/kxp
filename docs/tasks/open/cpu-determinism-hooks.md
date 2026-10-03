@@ -1,5 +1,4 @@
 ---
-priority: 6
 phase: 2
 depends-on: [externalised-operational-settings]
 gated-on: []

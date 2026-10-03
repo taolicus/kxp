@@ -1,5 +1,4 @@
 ---
-priority: 12
 phase: 3
 depends-on: []
 gated-on: [player-identity]

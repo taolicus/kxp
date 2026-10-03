@@ -64,8 +64,8 @@ two players share. See [architecture](docs/features/architecture.md) for the int
 - [register.md](docs/register.md) — what each of the directories below is for,
   and the rules that keep them separate.
 - [tasks/](docs/tasks/) — work items: what is specified and not yet landed
-  ([open/](docs/tasks/open/), `priority` integer in the frontmatter) and what has
-  landed ([closed/](docs/tasks/closed/)).
+  ([open/](docs/tasks/open/), with `phase` and dependencies in the frontmatter) and
+  what has landed ([closed/](docs/tasks/closed/)).
 - [roadmap.md](docs/roadmap.md) — why the phases are ordered as they are, with a
   link per landed item. Not a register, and carries no status.
 - [issues/](docs/issues/) — observed reliability symptoms parked until

@@ -1,5 +1,4 @@
 ---
-priority: 11
 phase: 2
 depends-on: []
 gated-on: [reconnect-loss, window-shrink]

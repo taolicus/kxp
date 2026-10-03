@@ -1,5 +1,4 @@
 ---
-priority: 10
 phase: 2
 depends-on: []
 gated-on: []
