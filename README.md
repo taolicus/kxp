@@ -34,8 +34,9 @@ Then open `http://localhost:<port>`.
 
 1. Open the app in two browser tabs (one per player) and hit **Play Online** in
    both to face each other, or hit **Play vs CPU** for a solo match.
-2. When a match is found, hit **Tap Ready**. Both sides do — the round waits for
-   you, so a round never fires at someone who wasn't looking at the screen.
+2. When a match is found, the round waits for you. **Both sides do** — keep the
+   app in the foreground and a round never fires at someone who wasn't looking at
+   the screen.
 3. A **READY – KA – CHI** countdown leads to **PUN!**.
 4. Tap ✊ ✋ ✌️ right on PUN — results are shown with your reaction timing.
 

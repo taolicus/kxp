@@ -38,35 +38,43 @@ never acks — 8s timeout or a disconnect — the pending match is cancelled and
 survivor(s) go back to the queue.
 
 The handshake is a **self-timing buffer, not a fixed sleep**: the client acks
-from the end of its `matched` handler, so the countdown cannot begin until it
-has finished setting the round up. A slow client waits as long as it needs (up
-to the 8s timeout) and a fast one pays nothing. A CPU match gates on its single
-human exactly this way; the bot is not a participant and is never waited for.
+once it has finished setting the round up, so the countdown cannot begin until it
+is ready to receive one. A slow client waits as long as it needs (up to the 8s
+timeout) and a fast one pays nothing. A CPU match gates on its single human
+exactly this way; the bot is not a participant and is never waited for.
 
-### Why readiness is a tap, not an automatic ack
+### Why readiness waits for a painted frame
 
-The ack used to be posted automatically from the `matched` handler, which meant it
+The ack used to be posted straight from the `matched` handler, which meant it
 proved only that bytes had reached the browser. On a phone that is a much weaker
 claim than it looks: an app in the background with a healthy connection acks just
-as reliably as one being looked at, and the round then fires at somebody who
-never saw it start. That is the same experience as a late first countdown frame —
-a round that arrived without warning — arriving from an unrelated cause, which is
-part of why it survived: the two are indistinguishable from the lobby.
+as reliably as one being looked at, and the round then fires at somebody who never
+saw it start. That is the same experience as a late first countdown frame — a
+round arriving without warning — arriving from an unrelated cause, which is part
+of why it survived: from the lobby the two are indistinguishable.
 
-So the client asks instead of asserting. A **Tap Ready** prompt is offered the
-moment a match is found and the `/ready` ack is sent when a person presses it,
-which makes the deadline hang off something slower than the network. Human
-reaction dwarfs latency, so the lead before PUN stops being eaten by the link,
-and the ack now distinguishes "a device received bytes" from "a player is here".
+So the ack waits for a **presented animation frame** before it is sent, and it is
+gated on `document.visibilityState` as well. `requestAnimationFrame` does not run
+in a backgrounded tab, which makes the whole gate self-suppressing: no frame means
+no ack, and the existing 8s timeout cancels the match rather than firing a round at
+an absent player. No new UI is involved — the count simply reads MATCH FOUND while
+the client decides whether it is really on screen.
 
-The trade is deliberate and it is a real one: a round no longer starts on its
-own, so a player who walks away cancels it for both, and the 8s timeout is now
-more likely to mean "nobody tapped" than "slow link". The prompt re-posts while
-matched so a lost ack on a flaky link still self-heals, and it comes down on every
-exit from `matched` — including a cancelled handshake — so a player is never left
-holding a button for a match that no longer exists. Visibility is driven off the
-state machine rather than hidden by hand in each handler, so it cannot drift out
-of step with the phase. Landed with the client tests in
+A button was tried first and rejected. It did earn the ack more strictly, but it
+charged every player a control to learn and press to start a round they were
+already looking at, and it bought a distinction the frame gate gets nearly all of
+for free: what it added was attention rather than presence, so it only separated
+the case of a phone propped up, screen awake and rendering, with nobody watching.
+
+What this cannot prove is attention, and the honest limit is that. It fixes the
+backgrounded app, which is the common case and the one that produced the reported
+symptom; it does not fix a distracted player, and no amount of client-side
+machinery can, because the server only ever sees an ack. The trade is that a round
+no longer starts on its own, so a player who backgrounds the app cancels it for
+both — one round lost, instead of one round fired at nobody. The ack re-posts every
+2s while matched so a lost ack on a flaky link still self-heals, and stops on every
+exit from `matched`, so a client never asks to start a round that no longer exists.
+Landed with the client tests in
 `web/app.ready.test.cjs`.
 
 ### Why three beats precede PUN

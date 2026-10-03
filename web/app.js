@@ -97,34 +97,40 @@ function stopReadyLoop() {
 
 function sendReady() { post('/ready'); }
 
-// Show or hide the ready prompt. Driven off the state machine in transition(),
-// so it cannot disagree with the phase -- the prompt is only ever up while the
-// client is actually matched and waiting.
-function setReadyPrompt(on) {
-  const btn = $('#btn-ready');
-  if (!btn) return;
-  btn.classList.toggle('hidden', !on);
-  btn.disabled = false;
-}
-
-// Re-posts while matched so a lost ack on a flaky link self-heals.
+// Advertise that we can actually receive the countdown; the server waits for both
+// sides before the round begins, so a slow network can never drop us straight
+// into an expired window. Re-posts while matched so a lost ack on a flaky link
+// self-heals.
 //
-// Armed by the tap, never by the match. The ack used to be posted automatically
-// from the matched handler, which meant it proved only that bytes had reached the
-// browser: a phone with the app backgrounded acked just as reliably as one being
-// looked at, and the round then fired at an absent player. Now a person says go,
-// and this only keeps that decision alive until the server hears it.
+// The ack waits for a presented frame rather than firing on the spot, and that
+// is the entire point. requestAnimationFrame does not run in a backgrounded tab,
+// so this self-suppresses: an app in the background never acknowledges, and the
+// server's 8s timeout cancels the match instead of firing a round at somebody who
+// is not there. An ack posted straight from the matched handler proved only that
+// bytes had reached this browser, which a backgrounded app does just as reliably
+// as one being watched -- and the round then began with nobody ready for it.
 //
-// The gate is still a buffer, not a guarantee, and the cost is a lost round: if
-// the link is too slow to deliver an ack within the server's 8s, it cancels the
-// pending match and sends `state idle`, which drops us back to the lobby with a
-// reason shown. That is now likelier to mean "nobody tapped" than "slow link".
+// What it cannot prove is attention. A phone propped up, screen awake and
+// rendering, acknowledges happily while nobody is looking, so this fixes the
+// backgrounded case rather than the absent-minded one.
+//
+// The gate is a buffer, not a guarantee, and the cost is a lost round: if the
+// link is too slow to deliver an ack within the server's 8s, it cancels the
+// pending match and sends `state idle`, which drops us back to the lobby with the
+// reason shown.
 function armReadyLoop() {
-  stopReadyLoop();
-  readyTimer = setInterval(() => {
-    if (state !== 'matched') { stopReadyLoop(); return; }
+  if (state !== 'matched') return;
+  const go = () => {
+    if (state !== 'matched' || document.visibilityState === 'hidden') return;
     sendReady();
-  }, 2000);
+    stopReadyLoop();
+    readyTimer = setInterval(() => {
+      if (state !== 'matched') { stopReadyLoop(); return; }
+      sendReady();
+    }, 2000);
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(go);
+  else go();
 }
 
 function show(view) {
@@ -343,7 +349,6 @@ function transition(ev, data) {
   }
   const from = state;
   state = to;
-  setReadyPrompt(to === 'matched');
   if (enter[to]) enter[to](data || {}, from);
   return true;
 }
@@ -396,6 +401,7 @@ const enter = {
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
     setCount('MATCH FOUND');
+    armReadyLoop();
   },
 
   countdown(d, from) {
@@ -599,17 +605,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-cancel').addEventListener('click', () => {
     transition('cancel');
     post('/cancel');
-  });
-
-  $('#btn-ready').addEventListener('click', () => {
-    const btn = $('#btn-ready');
-    // Re-checked per tap: a double-tap on a phone must not post twice, and a
-    // prompt left up over a live countdown must not be tappable into the window.
-    if (state !== 'matched' || btn.disabled) return;
-    btn.disabled = true;
-    setCount('READY…');
-    sendReady();
-    armReadyLoop();
   });
 
   $('#btn-again').addEventListener('click', () => {

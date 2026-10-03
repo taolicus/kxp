@@ -6,13 +6,15 @@ gated-on: []
 
 # Make the countdown deadline adapt to the slowest side
 
-> **Now partly superseded.** The human half of this has shipped -- readiness is a
-> tap, not an automatic ack (see [protocol.md](../../features/protocol.md) § Why
-> readiness is a tap), so the deadline hangs off a person rather than
-> off a network ack that only proved bytes arrived. That fixes the absent-player
-> case. The remaining half is the adaptive lead below, which is still needed for
-> the slow-but-present link -- the tap bounds the anchor, it does not remove the
-> round trip between the tap and the countdown.
+> **Now partly superseded.** The presence half of this has shipped -- readiness
+> is no longer an automatic ack; the client waits for a presented animation frame
+> and for the document to be visible before it acks (see
+> [protocol.md](../../features/protocol.md) § Why readiness waits for a painted
+> frame). So the deadline hangs off a rendered frame rather than off a network ack
+> that only proved bytes arrived, which fixes the backgrounded-player case. The
+> remaining half is the adaptive lead below, which is still needed for the
+> slow-but-present link -- a painted frame bounds the anchor, it does not remove
+> the round trip between the frame and the countdown.
 
 ## Why margin alone cannot be the answer
 
@@ -81,18 +83,21 @@ delivery was. The slow side's round starts later instead of losing its countdown
   a product call.
 - **Server must wait for the slowest side**, so a lagging player delays the round
   for both. Bounded by the prepare timeout, but it is a fairness cost.
-- **Should the human be the anchor instead?** Every synchronous game anchors on a
+- **Should the client be the anchor instead?** Every synchronous game anchors on a
   human action rather than a network ack, because human reaction dwarfs latency.
-  A ready-tap would make the anchor trivially slow, and would additionally
-  distinguish "bytes reached the browser" from "a person is looking at it" — which
-  is the real failure on a phone, where the app can be backgrounded with the
-  network perfectly healthy. This changes how a match starts, so it is not a
-  silent part of this task.
-- **Interaction with the client-generated ack.** `/ready` is sent automatically
-  from the `matched` handler, so today it proves only that bytes arrived. If that
-  remains true for the prepare ack, the adaptive lead fixes late delivery but not
-  an absent player, and the two symptoms stay conflated. Worth deciding whether
-  the ack should require the document to be visible.
+  This is what shipped, in a lighter form than was first built: the client acks
+  from a presented animation frame gated on visibility, rather than from a button.
+  That distinguishes "bytes reached the browser" from "this app is actually being
+  drawn" -- which is the real failure on a phone, where the app can be
+  backgrounded with the network perfectly healthy. A button was tried first and
+  rejected as unnecessary friction; it only added attention on top of presence,
+  and attention is not observable by the server. This changed how a match starts,
+  so it is not a silent part of this task.
+- **Interaction with the client-generated ack.** `/ready` now waits for a painted,
+  visible frame, so it proves more than it used to. If the prepare ack were to
+  remain a bare network ack, the adaptive lead would fix late delivery but not an
+  absent player, and the two symptoms would stay conflated. The prepare ack
+  should carry the same frame-and-visibility gate as `/ready` does now.
 
 ## Required context
 

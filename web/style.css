@@ -175,17 +175,6 @@ button.primary:hover {
   filter: brightness(1.08);
 }
 
-/* Spacing only. The prompt deliberately inherits the ordinary button styling --
-   an earlier pass sized and uppercased it like a call to action and it read as a
-   different, louder control than everything else on the screen. */
-button.ready {
-  margin: 14px 0 0;
-}
-button.ready:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
 .buttons {
   display: flex;
   flex-direction: column;

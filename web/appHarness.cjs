@@ -66,7 +66,12 @@ function loadApp(opts = {}) {
   const posts = [];
   const elements = new Map();
   const docHandlers = {};
+  const frames = [];
   let clock = 1700000000000;
+  // A frame is only ever presented when the test says so, which is the property
+  // the readiness gate depends on: app.js arms its ack from a rAF callback
+  // because a backgrounded tab does not get one.
+  let visibility = 'visible';
 
   const ctx = createContext({
     console,
@@ -109,12 +114,14 @@ function loadApp(opts = {}) {
       if (i >= 0) timers.splice(i, 1);
     },
     Image: function () { this.onload = null; this.onerror = null; this.src = ''; },
+    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
   });
 
   ctx.window = ctx;
   ctx.document = {
     documentElement: { style: { setProperty() {} } },
     body: { classList: { add() {}, remove() {}, toggle() {} } },
+    get visibilityState() { return visibility; },
     querySelector: (sel) => {
       if (!elements.has(sel)) elements.set(sel, stubElement());
       return elements.get(sel);
@@ -165,6 +172,15 @@ function loadApp(opts = {}) {
     // async (it awaits the roster before wiring), so callers must await it or the
     // buttons will not exist yet.
     boot: () => docHandlers.DOMContentLoaded && docHandlers.DOMContentLoaded(),
+    // Present a frame. Nothing is delivered until this is called, so a test can
+    // assert that nothing has been acked while no frame has been shown.
+    frame: () => {
+      const due = frames.splice(0, frames.length);
+      for (const fn of due) fn();
+    },
+    // Frames requested but not yet presented, i.e. what a backgrounded tab has.
+    pendingFrames: () => frames.length,
+    visibility: (v) => { visibility = v; },
     // Click a control the way app.js wired it, failing loudly if it was never
     // wired rather than silently passing.
     tap: (sel) => {
