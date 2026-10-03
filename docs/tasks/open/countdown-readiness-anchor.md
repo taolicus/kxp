@@ -6,8 +6,13 @@ gated-on: []
 
 # Make the countdown deadline adapt to the slowest side
 
-Replace the fixed lead before PUN with one that is measured per round, so the
-countdown survives on any connection instead of being bought with wait time.
+> **Now partly superseded.** The human half of this has shipped -- readiness is a
+> tap, not an automatic ack (see [protocol.md](../../features/protocol.md) § Why
+> readiness is a tap), so the deadline hangs off a person rather than
+> off a network ack that only proved bytes arrived. That fixes the absent-player
+> case. The remaining half is the adaptive lead below, which is still needed for
+> the slow-but-present link -- the tap bounds the anchor, it does not remove the
+> round trip between the tap and the countdown.
 
 ## Why margin alone cannot be the answer
 

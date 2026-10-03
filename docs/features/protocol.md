@@ -43,6 +43,32 @@ has finished setting the round up. A slow client waits as long as it needs (up
 to the 8s timeout) and a fast one pays nothing. A CPU match gates on its single
 human exactly this way; the bot is not a participant and is never waited for.
 
+### Why readiness is a tap, not an automatic ack
+
+The ack used to be posted automatically from the `matched` handler, which meant it
+proved only that bytes had reached the browser. On a phone that is a much weaker
+claim than it looks: an app in the background with a healthy connection acks just
+as reliably as one being looked at, and the round then fires at somebody who
+never saw it start. That is the same experience as a late first countdown frame —
+a round that arrived without warning — arriving from an unrelated cause, which is
+part of why it survived: the two are indistinguishable from the lobby.
+
+So the client asks instead of asserting. A **Tap Ready** prompt is offered the
+moment a match is found and the `/ready` ack is sent when a person presses it,
+which makes the deadline hang off something slower than the network. Human
+reaction dwarfs latency, so the lead before PUN stops being eaten by the link,
+and the ack now distinguishes "a device received bytes" from "a player is here".
+
+The trade is deliberate and it is a real one: a round no longer starts on its
+own, so a player who walks away cancels it for both, and the 8s timeout is now
+more likely to mean "nobody tapped" than "slow link". The prompt re-posts while
+matched so a lost ack on a flaky link still self-heals, and it comes down on every
+exit from `matched` — including a cancelled handshake — so a player is never left
+holding a button for a match that no longer exists. Visibility is driven off the
+state machine rather than hidden by hand in each handler, so it cannot drift out
+of step with the phase. Landed with the client tests in
+`web/app.ready.test.cjs`.
+
 ### Why three beats precede PUN
 
 `READY` → `KA` → `CHI` is three beats to `shoot`, not two, and `READY` is

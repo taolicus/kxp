@@ -95,22 +95,35 @@ function stopReadyLoop() {
   readyTimer = null;
 }
 
-// Advertise to the server that we're ready to receive the countdown; the
-// server waits for both sides before the round begins, so a slow network can
-// never drop us straight into an expired window. Re-posts while matched so a
-// lost ack on a flaky link self-heals.
+function sendReady() { post('/ready'); }
+
+// Show or hide the ready prompt. Driven off the state machine in transition(),
+// so it cannot disagree with the phase -- the prompt is only ever up while the
+// client is actually matched and waiting.
+function setReadyPrompt(on) {
+  const btn = $('#btn-ready');
+  if (!btn) return;
+  btn.classList.toggle('hidden', !on);
+  btn.disabled = false;
+}
+
+// Re-posts while matched so a lost ack on a flaky link self-heals.
 //
-// The gate is a buffer, not a guarantee, and the cost is a lost round: if the
-// link is too slow to deliver an ack within the server's 8s, it cancels the
-// pending match and sends `state idle`, which drops us back to the lobby with no
-// reason shown. That is the designed behaviour, but it is invisible to the
-// player — worth knowing before treating "matched then bounced" as a mystery.
-function readyLoop() {
-  post('/ready');
-  clearInterval(readyTimer);
+// Armed by the tap, never by the match. The ack used to be posted automatically
+// from the matched handler, which meant it proved only that bytes had reached the
+// browser: a phone with the app backgrounded acked just as reliably as one being
+// looked at, and the round then fired at an absent player. Now a person says go,
+// and this only keeps that decision alive until the server hears it.
+//
+// The gate is still a buffer, not a guarantee, and the cost is a lost round: if
+// the link is too slow to deliver an ack within the server's 8s, it cancels the
+// pending match and sends `state idle`, which drops us back to the lobby with a
+// reason shown. That is now likelier to mean "nobody tapped" than "slow link".
+function armReadyLoop() {
+  stopReadyLoop();
   readyTimer = setInterval(() => {
     if (state !== 'matched') { stopReadyLoop(); return; }
-    post('/ready');
+    sendReady();
   }, 2000);
 }
 
@@ -330,6 +343,7 @@ function transition(ev, data) {
   }
   const from = state;
   state = to;
+  setReadyPrompt(to === 'matched');
   if (enter[to]) enter[to](data || {}, from);
   return true;
 }
@@ -340,7 +354,7 @@ function transition(ev, data) {
 // equally consistent with a slow upload, a stalled connection, or a device that
 // slept. An unrecognised reason shows nothing rather than leaking the raw value.
 const CANCEL_NOTES = {
-  'handshake-timeout': 'Connection wasn’t ready in time — match cancelled.',
+  'handshake-timeout': 'Ready wasn’t confirmed in time — match cancelled. Both sides tap Ready to start.',
   'opponent-left': 'Opponent left before the round started.',
 };
 
@@ -381,8 +395,7 @@ const enter = {
     resetGame();
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
-    setCount('MATCH FOUND');
-    readyLoop();
+    setCount('TAP READY');
   },
 
   countdown(d, from) {
@@ -586,6 +599,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-cancel').addEventListener('click', () => {
     transition('cancel');
     post('/cancel');
+  });
+
+  $('#btn-ready').addEventListener('click', () => {
+    const btn = $('#btn-ready');
+    // Re-checked per tap: a double-tap on a phone must not post twice, and a
+    // prompt left up over a live countdown must not be tappable into the window.
+    if (state !== 'matched' || btn.disabled) return;
+    btn.disabled = true;
+    setCount('READY…');
+    sendReady();
+    armReadyLoop();
   });
 
   $('#btn-again').addEventListener('click', () => {

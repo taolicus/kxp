@@ -18,14 +18,29 @@ const CHARACTERS = join(__dirname, 'characters.js');
 const KXP = require('./kxp.js');
 
 function stubElement() {
+  // Real class tracking: a contains() that always returns false makes every
+  // visibility assertion silently pass, which is worse than no stub.
+  const classes = new Set();
   return {
     textContent: '',
     innerHTML: '',
     disabled: false,
     dataset: {},
     style: { setProperty() {}, removeProperty() {} },
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-    addEventListener() {},
+    classList: {
+      add: (c) => classes.add(c),
+      remove: (c) => classes.delete(c),
+      toggle(c, on) {
+        const want = on === undefined ? !classes.has(c) : !!on;
+        if (want) classes.add(c); else classes.delete(c);
+        return want;
+      },
+      contains: (c) => classes.has(c),
+    },
+    // Handlers are kept rather than dropped, so a test can tap a real control the
+    // way app.js wired it instead of calling the handler behind its back.
+    handlers: {},
+    addEventListener(type, fn) { this.handlers[type] = fn; },
     removeEventListener() {},
     querySelector: () => stubElement(),
     querySelectorAll: () => [],
@@ -48,12 +63,27 @@ function loadApp(opts = {}) {
   const timers = [];
   const sources = [];
   const transitions = [];
+  const posts = [];
   const elements = new Map();
+  const docHandlers = {};
   let clock = 1700000000000;
 
   const ctx = createContext({
     console,
-    fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+    // Posts are recorded rather than resolved blindly, so a test can assert what
+    // the client told the server -- notably whether it acknowledged readiness on
+    // its own or waited to be asked.
+    fetch: (url, opts) => {
+      posts.push({ url, body: opts && opts.body });
+      // /characters returns the roster as a JSON array; everything else returns an
+      // object. Handing the roster an object breaks loadRoster's consumers with
+      // "CHARACTERS.find is not a function", which looks nothing like a stub bug.
+      const isRoster = /\/characters\/?$/.test(String(url));
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: () => Promise.resolve(isRoster ? [] : {}),
+      });
+    },
     navigator: { sendBeacon: () => true },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     location: { search: '' },
@@ -90,7 +120,7 @@ function loadApp(opts = {}) {
       return elements.get(sel);
     },
     querySelectorAll: () => [],
-    addEventListener() {},
+    addEventListener(type, fn) { docHandlers[type] = fn; },
   };
   ctx.KXP = KXP;
   ctx.StateMachine = {
@@ -125,8 +155,23 @@ function loadApp(opts = {}) {
     ctx,
     sources,
     transitions,
+    posts,
+    // Every POST the client made, as "METHOD path" strings.
+    posted: () => posts.map((p) => String(p.url).replace(/^https?:\/\/[^/]+/, '')),
     // The stub itself, for assertions on a property other than text.
     el: (sel) => elements.get(sel),
+    // Run app.js's wiring, which is otherwise only reachable from DOMContentLoaded
+    // and so never runs in a test. Needed for anything a click handler does. It is
+    // async (it awaits the roster before wiring), so callers must await it or the
+    // buttons will not exist yet.
+    boot: () => docHandlers.DOMContentLoaded && docHandlers.DOMContentLoaded(),
+    // Click a control the way app.js wired it, failing loudly if it was never
+    // wired rather than silently passing.
+    tap: (sel) => {
+      const el = elements.get(sel);
+      if (!el || !el.handlers.click) throw new Error(`nothing is listening for clicks on ${sel}`);
+      el.handlers.click();
+    },
     html: (sel) => elements.get(sel)?.innerHTML,
     count: () => elements.get('#count')?.textContent,
     // Move the stubbed clock. Done from here rather than by reassigning Date.now
