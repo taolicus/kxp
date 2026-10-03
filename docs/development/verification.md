@@ -53,6 +53,32 @@ withdrawn; the reasoning and what a browser-level suite would require are in
 is a known, recorded gap, not an oversight — treat a rendering claim as
 hand-checked and say so.
 
+## Why there is no `tests/` directory
+
+Tests sit beside the code they test, and for the Go suite that is a toolchain
+requirement rather than a preference. All 21 `_test.go` files are `package main`,
+and so are all 8 non-test `.go` files: the tree contains exactly one Go package,
+at the root. `package main` cannot be imported at all, so a `tests/` directory
+would force every test file into a package that cannot see the code under test —
+and the external-test-package form (`package main_test`) is required by the go
+tool to live in the *same directory* as the package it tests, so it is not a way
+out either. That matters here more than it would elsewhere, because a lot of this
+suite is deliberately internal: `finish_test.go` drives match pointer states
+directly because the live race is order-dependent and cannot be reproduced
+reliably, `state_test.go` and `snapshot_test.go` reach through `c.mu` and `h.mu`,
+and the whole reason `go test -race` being unavailable does not block those tests
+is that they assert by driving the state rather than by racing two goroutines.
+Relocating them would trade that for nothing.
+
+The JavaScript side could move — `node --test` takes any path — but would gain
+nothing and lose the adjacency that matters: `web/appHarness.cjs` loads `app.js`
+by path from beside it, and the client-behaviour tests exist precisely to run the
+real source.
+
+Test files are a large share of this repo's text, and the answer to that is the
+working agreement in `AGENTS.md` — the landing commit names the one that matters,
+and the bodies are not read as a sweep. It has never been a reason to move them.
+
 ## Why browser-free probes
 
 The integration path is `t1`–`t8` in `tools/`: Node scripts that speak the real
