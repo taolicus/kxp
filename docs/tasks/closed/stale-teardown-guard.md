@@ -13,4 +13,4 @@ millisecond. Client impact: the browser reads that trailing `state` as a
 holds it in a live match (see the `matched` row in
 [docs/features/protocol.md](../../features/protocol.md)).
 
-→ rationale: [decisions/stale-teardown-guard.md](../../decisions/stale-teardown-guard.md)
+→ rationale: [architecture.md#sse-lifecycle](../../features/architecture.md#sse-lifecycle)

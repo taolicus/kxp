@@ -30,16 +30,46 @@ countdown. It is held as a `time.Time` rather than epoch-ns so it keeps its
 that has one, and `Sub` silently drops to wall-clock arithmetic when either
 operand lacks it, which would mis-time the round by the size of any mid-round
 clock step (NTP resync, network change). The wire value is derived from the same
-instant via `UnixMilli`. Reaction time is `arrival.Sub(shootAt)`, where
+instant via `UnixMilli`. This is not a stylistic choice: storing the deadline as
+epoch-ns and rebuilding it with `time.Unix` gives an instant with no monotonic
+reading, and a clock step mid-round — NTP resync, a network change — would then
+mis-time arrival timing, the KA/CHI/PUN sleeps, and the `too late` cutoff by
+exactly the size of the step. That defect surfaced as a flake before it was
+understood: a test whose own wall time was 1.21s reported a move as 13.3s late,
+and the two numbers could not both be right. A clock step cannot be injected, so
+the guard is structural — the stored deadline must still render with a trailing
+`m=+` — and that guard was checked to fail against the old wall-only form.
+Landed in `516c03c`.
+
+Reaction time is `arrival.Sub(shootAt)`, where
 `arrival` is `time.Now()` captured at POST receipt. Picks outside the shoot window
 (its
 length is server-controlled — see the `windowMs` field in the `countdown`/
 `shoot` frames) are rejected with `400`; failing to pick within it is a timeout
-loss. `handleMove` judges lateness against the announced deadline and its
-phase/deadline check is best-effort (it races the deadline timer); a move
-accepted there is never silently dropped — `drainPending` counts anything
-buffered before the deadline, and a straggler is drained at `finishMatch` (it
-can only lose an already-closed round).
+loss. `handleMove` samples the clock once, so its late-bound check and the
+arrival stamp it writes cannot disagree; a move accepted there is never silently
+dropped — `drainPending` counts anything buffered before the deadline fired, and
+a straggler is drained at `finishMatch` (it can only lose an already-closed
+round).
+
+**Both ends of the window are authoritative.** `resolve` judges each arrival
+against the whole announced window, `[shootAt, deadline]`, rather than relying on
+`handleMove` having checked correctly. That check is explicitly best-effort — it
+races the deadline timer — so a pick submitted in the final sliver of the window
+can pass it and be stamped past the deadline, and `drainPending` counts it as an
+on-time tap. Judging `>= shootAt` alone let exactly such a pick **win the round**
+on a move the server would have rejected with `400 too late` a moment later. A
+pick stamped at the instant the window closes is not *after* it and still counts:
+the client renders the window as closing at that same instant, so rejecting it
+would take the boundary away from a player who was inside it.
+
+**`late` is deliberately not `timeout`.** Connectivity-safe scoring keys a
+no-contest on the `timeout` note, and keeps `early` out of that rule because an
+early pick is a deliberate act that stays a full loss. A late pick is the same
+kind of act, so it gets its own note — folding it into `timeout` would let
+[connectivity-safe-scoring](../tasks/open/connectivity-safe-scoring.md) convert
+a full loss into a draw-scored no-contest without anyone deciding to. Landed in
+`482fb72`.
 
 Displayed reaction times use the client's own click timestamps when provided
 (network-neutral); win/loss remains server-authoritative on arrival time. The
@@ -65,6 +95,23 @@ matched). The gate is a bitmask over the non-bot sides, so a CPU match waits on
 its one human and a PvP match waits on both. If a match never acks — timeout or
 disconnect — the pending match is cancelled and the survivor(s) re-queued.
 
+**The handshake is verified buffer, not a fixed sleep.** A fixed 2s `Ready?` step
+ahead of KA was considered and rejected: the client does all of its setup in one
+shot when the first `countdown` arrives (`planRound` → arm `punTimer`), which is
+microseconds, so there is nothing incremental to give a slow client more time
+for. It does cost something real — it widens the pre-PUN phase from ~3.2s to
+~5.2s, and that phase is precisely the window in which a drop loses the round
+outright ([drop-loss](../issues/drop-loss.md)). That is buying a hypothetical
+benefit with a certain 67% increase in drop exposure. The handshake gives the
+same buffer *verified* rather than hoped-for: the client acks from the end of its
+`matched` handler, so a slow client waits as long as it needs and a fast one
+pays nothing. Landed in `32a3b02`.
+
+The cost it does accept is a new failure mode: a CPU match whose human never acks
+is cancelled and re-queued after 8s, where before it could not happen. The 2s
+ack re-post plus the `pending` snapshot flag — which routes a reconnecting client
+back through `matched` and re-arms its acks — cover the realistic cases.
+
 ## SSE lifecycle
 
 Connections are guarded by a `connID` freshness check so a newer connection
@@ -77,6 +124,28 @@ arms a stall watchdog while a round is live and, if no result arrives within a
 few seconds, forces a reconnect so the `connected` snapshot reconciles it back
 out. Snapshots for a finished (`done`) or already-expired (`shoot`) match route
 straight to the lobby rather than a dead end.
+
+**Match teardown is per-side and conditional.** When a handshake is abandoned,
+`readyTimeout`/`readyAbandon` re-queue both sides and `m.requeue` calls
+`tryMatch`, which can re-pair the survivor into a *new* match before the
+abandoned match's `finishMatch` runs. Sending `state {state:"idle"}` to every
+side of the old match would therefore show the survivor `matched` (new match)
+and then `state` (stale teardown) — in either order, since both frames land
+within the same millisecond. The client reads that trailing `state` as a
+`stateIdle` edge out of `matched` and drops to the lobby while the server still
+holds it in a live match. So only a side still in *this* match is told to go idle.
+That decision is taken under `h.mu`, because `Client.match` is plain state and an
+unlocked read would be a data race — and `-race` cannot run on this platform
+(see [environment](../development/environment.md)). `drainMoves` stays
+unconditional: that channel is the client's own, and a re-paired client must not
+open its new round on the old round's buffered pick.
+
+The live race is order-dependent — roughly 1 run in 7 — so `finish_test.go`
+drives the pointer states directly instead: a re-paired side gets no frame, an
+already-removed side gets no frame, and the normal path still tells **both**
+sides to go idle. That last one is the guard against over-correcting into
+stranding every finished client. `t8` still asserts the scenario as a live
+canary. Landed in `4143f1b`.
 
 Client joins/leaves are logged with the live count (so an off-by-one "online
 now" is diagnosable from the journal), and each stream's writes carry a short

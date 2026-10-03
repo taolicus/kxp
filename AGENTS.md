@@ -44,11 +44,12 @@ model, matchmaking, SSE lifecycle).
   item, which is why the phases are ordered as they are
 - why a landed item is the way it is —
   [docs/tasks/closed/](docs/tasks/closed/): one file per landed item, each linking
-  its rationale in [docs/decisions/](docs/decisions/)
+  the section of [docs/features/](docs/features/) holding its rationale
 - a symptom that looks familiar — [docs/issues/](docs/issues/): entries are
   **unconfirmed** by definition
-- re-litigating a landed decision — [docs/decisions/](docs/decisions/): one file
-  per decision
+- re-litigating a landed decision — the feature file that owns the invariant it
+  constrains, under "why not"; see
+  [docs/features/](docs/features/)
 
 **Deliberately not read as a sweep.** `tools/` is ~24% of the text in this repo
 and earns a read only when changing the probes or the verdict logic — then read
@@ -200,7 +201,7 @@ INCONCLUSIVE into a FAIL.
   The file keeps the phase it ran in by its position under
   [docs/roadmap.md](docs/roadmap.md), which holds the phase structure and a link
   per item and no status of its own.
-- **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → [docs/decisions/](docs/decisions/), one file per decision, linked from the closed task file.
+- **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → the section of the owning file in [docs/features/](docs/features/) (or [docs/development/](docs/development/)) that documents the invariant the decision constrains, written as present-tense prose and closed with the landing commit. The closed task file links to that section, so a reader who starts at the work item is routed to the reasoning.
 - **A symptom whose cause you cannot confirm** → [docs/issues/](docs/issues/): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
 - **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
 - **Host capability claims** → [docs/development/environment.md](docs/development/environment.md), re-measured rather than assumed.
@@ -229,9 +230,13 @@ stands is none of these: it belongs in `docs/features/`, and per
 [workflow.md](workflow.md) it is never moved in from a task.
 
 Two consequences worth stating because they look like exceptions and are not. A
-landed item's *reasoning* lives in `docs/decisions/` — that is a second **file**
-about the item, not a second **status**; the closed task file keeps the pointer,
-so the copy a reader hits first is still the only copy of the status. And a
+landed item's *reasoning* is **in** the feature file rather than beside it —
+that is the same **file** as the invariant, not a second copy of anything, and
+the closed task file keeps the pointer so the copy a reader hits first is still
+the only copy of the status. (It was a separate `docs/decisions/` register until
+it was folded in: every decision there was cited by exactly one file — its own
+closed task — so the reasoning was reachable from the plan and invisible from the
+system docs that encode the constraint.) And a
 task's `priority` is metadata, not a place: a task is not "unimportant" because
 it sits at priority 17, so it stays in `open/` and gets no third directory to
 reflect that. The README tracks no status at all — it points at the three

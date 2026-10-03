@@ -6,4 +6,4 @@ ignores a bot bit outright. The original rationale ("CPU matches have one human
 who just clicked, so they start immediately") was the gap: the one match with no
 sync barrier was the one that started instantly.
 
-→ rationale: [decisions/cpu-ready-gate.md](../../decisions/cpu-ready-gate.md)
+→ rationale: [architecture.md#matchmaking](../../features/architecture.md#matchmaking)

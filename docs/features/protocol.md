@@ -92,7 +92,26 @@ being dropped into the queue for a human opponent they never requested.
 The client shows the reason without blame: the server observes an ack that never
 arrived, which is equally consistent with a slow upload, a stalled connection, or
 a device that slept, so it can prove the handshake was cancelled but never which
-player caused it.
+player caused it. The copy states the cause it can prove and never which player
+was at fault, and it must not read as a loss: no `result` is emitted, so nothing
+is scored.
+
+**The extra fields are additive, and that was not the obvious choice.** Swapping
+the event type for `waiting` would have reused the frame `POST /queue` already
+sends — but `waiting` has no `matched → waiting` edge in the client machine, and
+adding it does not help a client that predates the change. A tab open across a
+deploy would strand itself on the game screen with a rejected transition. Keeping
+the frame as `state idle` and adding fields means an old client ignores them and
+behaves exactly as before. The client needed one new edge
+(`matched + waiting = waiting`) to avoid a lobby flash, which is safe precisely
+because the wire format did not change.
+
+The mode-aware requeue matters more than the message did. `makeMatch` originally
+wired the *same* requeue closure for CPU and PvP, so a CPU handshake timeout put
+the player into the **PvP queue** for a human opponent they never asked for —
+`requeueSide(1)` correctly no-ops for the bot, but side 0 never checked the mode.
+Fixed at the source, and pinned by asserting the human is *not* on the queue,
+which is the inverse of the test it replaced. Landed in `6c96bfb`.
 
 Match duration: `matched` → `READY` (+1s) → `KA` (+1s) → `CHI` (+1s) → `shoot`
 (2s window) → `result`. Handshake time precedes the countdown and is
@@ -154,6 +173,28 @@ snapshot.
 ### One live match per client
 
 `/cpu` and `/queue` both return `409 already in a match` while the client holds a live match. The invariant has to be enforced at the handler, because nothing downstream can repair the damage otherwise: a retried or double-tapped start request would overwrite the client's match pointer and orphan the first match, and both match loops would then drive the same event stream. The client would see two `matched` and two `countdown` frames for one round, its single pick would be routed to whichever match the pointer names, and the orphan would resolve with no human move — reporting `result: loss` with `yourNote: "timeout"` for a round the player never played. The stale-teardown guard in `finishMatch` cannot clean that up either: it deliberately suppresses the teardown frame for any side that has already been re-pointed at a newer match, so the phantom round is never retracted. The browser also disables its start button for the duration of the request, so a double-tap on Fight does not ask for a second match in the first place.
+
+### Why `/health` carries a build identity
+
+The probe suite points at a deployed origin, so without an identity every live
+result is conditional on an assumption nobody can check — that the deploy
+actually happened and restarted. A green suite against a stale binary is *worse*
+than no suite, because it reads as verification. This is the same failure shape
+as the probe origin defaulting to the wrong host: a suite that looks
+authoritative while measuring the wrong thing. The suite cannot detect its own
+misconfiguration, so the check has to be explicit and has to run first — hence
+`t1`, before any other probe.
+
+**No build script is required.** The identity comes from Go's automatic VCS
+stamping, so a plain `go build -o kxp .` inside a work tree identifies itself
+with no deploy-time discipline to forget. `modified` is reported separately from
+`sha` so a dirty tree cannot masquerade as its commit, and `source` names which
+mechanism supplied it. `sha` is `"unknown"` for a binary carrying no VCS
+metadata, which is what a stale or externally-built binary reports — and `t1`
+treats that as a failure rather than passing it. `go test` does not stamp test
+binaries, so the parser is unit-tested from synthetic settings and only a real
+binary on a deployed origin exercises the stamped path end to end.
+Landed in `a9abeba`.
 
 ## Client state machine
 

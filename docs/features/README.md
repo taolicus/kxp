@@ -7,9 +7,14 @@ This is not a work-item register. Nothing here has a status, nothing here moves
 when work lands, and per [workflow.md](../../workflow.md) a task is never moved
 into this directory — when completed work establishes durable knowledge, the
 knowledge goes here and the work record stays in
-[docs/tasks/closed/](../tasks/closed/). If a file here needs a "why did we do it
-that way" answer, that lives in [docs/decisions/](../decisions/) and is linked
-from the relevant feature file.
+[docs/tasks/closed/](../tasks/closed/).
+
+The rationale for how something works belongs *in* the file that describes it,
+not beside it. A rejected alternative you would otherwise re-litigate — why the
+deadline is a `time.Time`, why there is no fixed `Ready?` step — is a paragraph
+under the invariant it constrains, in the present tense, closing with the commit
+that landed it. That is the same **file** as the knowledge, not a second copy of
+it.
 
 - [architecture.md](architecture.md) — the engine and its invariants: round
   timing, matchmaking, the state machine, SSE lifecycle, and what the tests
@@ -21,11 +26,8 @@ from the relevant feature file.
   roster, and how to add a fighter.
 - [backgrounds.md](backgrounds.md) — the match background asset pipeline.
 
-Two things about this tree that are deliberately *not* here:
+One thing about this tree that is deliberately *not* here:
 
 - **[docs/development/](../development/)** is durable, but it describes the
   development host and the verification gates rather than the implemented
   system.
-- **[docs/decisions/](../decisions/)** is durable, but it records why a decision
-  was made, which is history rather than a description of what the code now
-  does.

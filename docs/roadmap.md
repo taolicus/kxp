@@ -15,7 +15,8 @@ The lists below are tables of contents — phase, then title, then a link. They
 carry no status word and no priority. Priority is the `priority` integer in an
 open task's frontmatter, so the next thing to pick up is a sort of
 [tasks/open/](tasks/open/), not a list maintained here. The reasoning behind any
-landed item is in [docs/decisions/](decisions/), linked from the item itself.
+landed item is in the [docs/features/](features/) file that owns the invariant it
+constrains, linked from the item itself.
 
 This file used to carry the item bodies as checkboxes, which was wrong twice
 over and both errors surfaced as stale text before anyone noticed they were

@@ -3,4 +3,4 @@
 `resolve` judged only the near end, `arrive >= shootAt`, and left the far end to
 `handleMove`.
 
-→ rationale: [decisions/pick-window-both-ends.md](../../decisions/pick-window-both-ends.md)
+→ rationale: [architecture.md#timing-model](../../features/architecture.md#timing-model)

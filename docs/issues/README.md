@@ -33,8 +33,8 @@ moment an entry is inserted or removed.
 
 ## How an entry graduates
 
-An entry becomes a task when the next action is **build X**, and a
-[decision](../decisions/) or a measured number is all that stands between it and
+An entry becomes a task when the next action is **build X**, and a written
+[decision](../features/) or a measured number is all that stands between it and
 the work items. A symptom whose cause is still unconfirmed cannot: the whole
 point is that nobody yet knows what to build. So an entry leaves here when its
 "proves the cause" line is satisfied, or when what it needs is a decision
