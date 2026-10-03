@@ -204,6 +204,16 @@ and no item carries a status word anywhere else — no checkbox, no "done", no
 "planned". That is the invariant, and the stale-copy incident below is what it
 protects against.
 
+**Which register is it?** The test is whether you could hand the file to someone
+with no further conversation and have them start. If you would have to ask a
+question first, it is an issue. "Add a `cancelled` event so `state` means one
+thing" is a task even though nothing about it is urgent and even though it is
+blocked until the deploy can guarantee clients refresh — naming the work is
+enough. "A match sometimes stalls after the opponent is found" is not, because
+nobody knows what to build. And durable knowledge about the system as it now
+stands is none of these: it belongs in `docs/features/`, and per
+[workflow.md](workflow.md) it is never moved in from a task.
+
 Two consequences worth stating because they look like exceptions and are not. A
 landed item's *reasoning* lives in `docs/decisions/` — that is a second **file**
 about the item, not a second **status**; the closed task file keeps the pointer,

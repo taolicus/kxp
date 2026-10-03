@@ -1,4 +1,4 @@
-# Tasks
+# Task register
 
 Two registers, one transition between them. The directory a task file sits in is
 its status; there is no checkbox to tick anywhere.
@@ -6,18 +6,13 @@ its status; there is no checkbox to tick anywhere.
 - [open/](open/) — specified builds, not yet landed.
 - [closed/](closed/) — what has landed, kept for history.
 
-## What makes something a task
-
-The next action has to be a build. "Add a `cancelled` event so `state` means one
-thing" is a task even though nothing about it is urgent, and even though it is
-blocked until the deploy can guarantee clients refresh — naming the work is
-enough. "A match sometimes stalls after the opponent is found" is not: nobody
-knows what to build, so it is an [issue](../issues/), and it becomes a task when
-its cause is confirmed.
-
-The test is whether you could hand the file to someone with no further
-conversations and have them start. If you would have to ask a question first, it
-is an issue.
+**Telling a task from an issue, or from durable system knowledge, is not
+answered here** — it is a cross-register decision and this file only covers the
+two task directories. See
+[AGENTS.md](../../AGENTS.md#one-home-per-work-item) for the test, and note that a
+work item is not the only kind of thing recorded in this tree: `docs/features/`
+holds durable knowledge about the implemented system, which is not a work item
+and never becomes one.
 
 ## Metadata
 
