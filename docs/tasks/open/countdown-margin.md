@@ -49,6 +49,20 @@ time.
 So the deficit is margin, not correctness. Nothing here is a bug in the sense of
 a violated invariant, which is why this is a task rather than an issue.
 
+## Measuring it, without a console
+
+`web/diag.html` is served from the same origin and is the way to get this number
+from a real player. It opens two throwaway clients, plays one real match against
+itself, and reports how many of the three beats each side actually received,
+lateness measured against the `ts` every frame already carries. It renders the
+countdown by driving `/kxp.js`'s real `countdownSchedule`, so what it shows is
+what a player sees rather than a recording of it.
+
+This exists because nothing else here can answer the question. The probes see
+frames arriving but have no reference to measure delivery against, and there is
+no `/ping`. Handing a player a devtools snippet was tried first and is not a
+reasonable thing to ask of someone trying to play a game on a phone.
+
 ## The trade-off
 
 Margin is bought with seconds before PUN, one for one. The budget before the

@@ -34,8 +34,14 @@ Then open `http://localhost:<port>`.
 
 1. Open the app in two browser tabs (one per player) and hit **Play Online** in
    both to face each other, or hit **Play vs CPU** for a solo match.
-2. A **KA–CHI** countdown leads to **PUN!**.
+2. A **READY – KA – CHI** countdown leads to **PUN!**.
 3. Tap ✊ ✋ ✌️ right on PUN — results are shown with your reaction timing.
+
+If the countdown is missing on your network — you go straight from *MATCH FOUND*
+to *PUN!* — open **`/diag.html`** on the same origin. It plays one throwaway
+match against itself and reports how many of the countdown beats your connection
+can actually deliver. The countdown is announced exactly as long before PUN as it
+lasts, so it has no slack to spare and each second of delay costs a beat.
 
 ## How it works
 
