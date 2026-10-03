@@ -142,6 +142,7 @@ and it does not depend on how the context window behaves.
 ### Verify
 
 ```sh
+npm run links       # internal doc links and #fragments; sub-second, run it every time
 gofmt -l .          # must print nothing
 go vet ./...
 go test ./...       # ~60s on this host; batch Go edits, don't re-run per edit
@@ -151,7 +152,12 @@ npm run tall        # probes t1–t8 — requires an origin (see below), creates
 
 `npm run unit` is the catch-all for client and harness tests (the README's
 shorter `node --test web/kxp.test.cjs web/machine.test.cjs` misses
-`web/app.countdown.test.cjs`). What each gate does and does not cover, and why
+`web/app.countdown.test.cjs`). `npm run links` is first because it is the only
+gate that costs nothing and catches a rename immediately: the documentation is
+the largest surface in this repo and nothing else here would notice a link left
+pointing at nothing. It checks that internal paths resolve and that each
+`#fragment` names a heading that exists — not that what a document says is still
+true, which needs a reader. What each gate does and does not cover, and why
 the integration path is a browser-free probe suite, is in
 [docs/development/verification.md](docs/development/verification.md) — read it
 when adding a test or deciding whether something is verifiable here.

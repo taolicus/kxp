@@ -13,6 +13,7 @@ For the machine itself, see [environment.md](environment.md).
 
 | gate | covers | does not cover |
 | --- | --- | --- |
+| `npm run links` | internal doc paths resolve, each `#fragment` names a heading that exists | whether a linked document says anything true |
 | `gofmt -l .` | formatting | anything behavioural |
 | `go vet ./...` | printf misuse, unreachable code, bad struct tags | logic |
 | `go test ./...` | server internals, engine, handlers, and the invariants `AGENTS.md` lists | client behaviour, the deployed binary |
