@@ -395,7 +395,7 @@ const enter = {
     resetGame();
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
-    setCount('TAP READY');
+    setCount('MATCH FOUND');
   },
 
   countdown(d, from) {

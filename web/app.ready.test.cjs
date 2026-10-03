@@ -44,7 +44,11 @@ test('the ready prompt is up while matched', async () => {
   const app = await matched();
   assert.equal(app.el('#btn-ready').classList.contains('hidden'), false,
     'the prompt is offered as soon as a match is found');
-  assert.equal(app.count(), 'TAP READY', 'and the count says so');
+  // The instruction lives on the button only. The count said "TAP READY" as
+  // well and it read as a second copy of the same thing on one screen.
+  assert.doesNotMatch(app.count(), /tap|ready/i,
+    'the count does not repeat the prompt');
+  assert.equal(app.count(), 'MATCH FOUND', 'and still says what happened');
 });
 
 test('tapping ready acknowledges exactly once', async () => {
