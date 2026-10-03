@@ -100,30 +100,24 @@ termination") — write the reasoning there, leave the code alone.
 ### Keep the session small too
 
 Slice size is not only a review concern. A slice small enough to finish, test,
-document, commit, and push inside one context window is what keeps a long
-working session from losing its own thread.
+document, commit, and push is what keeps a long working session from losing its own
+thread.
 
-**Compact between tasks, never mid-slice.** `/compact` (alias `/summarize`,
-keybind `ctrl+x c`) frees context by summarising the conversation, and that
-summary is lossy in exactly the place a slice cannot afford: which files are
-staged, what the new test asserts and what it was checked to fail against, which
-line of reasoning ruled out the alternative you rejected, what the commit body
-was going to say. A compacted mid-slice resumes with a paraphrase of work whose
-entire value is that it is exact.
+There is deliberately nothing here about when to compact. That guidance used to
+assert that a mid-slice summary is lossy "exactly where a slice cannot afford", and
+that a keybind belongs here — and the assertion was wrong by measurement, since
+several sessions hit the context limit repeatedly with no meaningful loss. Keeping
+a confident rule about a tool's behaviour that the repo cannot verify is the same
+mistake as keeping a stale claim in a comment: it ages into a rule nobody can
+re-derive and nobody dares contradict. A keybind is worse still, being wrong for
+every agent that does not run that tool.
 
-So the boundary is the slice: **finish the slice — verified, documented,
-committed, pushed — and only then compact.** At that point there is nothing to
-lose, because the state that matters lives in git rather than in the
-conversation: the next task starts from a clean tree and a pushed commit, and
-the summary only has to carry the intent forward. `/new` (alias `/clear`) is
-the blunter version of the same move, for when a fresh session is worth more than
-a summary.
-
-Two corollaries. If compaction feels imminent *during* a slice, that slice is
-too big — split it now rather than after the fact. And never let a slice
-straddle a compaction boundary: park it first, committed if it is verified or
-reverted if it is not, so nothing in the tree depends on context that is about
-to be summarised away.
+What is left is the part that is not about tooling: **finish the slice — verified,
+documented, committed, pushed — before starting the next one.** At that point there
+is nothing to lose, because the state that matters lives in git rather than in the
+conversation, so a new session starts from a clean tree and a pushed commit and
+only the intent needs carrying forward. That was the real argument for a boundary,
+and it does not depend on how the context window behaves.
 
 ### Test first, and prove the test bites
 
