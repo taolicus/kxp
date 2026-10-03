@@ -8,8 +8,8 @@ its status; there is no checkbox to tick anywhere.
 
 **Telling a task from an issue, or from durable system knowledge, is not
 answered here** — it is a cross-register decision and this file only covers the
-two task directories. See
-[AGENTS.md](../../AGENTS.md#one-home-per-work-item) for the test, and note that a
+two task directories. See the "One home per work item" paragraph in
+[AGENTS.md](../../AGENTS.md) for the test, and note that a
 work item is not the only kind of thing recorded in this tree: `docs/features/`
 holds durable knowledge about the implemented system, which is not a work item
 and never becomes one.

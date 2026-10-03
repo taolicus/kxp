@@ -54,9 +54,13 @@ two players share. See [architecture](docs/features/architecture.md) for the int
   the client state table, clock handling),
   [character selection](docs/features/character-selection.md),
   [backgrounds](docs/features/backgrounds.md) (asset pipeline).
-- [environment.md](docs/environment.md) — the measured development host
-  (Android/Termux), its toolchain, and how to re-measure both. What it can and
-  cannot verify, and the working loop, live in [AGENTS.md](AGENTS.md).
+- [development/](docs/development/) — how this repo is built and verified on
+  this host: [environment.md](docs/development/environment.md) (the measured
+  Android/Termux host, its toolchain, and how to re-measure both) and
+  [verification.md](docs/development/verification.md) (what each gate does and
+  does not cover, the browser-free probe suite, and the verdicts it reports).
+  What the host can and cannot verify, and the working loop, live in
+  [AGENTS.md](AGENTS.md).
 - [tasks/](docs/tasks/) — work items: what is specified and not yet landed
   ([open/](docs/tasks/open/), `priority` integer in the frontmatter) and what has
   landed ([closed/](docs/tasks/closed/)).

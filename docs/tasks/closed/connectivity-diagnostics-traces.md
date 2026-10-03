@@ -7,4 +7,4 @@ confirmed cause ([docs/issues/](../../issues/)). The causes are deliberately
 suite that cannot tell a transport fault from a server defect trains you to
 ignore it, so every trace here exists to make the next judgement possible.
 
-→ rationale: [decisions/connectivity-diagnostics-traces.md](../../decisions/connectivity-diagnostics-traces.md)
+→ rationale: [verification.md#the-traces-that-make-live-diagnosis-possible](../../development/verification.md#the-traces-that-make-live-diagnosis-possible)

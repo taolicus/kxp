@@ -12,4 +12,4 @@ contracts, character round-trip, SSE frame/id/skew contract, a timed CPU match,
 mid-match reconnect + reconciliation, the full rejection-code matrix, and
 self-paired PvP including the abandoned-handshake case.
 
-→ rationale: [decisions/browser-free-probes.md](../../decisions/browser-free-probes.md)
+→ rationale: [verification.md#why-browser-free-probes](../../development/verification.md#why-browser-free-probes)

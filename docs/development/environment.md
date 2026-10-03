@@ -10,6 +10,10 @@ in `AGENTS.md` ("Verify"), because those apply to every task and are read far
 more often than this page. What is below earns a read only when a task touches
 the build, the toolchain, or a claim about what this machine can do.
 
+The design behind the commands is in [verification.md](verification.md): what
+each gate does and does not cover, and why the integration path is a
+browser-free probe suite against a deployed origin rather than an e2e run.
+
 Facts here were measured on this host, not inferred from CI config — re-run the
 commands in "Verifying" to confirm them on a new machine.
 
@@ -47,7 +51,7 @@ installed: there is no Playwright and no Chromium. That is a decision, not an
 omission — the Playwright e2e suite was withdrawn, and the browser-free probe
 suite is the integration path on this host. The reasoning, and what a
 browser-level suite would require, is in
-[automated-test-workflow.md](tasks/closed/automated-test-workflow.md).
+[automated-test-workflow.md](../tasks/closed/automated-test-workflow.md).
 
 ## Verifying
 

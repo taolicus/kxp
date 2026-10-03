@@ -23,8 +23,9 @@ from the relevant feature file.
 
 Two things about this tree that are deliberately *not* here:
 
-- **[docs/environment.md](../environment.md)** is durable, but it describes the
-  development host rather than the implemented system.
+- **[docs/development/](../development/)** is durable, but it describes the
+  development host and the verification gates rather than the implemented
+  system.
 - **[docs/decisions/](../decisions/)** is durable, but it records why a decision
   was made, which is history rather than a description of what the code now
   does.

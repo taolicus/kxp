@@ -24,7 +24,7 @@ model, matchmaking, SSE lifecycle).
 
 **When the task reaches them:**
 
-- a claim about this host — [docs/environment.md](docs/environment.md): the
+- a claim about this host — [docs/development/](docs/development/): the
   measured host, toolchain, and the commands to re-measure them. Read it when
   the task touches the build, the toolchain, or a claim about what this machine
   can do — not every task, because the per-task verification rules it used to
@@ -145,7 +145,10 @@ npm run tall        # probes t1–t8 — requires an origin (see below), creates
 
 `npm run unit` is the catch-all for client and harness tests (the README's
 shorter `node --test web/kxp.test.cjs web/machine.test.cjs` misses
-`web/app.countdown.test.cjs`).
+`web/app.countdown.test.cjs`). What each gate does and does not cover, and why
+the integration path is a browser-free probe suite, is in
+[docs/development/verification.md](docs/development/verification.md) — read it
+when adding a test or deciding whether something is verifiable here.
 
 **This host cannot verify** — state these limits in the commit body and in any
 report, rather than implying coverage that does not exist:
@@ -200,7 +203,7 @@ INCONCLUSIVE into a FAIL.
 - **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → [docs/decisions/](docs/decisions/), one file per decision, linked from the closed task file.
 - **A symptom whose cause you cannot confirm** → [docs/issues/](docs/issues/): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
 - **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
-- **Host capability claims** → [docs/environment.md](docs/environment.md), re-measured rather than assumed.
+- **Host capability claims** → [docs/development/environment.md](docs/development/environment.md), re-measured rather than assumed.
 
 Write the *why*, not the *what* — the diff already says what. If a decision had
 a rejected alternative that a future reader would otherwise re-litigate (the
