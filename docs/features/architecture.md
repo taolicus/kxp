@@ -131,6 +131,20 @@ few seconds, forces a reconnect so the `connected` snapshot reconciles it back
 out. Snapshots for a finished (`done`) or already-expired (`shoot`) match route
 straight to the lobby rather than a dead end.
 
+**The reconciler is pinned by test, because nothing else can observe it.** The
+`connected` handler decides which of five states a reconnected client lands in,
+and it is the only place a stalled link is recovered from. `go test` does not run
+client code, the `kxp.js` tests exercise the pure schedule helpers away from
+`app.js`, and probes `t1`–`t8` assert frames arriving on the wire rather than
+what the browser does with them — so the entire recovery path was invisible until
+`web/app.reconnect.test.cjs` drove the real `app.js` against a stubbed context.
+The rejoin case is the substantive one, since it judges the PUN window on *server*
+time ([Timing model](#timing-model)): a phone whose own clock reads headroom on a
+window the server has already closed loses a PUN it was owed, and because the skew
+correction is signed, both directions and the `shootAt + windowMs` boundary itself
+are asserted — one millisecond of dead window is all the difference `>` versus
+`>=` would make, and nothing else here would notice it. Landed in `54a1801`.
+
 **Match teardown is per-side and conditional.** When a handshake is abandoned,
 `readyTimeout`/`readyAbandon` re-queue both sides and `m.requeue` calls
 `tryMatch`, which can re-pair the survivor into a *new* match before the
@@ -206,6 +220,17 @@ testable and reusable without a hub or a wire.
   the snapshot reconciler that decides where a reconnecting client lands. Invoke
   the script rather than the individual files — the set is a glob, and those two
   are the ones that close the gap probes cannot.
+- `web/appHarness.cjs` is shared by both client-behaviour tests rather than copied
+  into each. It holds the stubbed clock, the hand-fired timer queue and the
+  recording state machine — the seam that makes a second such test cost almost
+  nothing, since [stall-watchdog](../tasks/open/stall-watchdog.md) needs no new
+  infrastructure. A harness duplicated per test file is a second copy that drifts,
+  which is the failure the registers in [docs/register.md](../register.md) were
+  reorganised to remove. Sharing it also exposed that the countdown dedupe case had
+  been asserting nothing: delivered in a single tick, removing the `plannedShootAt`
+  guard re-planned to an identical schedule, so the test passed either way. Its
+  frames are now staggered as the server sends them, and the guard is caught.
+  Landed in `54a1801`.
 - `go test -race` is not supported on the device this is developed on (arm64
   Android); see [automated-test-workflow](../tasks/closed/automated-test-workflow.md)
   if you add CI.
