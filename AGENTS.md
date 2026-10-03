@@ -189,7 +189,7 @@ INCONCLUSIVE into a FAIL.
 
 - **Wire format / events / state table** → [docs/features/protocol.md](docs/features/protocol.md).
 - **Internals, invariants, mechanisms** → [docs/features/architecture.md](docs/features/architecture.md).
-- **How a shipped feature works, or how to add one to it** → [docs/features/](docs/features/), one file per subject. Durable knowledge about the system as it stands; per [workflow.md](workflow.md) it is never moved in from a task.
+- **How a shipped feature works, or how to add one to it** → [docs/features/](docs/features/), one file per subject. Durable knowledge about the system as it stands; per [docs/register.md](docs/register.md) it is never moved in from a task.
 - **A work item's status** — its own file in [docs/tasks/open/](docs/tasks/open/)
   if the next action is a specified build, [docs/issues/](docs/issues/) if the
   next action is to find out or decide, and [docs/tasks/closed/](docs/tasks/closed/)
@@ -227,7 +227,7 @@ blocked until the deploy can guarantee clients refresh — naming the work is
 enough. "A match sometimes stalls after the opponent is found" is not, because
 nobody knows what to build. And durable knowledge about the system as it now
 stands is none of these: it belongs in `docs/features/`, and per
-[workflow.md](workflow.md) it is never moved in from a task.
+[docs/register.md](docs/register.md) it is never moved in from a task.
 
 Two consequences worth stating because they look like exceptions and are not. A
 landed item's *reasoning* is **in** the feature file rather than beside it —
@@ -239,8 +239,9 @@ closed task — so the reasoning was reachable from the plan and invisible from 
 system docs that encode the constraint.) And a
 task's `priority` is metadata, not a place: a task is not "unimportant" because
 it sits at priority 17, so it stays in `open/` and gets no third directory to
-reflect that. The README tracks no status at all — it points at the three
-registers. `docs/roadmap.md` is not one of them: it is a table of contents by
+reflect that. The README tracks no status at all — it points at the registers and
+at [docs/register.md](docs/register.md), which is where their rules live.
+`docs/roadmap.md` is not one of them: it is a table of contents by
 phase and carries no status word, which is why it can be read without being able
 to contradict a file.
 

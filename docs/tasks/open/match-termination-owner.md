@@ -33,4 +33,5 @@ per-round termination *on top of* whatever shape this takes. Do it in that
 order, not before, or it is paid for twice.
 
 Unscheduled by priority, not by lifecycle: it is a task, so it does not belong in
-`docs/issues/` — `workflow.md` makes priority metadata, not a directory.
+`docs/issues/` — [docs/register.md](../../register.md) makes priority metadata, not a
+directory.

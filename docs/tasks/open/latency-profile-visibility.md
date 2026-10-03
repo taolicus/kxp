@@ -15,9 +15,9 @@ its own item when Task C lands; until then there is nothing to profile.
 ## Why it is not an issue
 
 "Cannot start yet" names the work and the shape of the work, so it fails
-`workflow.md`'s test for an issue: it is not a question about what to build, it is
-a specified build whose prerequisite is parked. The prerequisite itself is an
-issue —
+[docs/register.md](../../register.md)'s test for an issue: it is not a question
+about what to build, it is a specified build whose prerequisite is parked. The
+prerequisite itself is an issue —
 [`/ping` health probe](../../issues/reconnect-loss.md) is recorded as the
 prospective fix for two symptoms in
 [docs/issues/reconnect-loss.md](../../issues/reconnect-loss.md) and

@@ -61,11 +61,13 @@ two players share. See [architecture](docs/features/architecture.md) for the int
   does not cover, the browser-free probe suite, and the verdicts it reports).
   What the host can and cannot verify, and the working loop, live in
   [AGENTS.md](AGENTS.md).
+- [register.md](docs/register.md) — what each of the directories below is for,
+  and the rules that keep them separate.
 - [tasks/](docs/tasks/) — work items: what is specified and not yet landed
   ([open/](docs/tasks/open/), `priority` integer in the frontmatter) and what has
   landed ([closed/](docs/tasks/closed/)).
 - [roadmap.md](docs/roadmap.md) — why the phases are ordered as they are, with a
-  link per landed item.
+  link per landed item. Not a register, and carries no status.
 - [issues/](docs/issues/) — observed reliability symptoms parked until
   their cause is confirmed, one file per symptom.
 
