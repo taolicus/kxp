@@ -17,7 +17,7 @@ For the machine itself, see [environment.md](environment.md).
 | `gofmt -l .` | formatting | anything behavioural |
 | `go vet ./...` | printf misuse, unreachable code, bad struct tags | logic |
 | `go test ./...` | server internals, engine, handlers, and the invariants `AGENTS.md` lists | client behaviour, the deployed binary |
-| `npm run unit` | client state machine, countdown arming, probe harness | rendering, CSS, console errors |
+| `npm run unit` | client state machine, countdown arming, snapshot reconciliation, probe harness | rendering, CSS, console errors |
 | `npm run tall` | the deployed server over real SSE and HTTP | anything this machine cannot observe |
 
 `npm run unit` is the catch-all for client and harness tests, and the gate column
@@ -37,10 +37,14 @@ re-arms a timer incorrectly, or paints a beat that is overwritten in the same
 tick, is invisible to both `go test` and `t1`–`t8`: the server sent the right
 frames, and the probe has no browser.
 
-That gap is why `web/app.countdown.test.cjs` drives the real `app.js` source
-against a stubbed context instead of reimplementing the countdown logic in the
-test. Reimplementing it would test the copy. If you touch client logic, add a
-client-behaviour test — the probe suite will not catch it for you.
+That gap is why `web/app.countdown.test.cjs` and `web/app.reconnect.test.cjs`
+drive the real `app.js` source against a stubbed context instead of
+reimplementing client logic in the test. Reimplementing it would test the copy.
+Both load the same `web/appHarness.cjs`, which is where the stubbed clock, the
+hand-fired timer queue and the recording state machine live: a harness copied per
+test file is a second copy that drifts, which is the failure the docs registers
+were reorganised to remove. If you touch client logic, add a client-behaviour test
+— the probe suite will not catch it for you.
 
 Rendering, CSS, and in-browser console errors have **no** automated coverage
 anywhere in this repo. The Playwright e2e suite that would have covered them was

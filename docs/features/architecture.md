@@ -74,7 +74,13 @@ a full loss into a draw-scored no-contest without anyone deciding to. Landed in
 Displayed reaction times use the client's own click timestamps when provided
 (network-neutral); win/loss remains server-authoritative on arrival time. The
 client estimates phone/server clock skew from the `now` field of the
-`connected` snapshot so a skewed clock never shrinks the local PUN window.
+`connected` snapshot so a skewed clock never shrinks the local PUN window. That
+correction is signed, and the rejoin decision it feeds is a boundary: the window
+is playable up to and including `shootAt + windowMs`, judged on server time. Both
+directions are pinned in `web/app.reconnect.test.cjs`, together with the whole
+snapshot routing table — a reconnected client that judged the window on its own
+clock rejoins a window the server has already closed and loses a PUN it was owed,
+which no probe here can observe.
 
 The client schedules KA/CHI/PUN against the announced plan, so a stalled or
 dropped `shoot` frame no longer destroys the window; every timed frame carries
@@ -195,10 +201,11 @@ testable and reusable without a hub or a wire.
   mid-match disconnects, and endpoint validation, alongside the unit tests.
 - Client and harness tests run under `npm run unit`, which globs
   `web/*.test.cjs` and `tools/lib/*.test.mjs`: client pure logic (the PUN-window
-  plan, stats, result lines), the client state machine, and the countdown arming
-  that runs the real `app.js` against a stubbed context. Invoke the script rather
-  than the individual files — the set is a glob, and the third file is the one
-  that closes the gap probes cannot.
+  plan, stats, result lines), the client state machine, and the two files that
+  run the real `app.js` against a stubbed context — the countdown paint path and
+  the snapshot reconciler that decides where a reconnecting client lands. Invoke
+  the script rather than the individual files — the set is a glob, and those two
+  are the ones that close the gap probes cannot.
 - `go test -race` is not supported on the device this is developed on (arm64
   Android); see [automated-test-workflow](../tasks/closed/automated-test-workflow.md)
   if you add CI.
