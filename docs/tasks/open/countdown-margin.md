@@ -6,6 +6,16 @@ gated-on: []
 
 # Buy the countdown a delivery margin
 
+> **Superseded in principle by
+> [countdown-readiness-anchor.md](countdown-readiness-anchor.md)**, which fixes the
+> same symptom for every connection instead of tuning for one link. Margin costs a
+> second of pre-PUN wait per second of tolerance and latency has no lower bound, so
+> it cannot be tuned to a player population. This task stands as the shallow
+> version and its measurement section is still the way to get the number; prefer
+> the anchor task unless its extra round trip is rejected.
+
+# Buy the countdown a delivery margin
+
 A player on a slow mobile link goes from `MATCH FOUND` straight to **PUN!**,
 with the pick window open and no cue that a round began. The cause is traced and
 pinned by a test; what is left is a product trade-off about how long the wait
