@@ -138,6 +138,7 @@
       if (s.streak > 0) s.last = s.streak;
       s.streak = 0;
     }
+    // void is a no-contest: like a draw, it does not change wins/streak/best/last.
     return s;
   }
 

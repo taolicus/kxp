@@ -135,8 +135,8 @@ func TestTimeoutLoses(t *testing.T) {
 	if rb["yourNote"] != "timeout" {
 		t.Errorf("b note = %v, want timeout", rb["yourNote"])
 	}
-	if rb["outcome"] != "loss" {
-		t.Errorf("b outcome = %v, want loss", rb["outcome"])
+	if rb["outcome"] != "void" {
+		t.Errorf("b outcome = %v, want void", rb["outcome"])
 	}
 }
 

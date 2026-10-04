@@ -15,6 +15,7 @@ const (
 	ResultWin  Result = "win"
 	ResultLoss Result = "loss"
 	ResultDraw Result = "draw"
+	ResultVoid Result = "void"
 )
 
 var winsAgainst = map[Move]Move{

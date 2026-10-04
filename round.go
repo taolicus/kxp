@@ -708,9 +708,20 @@ func (m *match) resolve() {
 	case !ps[0].valid && !ps[1].valid:
 		res = [2]Result{ResultDraw, ResultDraw}
 	case !ps[0].valid:
-		res = [2]Result{ResultLoss, ResultWin}
+		// Connectivity-safe scoring: a no-valid-move timeout resolves as void
+		// for the absent side (never a loss), while the opponent wins the round.
+		// late/early cases remain losses as their notes indicate.
+		if ps[0].note == "timeout" {
+			res = [2]Result{ResultVoid, ResultWin}
+		} else {
+			res = [2]Result{ResultLoss, ResultWin}
+		}
 	case !ps[1].valid:
-		res = [2]Result{ResultWin, ResultLoss}
+		if ps[1].note == "timeout" {
+			res = [2]Result{ResultWin, ResultVoid}
+		} else {
+			res = [2]Result{ResultLoss, ResultWin}
+		}
 	default:
 		r := EvaluateRound(ps[0].move, ps[1].move)
 		switch r {
