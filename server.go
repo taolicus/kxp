@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -194,6 +195,22 @@ func NewHub() *Hub {
 		metrics: newHubMetrics(),
 		started: time.Now(),
 	}
+}
+
+// backgrounds is the roster of match stages, in the same order as the BGS array
+// in web/app.js. The server sends the *choice* and never the bytes: the animated
+// and reduced-motion WebPs stay client-side assets, and only the name travels.
+//
+// The two lists have to agree, because a client that is handed a name it does not
+// recognise has to fall back to picking for itself -- and a server-side entry with
+// no client-side counterpart would mean the two players quietly saw different
+// stages. TestBackgroundRosterMatchesTheClient guards that by reading both.
+var backgrounds = []string{"pool", "forest", "tomb", "arena", "portal"}
+
+// pickBackground chooses one stage for a whole match. Called once per match, not
+// once per side, so both players are told the same thing.
+func pickBackground() string {
+	return backgrounds[rand.IntN(len(backgrounds))]
 }
 
 // routes wires every HTTP endpoint to the hub. The static file server for the
@@ -582,6 +599,7 @@ func (h *Hub) tryMatch() {
 func (h *Hub) makeMatch(id string, a, b side) *match {
 	src := [2]side{a, b}
 	m := newMatch(id)
+	m.background = pickBackground()
 	for i := range src {
 		p := matchParty{name: "Opponent", character: src[i].character}
 		if src[i].client == nil {

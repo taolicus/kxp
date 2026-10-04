@@ -169,7 +169,13 @@ type match struct {
 	id      string
 	sides   [2]matchParty
 	botMove chan moveMsg
-	phase   atomic.Int32
+	// background is the stage name chosen for this match. One value for the whole
+	// match, not one per side: both players are meant to be looking at the same
+	// arena, and a per-side choice would make the two screens disagree for reasons
+	// neither player could see. Set by the hub, which owns the roster -- the engine
+	// only carries the value and announces it.
+	background string
+	phase      atomic.Int32
 	// shootAt is the announced PUN deadline, fixed at countdown start. It is
 	// held as a time.Time rather than epoch-ns so it carries a monotonic
 	// reading alongside the wall clock, because three separate judgements are
@@ -430,6 +436,7 @@ func (m *match) run() {
 		m.send(i, evt("matched", map[string]any{
 			"opponentName":      m.opponentName(i),
 			"opponentCharacter": m.opponentCharacter(i),
+			"background":        m.background,
 			"ts":                tsNow(),
 		}))
 	}

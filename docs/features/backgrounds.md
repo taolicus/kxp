@@ -25,10 +25,22 @@ Tomb and portal used `WEBP_QUALITY=65` for their animated WebPs.
 
 ## Selection
 
-The game screen picks one of the five stages at random per match: `app.js`
-keeps a `BGS` roster and `randomizeBg()` sets the `--bg-anim`/`--bg-static`
-CSS variables on the document, so the stage changes between fights with no
-server round-trip.
+The **server** picks the stage, once per match, and announces it on `matched` as
+a `background` name. The client never chooses and never receives bytes: the
+WebPs stay client-side assets, and only the name travels. `pickBackground()`
+draws from the `backgrounds` roster in `server.go`, and `makeMatch` calls it once
+per match rather than once per side — both players are meant to be looking at the
+same arena, and a per-side pick would leave two correct-looking screens disagreeing
+for reasons neither player could see.
+
+The client still keeps its own `BGS` roster in `app.js`, for two reasons: it is the
+fallback when the server's name is missing or unrecognised, and
+`TestBackgroundRosterMatchesTheClient` reads both lists and fails if they drift,
+because a server-side entry with no client-side counterpart is exactly how the two
+lists would silently stop agreeing.
+
+`randomizeBg()` is what applies the choice: it sets the `--bg-anim`/`--bg-static`
+CSS variables on the document once the named stage has decoded.
 
 ## Pipeline
 
