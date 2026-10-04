@@ -777,9 +777,21 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusConflict, "ready gate closed")
 		return
 	}
-	if i := m.indexOfMoves(c.moves); i >= 0 {
-		m.ackReady(i)
+	i := m.indexOfMoves(c.moves)
+	if i < 0 {
+		// The client holds a match pointer whose side list does not contain it.
+		// This was unreachable as far as I could trace -- moves is set once at
+		// makeMatch and never cleared, so the pointer stays findable for as long
+		// as the match exists -- but the fallthrough answered 200 for an ack that
+		// had not been recorded against anybody, which is the one thing this
+		// handler must never do. A 200 is read as "the countdown is coming", so
+		// the client would sit waiting on a gate nothing is holding open. The
+		// cost of the guard is a rejected ack in a state that should not occur;
+		// the cost of no guard is a round that never arrives.
+		h.handlerError(w, http.StatusConflict, "not a side of this match")
+		return
 	}
+	m.ackReady(i)
 	w.Write([]byte("{}"))
 }
 

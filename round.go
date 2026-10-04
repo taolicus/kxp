@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand/v2"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -28,6 +29,19 @@ var countdownBeats = [countdownSlots]string{"READY", "KA", "CHI"}
 // advertise that it is ready to receive the countdown. A package var so tests
 // can shrink it.
 var readyTimeout = 8 * time.Second
+
+// readyLease is how stale a readiness ack may be and still count towards opening
+// the gate. It must stay comfortably longer than the client's re-ack interval
+// (2s, see armReadyLoop in web/app.js) or a well-behaved client would expire its
+// own lease between acks and stall the match it is behaving correctly in. A
+// package var so tests can shorten it.
+var readyLease = 4 * time.Second
+
+// readyRecheck is how often waitReady re-tests freshness. It is only load-bearing
+// for a renewal -- the first ack from each side wakes waitReady immediately via
+// readyCh -- so this is a polling interval for the stale case and can afford to
+// be coarse.
+var readyRecheck = 250 * time.Millisecond
 
 // Why a pending match was cancelled before its countdown began. Reported to the
 // client on the teardown frame so a bounced player learns the round was
@@ -149,8 +163,24 @@ type match struct {
 	// the same instant (see shootAtMs), so the protocol is unaffected.
 	shootAt atomic.Pointer[time.Time]
 	moves   [2]*moveMsg
-	ready   atomic.Int32 // bitmask: bit i set once side i acked readiness
-	readyCh chan struct{}
+
+	// readyAt is when side i last acknowledged readiness, or the zero time if it
+	// never has; readySignalled records that readyCh has been closed.
+	//
+	// Guarded by readyMu rather than packed into an atomic int64 because the
+	// lease is a duration measured against time.Now(), and a time.Time carrying a
+	// monotonic reading cannot be flattened to an integer without throwing that
+	// reading away -- a wall-only stamp would re-interpret a phone's clock step
+	// as the ack having gone stale, which is the same class of bug the round
+	// deadline documents above.
+	readyAt        [2]time.Time
+	readySignalled bool
+	readyMu        sync.Mutex
+	readyCh        chan struct{}
+
+	// now is the match's clock, injectable so the readiness lease can be tested
+	// by advancing it rather than by sleeping. Never nil after newMatch.
+	now func() time.Time
 
 	// requeue re-queues side i after a failed ready handshake. Hub-provided;
 	// nil in engine-only tests. Returns whether side i actually went back on
@@ -178,7 +208,7 @@ type match struct {
 }
 
 func newMatch(id string) *match {
-	return &match{id: id, readyCh: make(chan struct{})}
+	return &match{id: id, readyCh: make(chan struct{}), now: time.Now}
 }
 
 // setShootAt fixes the announced PUN deadline. The caller must pass a value
@@ -223,61 +253,105 @@ func (m *match) humanMask() int32 {
 	return mask
 }
 
-// ackReady marks side i as ready to receive the countdown. Idempotent; closes
-// readyCh once every human side has acked. A bot side is ignored: it has no
-// client to be told anything, so it can never be a participant in the gate.
+// ackReady records that side i is ready to receive the countdown, and refreshes
+// the lease on every call rather than only the first -- a repeat ack is the
+// lease being renewed, so an implementation that short-circuited on a side that
+// had already acked would expire the lease for the one client doing exactly the
+// right thing. A bot side is ignored: it has no client to be told anything, so it
+// can never be a participant in the gate.
 func (m *match) ackReady(i int) {
 	if m.sides[i].bot {
 		return
 	}
-	mask := m.humanMask()
-	for {
-		cur := m.ready.Load()
-		if cur&(1<<i) != 0 {
-			return
-		}
-		if !m.ready.CompareAndSwap(cur, cur|(1<<i)) {
-			continue
-		}
-		if (cur|(1<<i))&mask == mask {
-			close(m.readyCh)
-		}
-		return
+	m.readyMu.Lock()
+	now := m.clock()
+	m.readyAt[i] = now
+	all := m.allHumanFreshLocked(now)
+	// The nil check is not defensive noise: a match built as a struct literal
+	// has no channel to close, and closing nil panics. Nothing waits on readyCh
+	// for such a match, so skipping the close is correct rather than a
+	// workaround.
+	if all && !m.readySignalled && m.readyCh != nil {
+		m.readySignalled = true
+		close(m.readyCh)
 	}
+	m.readyMu.Unlock()
 }
 
-// allHumanReady reports whether every human side has acked readiness. An
-// all-bot match has an empty mask and is trivially ready.
+// allHumanReady reports whether every human side holds a readiness ack that is
+// still inside the lease. An all-bot match has no human sides to be fresh and is
+// trivially ready.
 func (m *match) allHumanReady() bool {
-	mask := m.humanMask()
-	return m.ready.Load()&mask == mask
+	m.readyMu.Lock()
+	defer m.readyMu.Unlock()
+	return m.allHumanFreshLocked(m.clock())
+}
+
+// clock is the match's time source, falling back to time.Now for a match built as
+// a struct literal rather than through newMatch. Without the fallback, a nil now
+// takes out every caller of allHumanReady -- including snapshot, which is on the
+// reconnect path -- and a zero-value match is easy to write by accident.
+func (m *match) clock() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return time.Now()
+}
+
+// allHumanFreshLocked is allHumanReady with readyMu already held.
+func (m *match) allHumanFreshLocked(now time.Time) bool {
+	cutoff := now.Add(-readyLease)
+	for i := range m.sides {
+		if m.sides[i].bot {
+			continue
+		}
+		if m.readyAt[i].IsZero() || m.readyAt[i].Before(cutoff) {
+			return false
+		}
+	}
+	return true
 }
 
 // waitReady blocks until the countdown may begin. Every match gates on it, CPU
-// included: the client acks from the end of its `matched` handler, so the
-// countdown cannot begin until it has actually finished setting the match up.
-// That is a self-timing buffer rather than a fixed sleep, so a slow client
-// waits as long as it needs (up to readyTimeout) and a fast one pays nothing.
+// included: the client acks once it has finished setting the round up, so the
+// countdown cannot begin until it is ready to receive one. That is a
+// self-timing buffer rather than a fixed sleep, so a slow client waits as long
+// as it needs (up to readyTimeout) and a fast one pays nothing.
+//
+// It waits on freshness rather than on a one-shot bit. A bit says a side acked
+// once, which is true forever; the lease says a side is acking *now*, which is
+// the only version of the claim that means anything when the countdown actually
+// starts. The re-check tick matters because acks can go stale after every side
+// has acked once, which is precisely the side that acked and then vanished.
 // Returns false when the pending match should be abandoned (timeout /
 // disconnect).
 func (m *match) waitReady() bool {
-	if m.allHumanReady() {
-		return true
-	}
-	timer := time.NewTimer(readyTimeout)
-	defer timer.Stop()
-	select {
-	case <-m.readyCh:
-		return true
-	case <-timer.C:
-		m.readyTimeout()
-		return false
-	case <-m.leftCh(0):
-		m.readyAbandon(0)
-		return false
-	case <-m.leftCh(1):
-		m.readyAbandon(1)
-		return false
+	deadline := time.NewTimer(readyTimeout)
+	defer deadline.Stop()
+	recheck := time.NewTicker(readyRecheck)
+	defer recheck.Stop()
+	// readyCh is closed the first time every human side has acked. Taking from a
+	// closed channel never blocks, so it has to be nil'd out after the first
+	// receive or this loop spins.
+	ch := m.readyCh
+	for {
+		if m.allHumanReady() {
+			return true
+		}
+		select {
+		case <-ch:
+			ch = nil
+		case <-recheck.C:
+		case <-deadline.C:
+			m.readyTimeout()
+			return false
+		case <-m.leftCh(0):
+			m.readyAbandon(0)
+			return false
+		case <-m.leftCh(1):
+			m.readyAbandon(1)
+			return false
+		}
 	}
 }
 

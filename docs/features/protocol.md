@@ -37,6 +37,28 @@ flag, which sends it back through `matched` and so re-arms its acks. If a match
 never acks — 8s timeout or a disconnect — the pending match is cancelled and the
 survivor(s) go back to the queue.
 
+### Why readiness is a lease, not a latch
+
+The gate opens only while every human side
+holds an ack newer than `readyLease` (4s), re-tested every 250ms rather than once,
+so a side that acked and then went quiet stops counting and the match ends on the
+existing timeout instead of being served a round. A latch says "this side acked
+once", which is true forever and is not the same claim as "this side is here now"
+— which is the only version of it that still means anything when the countdown
+starts. `readyLease` must stay comfortably above the client's 2s re-ack interval
+for exactly this reason: a client that is behaving correctly must not be able to
+expire its own lease between acks and stall the match. Re-acking renews the lease,
+so the renewal cannot short-circuit on a side that has already acked.
+
+The lease does not close every gap, and the one it leaves is worth naming rather
+than implying otherwise. A side that acks and is then hidden *within the window
+before the countdown starts* still counts as fresh, because freshness is judged at
+the instant the gate opens and nothing re-checks afterwards. Closing that would
+mean refusing to open the gate until every side had acked across a full renewal
+interval, which adds a fixed multi-second delay to the start of every round. That
+is a worse trade than the narrow window it removes, so the window is documented
+rather than paid for.
+
 The handshake is a **self-timing buffer, not a fixed sleep**: the client acks
 once it has finished setting the round up, so the countdown cannot begin until it
 is ready to receive one. A slow client waits as long as it needs (up to the 8s
@@ -214,7 +236,7 @@ snapshot.
 | --- | --- | --- |
 | `POST /queue` | `{id}` | `200 {}` — joins the online queue (idempotent). `409 already in a match` while the client holds a live match. |
 | `POST /cancel` | `{id}` | `200 {}` — leaves the queue (best effort). |
-| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has already left the countdown phase and will send no countdown. Gates CPU and PvP alike. Idempotent while the match is live, so a re-sent ack from a reconnecting client is still accepted — but a `200` is never returned for a match that will not run a countdown, since a client reads it as "hold still, it is coming". |
+| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has already left the countdown phase and will send no countdown, and `409 not a side of this match` if the client's match pointer resolves to no side of it. Both 409s exist because a `200` is read by the client as "hold still, it is coming", so it must never be returned for an ack that did not register or for a match that will not run. Gates CPU and PvP alike. Idempotent while the match is live — every call renews the readiness lease — so a re-sent ack from a reconnecting client is still accepted, and a repeat ack from a client that is behaving correctly must not expire its own lease. |
 | `POST /cpu` | `{id}` | `200 {}` — starts a CPU match (also drains/leaves the queue). The match still waits for the client's `/ready` ack before its countdown. `409 already in a match` while the client holds a live match. |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
