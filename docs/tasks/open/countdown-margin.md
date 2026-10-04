@@ -59,13 +59,27 @@ time.
 So the deficit is margin, not correctness. Nothing here is a bug in the sense of
 a violated invariant, which is why this is a task rather than an issue.
 
+One client-side cause has been found and fixed since, and it is worth separating
+from the margin question because the evidence above does not cover it. Every
+measurement here is on the wire, so it can only clear transport; the client's own
+paint path was not in scope for any of it. That path could blank the countdown
+*entirely* — not lose a beat — when `clockSkew`, sampled once at connect, went
+stale: one bad clock reading parked the display on a single long timer and the
+repeat frames that could have corrected it were dropped as duplicates, leaving
+`MATCH FOUND` then **PUN!** with the window open. It is fixed and pinned in
+[client-countdown-painter.md](../closed/client-countdown-painter.md). Whether it
+accounts for the reported rounds is still unmeasured — this host cannot see a
+phone's wall clock step — so the margin deficit stands on its own, and a player
+who still loses beats with the fix deployed should be asked for the `/diag.html`
+run before the lead is widened.
+
 ## Measuring it, without a console
 
 `web/diag.html` is served from the same origin and is the way to get this number
 from a real player. It opens two throwaway clients, plays one real match against
 itself, and reports how many of the three beats each side actually received,
 lateness measured against the `ts` every frame already carries. It renders the
-countdown by driving `/kxp.js`'s real `countdownSchedule`, so what it shows is
+countdown by driving `/kxp.js`'s real `countdownPainter`, so what it shows is
 what a player sees rather than a recording of it.
 
 This exists because nothing else here can answer the question. The probes see

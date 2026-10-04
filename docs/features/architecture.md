@@ -240,7 +240,10 @@ testable and reusable without a hub or a wire.
   been asserting nothing: delivered in a single tick, removing the `plannedShootAt`
   guard re-planned to an identical schedule, so the test passed either way. Its
   frames are now staggered as the server sends them, and the guard is caught.
-  Landed in `54a1801`.
+  Landed in `54a1801`. The guard has since been removed on purpose — repeats
+  re-derive the countdown rather than being dropped, which is what lets a bad
+  clock reading be corrected; see
+  [client-countdown-painter.md](../tasks/closed/client-countdown-painter.md).
 - `go test -race` is not supported on the device this is developed on (arm64
   Android); see [automated-test-workflow](../tasks/closed/automated-test-workflow.md)
   if you add CI.

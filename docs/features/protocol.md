@@ -155,11 +155,34 @@ The schedule is **announced, not recomputed**. The server sets `shootAt` once at
 countdown start and the run loop sleeps to the announced slots, never re-minting
 the deadline, so every client judges the same instant regardless of when its
 frames arrive. The client therefore paints from the announced deadline rather
-than from `n`: on receipt it resolves which beat is genuinely showing
-(`countdownSlot` in `web/kxp.js`) and arms a single timer to advance to the next,
-so a frame that arrives after its own beat degrades to the next beat instead of
-painting one with no time behind it — that flash would be overwritten in the same
-tick and cost the countdown outright. The `READY`/`KA`/`CHI` offsets live in one
+than from `n`: on receipt it resolves which beat is genuinely showing and arms a
+timer to re-check, so a frame that arrives after its own beat degrades to the next
+beat instead of painting one with no time behind it — that flash would be
+overwritten in the same tick and cost the countdown outright.
+
+**The client re-derives the beat from the clock on every check rather than
+stepping once per beat.** `countdownPainter` in `web/kxp.js` is a pure stepper:
+call it and it reports the beat due now and how long until that could change. It
+replaces a generator walked one beat per timer, and that version blanked the whole
+countdown outright — not by losing a beat, but by losing all of them. Each delay
+was measured from the step before it, so anything a runtime did to a timer
+accumulated; the chain was built once, from the first frame, so the repeat frames
+carrying the same `shootAt` could never correct it. `clockSkew` is sampled once at
+connect and never re-derived, so a phone whose wall clock stepped between the
+snapshot and the round left the client counting against a reading that was no
+longer true: one bad measurement parked the display on a single long timer and
+nothing repainted until it fired, with the pick window still open and every
+delivered frame dropped as a duplicate. Re-deriving bounds the damage to one
+check — the wait before the first beat is capped rather than trusted — so a wrong
+reading is re-read on the next frame instead of waited out. Repeats are no longer
+dropped either; they re-derive, which is invisible because a label is reported
+only when the beat actually changes, and a new stepper per round keeps that
+memory. The stepper is deliberately pure — `kxp.js` never touches a timer or the
+DOM — so the caller owns the scheduling and an injected clock can drive it, and
+`web/diag.html` paints its countdown with the same code the game does rather than
+modelling it separately. Pinned by "the countdown survives a clock that reads
+wrong and then comes back" in `web/app.countdown.test.cjs`; the reasoning is in
+[client-countdown-painter.md](../tasks/closed/client-countdown-painter.md). The `READY`/`KA`/`CHI` offsets live in one
 table shared by that logic and `countdownBeats` in `round.go`, and the two must
 stay in step.
 

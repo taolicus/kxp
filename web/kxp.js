@@ -36,6 +36,54 @@
   // showing, and at or past the deadline PUN itself is due, so no beat is
   // reported — that is what stops a late frame from flashing a beat with no
   // time behind it just before the window opens.
+  // SLOT_CAP_MS bounds how long the countdown display will trust a single reading
+  // of the clock. Without it, one bad reading parks the whole countdown on one
+  // long timer and nothing repaints until that timer fires.
+  const SLOT_CAP_MS = 1000;
+
+  // countdownPainter returns a pure stepper for an on-screen countdown: call it
+  // whenever the caller wants to re-check, and it says what is due and how long
+  // until that could change. It re-derives from the clock on every call rather
+  // than carrying a position forward, which is the whole point.
+  //
+  // It replaces a generator walked one beat per timer, and that version blanked
+  // the entire countdown in two ways. Each delay was measured from the previous
+  // step, so anything a runtime did to a timer accumulated down the chain; and the
+  // chain was built once, from the first frame, so the later frames -- which all
+  // carry the same shootAt -- could never correct it. A phone whose wall clock
+  // stepped once between the snapshot and the round showed *no* countdown at all
+  // despite three seconds remaining: the first reading scheduled a single long
+  // timer and nothing repainted until it fired. Re-deriving bounds the cost of a
+  // bad reading to one call, and because the stepper is idempotent the caller can
+  // build a new one on every frame it receives without the restart being visible.
+  //
+  // `label` is non-null only when the due beat *changes*, so neither a redundant
+  // check nor a fresh stepper repaints what is already on screen. `wait` is the
+  // milliseconds until the next check: the time to the next beat, capped before
+  // the first beat so a wrong clock is re-read rather than waited out, and zero
+  // once PUN is due, which is the caller's cue to stop scheduling.
+  //
+  // skewFn rather than a skew value so a client that re-reads its skew mid-round
+  // is not counting against the reading it started with.
+  //
+  // Pure by design: kxp.js never touches a timer or the DOM, so the caller owns
+  // the scheduling and can be driven by an injected clock in tests. Keep it that
+  // way -- a timer here would escape the vm the client tests run in.
+  function countdownPainter(nowFn, shootAt, windowMs, skewFn) {
+    let last = null;
+    return function step() {
+      const left = shootAt - (nowFn() + (skewFn ? skewFn() : 0));
+      const slot = countdownSlot(left);
+      let label = null;
+      if (slot.label && slot.label !== last) {
+        last = slot.label;
+        label = slot.label;
+      }
+      const wait = slot.label ? slot.msUntilNext : Math.min(slot.msUntilNext, SLOT_CAP_MS);
+      return { label, left, wait };
+    };
+  }
+
   function countdownSlot(msUntilPun) {
     if (msUntilPun <= 0) return { label: null, msUntilNext: 0 };
     for (let i = COUNTDOWN_SLOTS.length - 1; i >= 0; i--) {
@@ -43,29 +91,6 @@
       if (off >= msUntilPun) return { label, msUntilNext: msUntilPun - (off - 1000) };
     }
     return { label: null, msUntilNext: msUntilPun - COUNTDOWN_SLOTS[0][1] };
-  }
-
-  // countdownSchedule walks the remaining countdown steps, yielding the beat due
-  // now (null once PUN itself is due, or before the first beat) together with the
-  // delay until the beat after it, and stopping when there is nothing left.
-  //
-  // This is a generator rather than a single "next slot" lookup because the
-  // client needs to walk every remaining beat from one timer, not just the next
-  // one. The later countdown frames are deduped by plannedShootAt (they announce
-  // the same shootAt), so a re-arm chain started from the first frame is the
-  // only thing advancing the beat -- a one-shot timer advanced READY to KA and
-  // then stalled, so CHI never appeared and the count jumped to PUN.
-  //
-  // nowFn is called each step rather than a fixed start time, so timer drift
-  // cannot accumulate across the walk.
-  function* countdownSchedule(nowFn, shootAt, windowMs, skew) {
-    for (;;) {
-      const plan = planRound(nowFn(), shootAt, windowMs, skew);
-      if (!plan) return;
-      yield { label: plan.dueSlot, delay: plan.msUntilNextSlot };
-      // Stop once PUN is due (delay 0, no label): punTimer opens the window.
-      if (!plan.dueSlot || plan.msUntilNextSlot <= 0) return;
-    }
   }
 
   // planRound lays the announced round schedule onto the client clock. The
@@ -161,5 +186,5 @@
     return { pass: true, key };
   }
 
-  return { aliases, shootWindow, planRound, countdownSlot, countdownSchedule, applyResult, resultLines, rejectLabel, beaconGate };
+  return { aliases, shootWindow, planRound, countdownSlot, countdownPainter, applyResult, resultLines, rejectLabel, beaconGate };
 }));

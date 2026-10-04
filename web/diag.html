@@ -92,7 +92,7 @@ actually play on.</p>
     <li>Every frame carries the server's own send time. <em>Late by</em> is the gap
       between that and when your browser got it, corrected for clock skew.</li>
     <li>The count above is not a recording — it runs
-      <code>kxp.js</code>'s real <code>countdownSchedule</code>, the same code the
+      <code>kxp.js</code>'s real <code>countdownPainter</code>, the same code the
       game uses, so what you see is what a player would see.</li>
     <li>The countdown is announced exactly as long before PUN as it lasts, so
       there is no built-in slack. Each second of delay costs one beat.</li>
@@ -231,25 +231,28 @@ function run() {
     return d && d.ts != null && s != null ? Math.round(Date.now() + s - d.ts) : null;
   }
 
-  // Walk the real countdown schedule locally, exactly as app.js does once it
-  // learns shootAt. This is the player's view. Nothing further is sent to us per
-  // beat, which is precisely why a late first frame is unrecoverable.
+  // Drive the real countdown painter locally, exactly as app.js does once it
+  // learns shootAt. This is the player's view.
+  //
+  // Nothing further is sent to us per beat, so a late first frame cannot be
+  // recovered from the wire -- but it no longer has to be, because the painter
+  // re-derives from the clock on every tick rather than stepping once per beat
+  // from whichever frame arrived first. A bad clock reading costs one tick now
+  // instead of blanking the countdown until PUN.
   let stepTimer = null;
   let punTimer = null;
   function startCountdown(side, d, seen) {
     if (stepTimer) return;
     const sk = skew[side] || 0;
-    const walk = KXP.countdownSchedule(() => Date.now(), d.shootAt, d.windowMs, sk);
+    const stepper = KXP.countdownPainter(() => Date.now(), d.shootAt, d.windowMs, () => skew[side] || 0);
     const step = () => {
-      const n = walk.next();
-      if (n.done) return;
-      if (n.value.label) {
-        const left = d.shootAt - (Date.now() + sk);
-        paint(n.value.label, '', Math.max(0, Math.min(100, 100 * (1 - left / 3000))));
-        const i = BEATS.indexOf(n.value.label);
+      const due = stepper();
+      if (due.label) {
+        paint(due.label, '', Math.max(0, Math.min(100, 100 * (1 - due.left / 3000))));
+        const i = BEATS.indexOf(due.label);
         if (i >= 0) seen[i] = true;
       }
-      stepTimer = setTimeout(step, Math.max(0, n.value.delay));
+      if (due.wait > 0) stepTimer = setTimeout(step, due.wait);
     };
     step();
     // The window opens on the announced deadline whether or not frames arrive,

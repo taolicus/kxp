@@ -96,52 +96,92 @@ test('planRound: exactly at the deadline is no longer actionable', () => {
   assert.equal(KXP.planRound(now, shootAt, 2000, 0).actionable, false);
 });
 
-test('countdownSchedule: walks every remaining beat, then stops at PUN', () => {
-  // This is the regression that shipped: the client armed a one-shot timer, the
-  // later countdown frames were deduped by shootAt, so the walk stopped after the
-  // first step. READY painted, KA painted, and CHI never appeared at all -- the
-  // count jumped from KA straight to PUN. The walk has to cover every beat that
-  // is genuinely still ahead, and has to terminate.
-  const shootAt = 1700000003000;
-  let t = 1700000000000; // first frame arrives exactly at the gate
-  const nowFn = () => t;
-  const steps = KXP.countdownSchedule(nowFn, shootAt, 2000, 0);
+// drive walks a painter the way app.js does: re-check whenever it is told to, and
+// advance the clock by however long the painter asked for. The painter and the loop
+// must share one clock -- a painter built over a frozen now() cannot be walked.
+function drive({ shootAt = 1700000003000, lag = 0 } = {}) {
+  let t = shootAt - 3000 + lag;
+  const stepper = KXP.countdownPainter(() => t, shootAt, 2000, () => 0);
   const seen = [];
-  for (const s of steps) {
-    seen.push([s.label, s.delay]);
-    t += s.delay; // stand in for the timer firing
+  for (let guard = 0; t < shootAt && guard < 100; guard++) {
+    const due = stepper();
+    if (due.label) seen.push(due.label);
+    if (due.wait <= 0) break;
+    t += due.wait;
   }
-  assert.deepEqual(seen, [
-    ['READY', 1000],
-    ['KA', 1000],
-    ['CHI', 1000],
-    [null, 0], // PUN is due; punTimer opens the window, the walk ends
-  ]);
+  return seen;
+}
+
+test('countdownPainter: walks every remaining beat, then stops at PUN', () => {
+  // The regression that shipped: the client armed a one-shot timer, the later
+  // countdown frames were deduped by shootAt, so the walk stopped after the first
+  // step. READY painted, KA painted, and CHI never appeared at all -- the count
+  // jumped from KA straight to PUN. Every beat that is genuinely still ahead has
+  // to be reported, and the walk has to terminate.
+  assert.deepEqual(drive(), ['READY', 'KA', 'CHI']);
 });
 
-test('countdownSchedule: a late first frame skips only the beats already gone', () => {
+test('countdownPainter: a late first check skips only the beats already gone', () => {
   // Same walk, but the first frame is delayed. Whatever has already passed is
   // dropped, and everything still ahead must still be painted.
-  const shootAt = 1700000003000;
-  const late = (lag) => {
-    let t = 1700000000000 + lag;
-    const seen = [];
-    for (const s of KXP.countdownSchedule(() => t, shootAt, 2000, 0)) {
-      if (s.label) seen.push(s.label);
-      t += s.delay;
-    }
-    return seen;
-  };
-  assert.deepEqual(late(0), ['READY', 'KA', 'CHI']);
-  assert.deepEqual(late(1000), ['KA', 'CHI']);
-  assert.deepEqual(late(2000), ['CHI']);
-  assert.deepEqual(late(3000), []); // nothing left; PUN opens straight away
+  assert.deepEqual(drive({ lag: 0 }), ['READY', 'KA', 'CHI']);
+  assert.deepEqual(drive({ lag: 1000 }), ['KA', 'CHI']);
+  assert.deepEqual(drive({ lag: 2000 }), ['CHI']);
+  assert.deepEqual(drive({ lag: 3000 }), []); // nothing left; PUN opens straight away
 });
 
-test('countdownSchedule: terminates when the deadline has long passed', () => {
-  // Must not spin: a stuck generator here would re-arm the timer forever.
-  const steps = [...KXP.countdownSchedule(() => 1700000000000 + 60000, 1700000000000, 2000, 0)];
-  assert.deepEqual(steps, [{ label: null, delay: 0 }]);
+test('countdownPainter: re-derives, so a wrong clock costs one check not the round', () => {
+  // The behaviour that replaced the one-shot chain. A clock reading wrong -- a
+  // phone stepping its wall clock between the snapshot and the round -- must not
+  // park the display on a single long timer. The wait before the first beat is
+  // capped, so the caller re-reads rather than waiting out the bad reading, and
+  // the label comes back on the next check.
+  const shootAt = 1700000003000;
+  let t = 1700000000000 - 4000; // clock reads 4s slow
+  const stepper = KXP.countdownPainter(() => t, shootAt, 2000, () => 0);
+
+  const wrong = stepper();
+  assert.equal(wrong.label, null, 'nothing is due by the wrong clock');
+  assert.ok(wrong.wait > 0 && wrong.wait <= 1000, `wait is capped, got ${wrong.wait}`);
+
+  // The clock steps back to where it should be, and the caller re-checks.
+  t = 1700000000000;
+  const corrected = stepper();
+  assert.equal(corrected.label, 'READY', 'the beat appears once the clock is right');
+  assert.equal(corrected.left, 3000, 'and the deadline is intact');
+});
+
+test('countdownPainter: reports a label once, not on every check', () => {
+  // The caller repaints on a non-null label, so a redundant check or a fresh
+  // painter for the same round must not flash the label already on screen.
+  const shootAt = 1700000003000;
+  let t = 1700000000000;
+  const stepper = KXP.countdownPainter(() => t, shootAt, 2000, () => 0);
+  assert.equal(stepper().label, 'READY');
+  t += 200; // still inside the READY beat
+  assert.equal(stepper().label, null, 'no repaint while the beat is unchanged');
+  t += 800;
+  assert.equal(stepper().label, 'KA');
+});
+
+test('countdownPainter: stops once the deadline has long passed', () => {
+  // Must not spin: a caller looping on a non-zero wait here would re-arm its timer
+  // forever, and PUN would never arrive.
+  const stepper = KXP.countdownPainter(() => 1700000000000 + 60000, 1700000000000, 2000, () => 0);
+  const due = stepper();
+  assert.deepEqual([due.label, due.wait], [null, 0]);
+});
+
+test('countdownPainter: skew is read per check, not captured at build time', () => {
+  // A client that re-reads its skew mid-round -- every reconnect does -- must not
+  // keep counting against the reading it started with.
+  const shootAt = 1700000003000;
+  let skew = 0;
+  let t = 1700000000000;
+  const stepper = KXP.countdownPainter(() => t, shootAt, 2000, () => skew);
+  assert.equal(stepper().label, 'READY');
+  skew = 2000; // the snapshot said the server runs 2s ahead
+  assert.equal(stepper().label, 'CHI', 'the corrected skew moves the beat on');
 });
 
 test('planRound: missing plan returns null', () => {

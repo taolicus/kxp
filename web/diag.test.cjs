@@ -80,7 +80,7 @@ test('diag.html drives the real schedule rather than restating it', () => {
   // arithmetic -- a second copy that drifts, and one that would then disagree
   // with what the player actually sees.
   assert.match(HTML, /<script src="\/kxp\.js"><\/script>/);
-  assert.match(inlineScript(), /KXP\.countdownSchedule/);
+  assert.match(inlineScript(), /KXP\.countdownPainter/);
 });
 
 test('diag.html reports lost beats to match what the schedule actually does', () => {

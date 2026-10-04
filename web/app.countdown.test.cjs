@@ -22,6 +22,11 @@ const SM = require('./machine.js');
 // The three beat labels, in the order the server sends them.
 const BEATS = ['READY', 'KA', 'CHI'];
 
+// distinct drops repeated readings. runUntil samples the count after every timer it
+// fires, so a beat that legitimately spans several checks appears several times; what
+// the player sees is the sequence of changes.
+const distinct = (xs) => xs.filter((v, i) => v !== xs[i - 1]);
+
 // announce replays what the server does: the first countdown frame opens the
 // gate, and the later beats carry the same shootAt (which app.js dedupes).
 // Frames land in the same tick, which is what a burst over a slow link looks
@@ -69,24 +74,62 @@ test('app.js skips only the beats a late first frame has already passed', () => 
   }
 });
 
-test('app.js dedupes the repeated countdown frames', () => {
-  // The server names the same shootAt on every beat, so each frame must be a
-  // no-op. The frames are staggered a second apart on purpose: delivered in one
-  // tick, a missing dedupe guard would be unobservable, because re-planning at
-  // the same instant yields the same schedule. Staggered, a re-plan would cancel
-  // the in-flight chain and jump the count to the last beat.
+test('a repeated countdown frame re-derives without skipping or reprinting', () => {
+  // The server names the same shootAt on every beat, so each frame after the first
+  // is a repeat. It has to be a no-op *visibly*: the count must neither skip a beat
+  // nor reprint the one already up.
+  //
+  // This used to assert the frames were dropped outright. They are not any more --
+  // each one re-derives from the clock, which is what lets a bad reading be
+  // corrected -- so the contract is now what the player sees, not which frames the
+  // client ignored. The readings are accumulated across both windows because the
+  // first beat is painted before the first runUntil.
   const shootAt = 1700000003000;
   const app = loadApp();
   runInContext("state = 'countdown'", app.ctx);
   app.setClock(1700000000000);
   runInContext(`planFromCountdown(${JSON.stringify(beats(shootAt, 'READY')[0])})`, app.ctx);
-  app.runUntil(1700000001000); // first beat painted; chain armed for the next
+  const seen = app.runUntil(1700000001000); // first beat painted; tick armed
 
   app.setClock(1700000001000);
   runInContext(`planFromCountdown(${JSON.stringify(beats(shootAt, 'READY')[1])})`, app.ctx);
-  const painted = app.runUntil(shootAt);
-  assert.deepEqual(painted, ['READY', 'KA', 'CHI'], 'duplicate frames do not restart or skip');
+  const painted = seen.concat(app.runUntil(shootAt));
+
+  assert.deepEqual(painted, ['READY', 'KA', 'CHI'], 'no beat skipped, none printed twice');
   assert.equal(app.count(), 'CHI', 'count settles on the last beat before PUN');
+});
+
+test('the countdown survives a clock that reads wrong and then comes back', () => {
+  // The regression this change exists for. clockSkew is sampled once at connect and
+  // never corrected, so a phone whose wall clock steps between the snapshot and the
+  // round hands the countdown a badly wrong "time until PUN".
+  //
+  // The old chain measured every delay from the step before it and was built once,
+  // from the first frame: one bad reading scheduled a single long timer, and the
+  // repeat frames that could have corrected it were dropped as duplicates. The count
+  // therefore sat blank until PUN with the pick window still open. Re-deriving caps
+  // the damage at one tick, and a frame re-arms the check, so the countdown picks
+  // itself back up the moment the clock is right.
+  const shootAt = 1700000003000;
+  const app = loadApp();
+  runInContext("state = 'countdown'", app.ctx);
+  app.setClock(1700000000000);
+  runInContext(`planFromCountdown(${JSON.stringify(beats(shootAt, 'READY')[0])})`, app.ctx);
+  assert.equal(app.count(), 'READY', 'sanity: READY is up before the clock moves');
+
+  // The clock steps 4s backwards, and a frame arrives while it reads wrong. This is
+  // the moment the old chain died: it read a deadline ~7s out, armed one long timer,
+  // and had nothing left that could re-check.
+  app.setClock(1699999996000);
+  runInContext(`planFromCountdown(${JSON.stringify(beats(shootAt, 'KA')[0])})`, app.ctx);
+  assert.equal(app.count(), 'READY', 'a wrong reading repaints nothing');
+
+  // The clock settles and the next frame lands. The countdown carries on from where
+  // it was rather than having to be restarted by hand.
+  app.setClock(1700000001000);
+  runInContext(`planFromCountdown(${JSON.stringify(beats(shootAt, 'CHI')[1])})`, app.ctx);
+  const painted = ['READY'].concat(distinct(app.runUntil(shootAt)));
+  assert.deepEqual(painted, ['READY', 'KA', 'CHI'], 'the beats resume once the clock is right');
 });
 
 // lateFrame replays the whole path a real client takes when its link is slow:

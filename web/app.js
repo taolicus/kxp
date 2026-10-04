@@ -11,9 +11,10 @@ let remainingWindowMs = 2000; // local portion of the PUN window still open
 let sawPunAt = 0;
 let clockSkew = 0; // serverNow - clientNow, estimated from the connected snapshot
 let stallTimer = null;
-let slotTimer = null; // advances the local countdown beat when a countdown frame is dropped
+let slotTimer = null; // re-checks which countdown beat is due
+let slotStep = null; // pure stepper for the round being counted down
+let plannedShootAt = 0; // announced deadline (epoch-ms) slotStep belongs to
 let punTimer = null; // local PUN entry scheduled from the announced round plan
-let plannedShootAt = 0; // announced deadline (epoch-ms) this punTimer belongs to
 
 // Last-resort recovery: if a PUN result never arrives (dropped SSE event,
 // wedged connection) we're stuck in a game state with nothing left to do.
@@ -269,6 +270,7 @@ function resetGame() {
   clearTimeout(punTimer);
   slotTimer = null;
   punTimer = null;
+  slotStep = null;
   plannedShootAt = 0;
   sawPunAt = 0;
   $('#banner').classList.add('hidden');
@@ -286,35 +288,46 @@ function resetGame() {
 // itself ends at the announced time via a local timer. A `shoot` frame that
 // arrives anyway just enters a window we already opened (the machine ignores
 // it in the shoot state).
+function tick() {
+  if (state !== 'countdown' || !slotStep) return;
+  const due = slotStep();
+  if (due.label) setCount(due.label);
+  if (due.wait > 0) slotTimer = setTimeout(tick, due.wait);
+}
+
 function planFromCountdown(d) {
   if (!d.shootAt) return; // pre-announce unseen — fall back to frame-driven play
-  if (d.shootAt === plannedShootAt) return; // duplicate countdown for this round
+  // Every countdown frame re-arms the painter and the PUN timer, repeats
+  // included. They all carry this same shootAt, and skipping them is what let one
+  // bad clock reading blank the whole countdown: the chain below was built from
+  // the first frame and the rest could not correct it. Re-arming is invisible --
+  // the painter repaints only when the due beat changes -- and each re-arm
+  // re-derives from the clock as it is now rather than from whenever the round
+  // was first announced.
   clearTimeout(slotTimer);
   clearTimeout(punTimer);
-  plannedShootAt = d.shootAt;
   const plan = KXP.planRound(Date.now(), d.shootAt, d.windowMs, clockSkew);
+  // Every frame re-derives what is due, repeats included, so a clock that read
+  // wrong a moment ago is corrected by the next frame rather than waited out.
+  // One stepper per round keeps its memory of the last painted beat, so
+  // re-deriving does not repaint the label already on screen.
   if (!plan) return;
   // The deadline decides what is on screen, not the frame that named it. A
   // countdown frame that arrives late must not paint a beat with no time behind
   // it: that beat would be overwritten in the same tick by an already-due
   // transition, so the count would jump straight to PUN and the player would
   // see no countdown at all even though the server had announced one and the
-  // pick window was still open. countdownSchedule yields whichever beats are
-  // genuinely still ahead, so a frame delayed past its own beat degrades to the
-  // next real beat instead of flashing a dead one.
-  //
-  // The timer re-arms on every step rather than firing once. The later
-  // countdown frames carry the same shootAt and are deduped above, so this
-  // chain is the only thing advancing the beat; a one-shot timer stopped after
-  // the first step and the tail of the countdown was never painted.
-  const steps = KXP.countdownSchedule(() => Date.now(), d.shootAt, d.windowMs, clockSkew);
-  const step = () => {
-    const next = steps.next();
-    if (next.done) return;
-    if (next.value.label && state === 'countdown') setCount(next.value.label);
-    if (next.value.delay > 0) slotTimer = setTimeout(step, next.value.delay);
-  };
-  step();
+  // pick window was still open. The painter shows whichever beat is genuinely
+  // still ahead, so a frame delayed past its own beat degrades to the next real
+  // beat instead of flashing a dead one -- and re-reads the clock on every tick,
+  // so a phone whose wall clock steps recovers within a tick instead of waiting
+  // out a timer scheduled from the bad reading.
+  if (d.shootAt !== plannedShootAt) {
+    plannedShootAt = d.shootAt;
+    slotStep = KXP.countdownPainter(() => Date.now(), d.shootAt, d.windowMs, () => clockSkew);
+  }
+  clearTimeout(slotTimer);
+  tick();
   if (plan.actionable) {
     punTimer = setTimeout(() => {
       if (state !== 'countdown') return;
