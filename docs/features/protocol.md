@@ -145,7 +145,7 @@ is right to report no beat once `msUntilPun <= 0`, since painting one there woul
 flash a beat with no time behind it, and once a client knows `shootAt` it paints
 the remaining beats on its own timers. Widening the tolerance means spending
 seconds before PUN, and that trade-off is held open in
-[`countdown-margin.md`](../tasks/open/countdown-margin.md). The envelope is pinned
+[`countdown-margin.md`](../tasks/closed/countdown-margin.md). The envelope is pinned
 by "app.js loses exactly one countdown beat per second of first-frame delay" in
 `web/app.countdown.test.cjs`, so changing the schedule has to move that table on
 purpose. The three-beat schedule itself landed in `8a859f7`; the bounded

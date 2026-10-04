@@ -6,15 +6,28 @@ gated-on: []
 
 # Make the countdown deadline adapt to the slowest side
 
-> **Now partly superseded.** The presence half of this has shipped -- readiness
-> is no longer an automatic ack; the client waits for a presented animation frame
-> and for the document to be visible before it acks (see
-> [protocol.md](../../features/protocol.md) § Why readiness waits for a painted
-> frame). So the deadline hangs off a rendered frame rather than off a network ack
-> that only proved bytes arrived, which fixes the backgrounded-player case. The
-> remaining half is the adaptive lead below, which is still needed for the
-> slow-but-present link -- a painted frame bounds the anchor, it does not remove
-> the round trip between the frame and the countdown.
+**The presence half shipped; the adaptive half was measured and not built.** The
+deadline no longer hangs off a bare network ack. Readiness is gated on a presented
+animation frame and on the document being visible, so `shootAt` is set from a
+rendered frame rather than from bytes having arrived — see
+[protocol.md](../../features/protocol.md) § Why readiness waits for a painted
+frame. That was the whole of the structural idea: anchor the deadline to something
+slower than the network.
+
+The adaptive lead, which scaled the wait to a measured round trip, was not built,
+because it was aimed at a symptom that had a different cause. On the link that
+reported going straight from `MATCH FOUND` to **PUN!**, all three beats arrived
+every time with around 90ms of jitter against 1s beats — the measurement is in
+[countdown-margin.md](countdown-margin.md). The countdown was never being lost to
+the link; the client was failing to paint frames it had already received, which
+[client-countdown-painter.md](client-countdown-painter.md) fixed. An adaptive lead
+would have widened the wait on every round to compensate for a bug that was no
+longer there, so it is left out rather than deferred.
+
+What follows is the reasoning as it stood while the question was open. It is kept
+because the argument that a fixed schedule cannot survive unbounded delay is the
+durable part, and because it is what anyone revisiting this on a link that
+genuinely loses beats would have to re-read.
 
 ## Why margin alone cannot be the answer
 
@@ -28,7 +41,8 @@ The structural statement: **a fixed schedule cannot survive an unbounded delay.*
 The lead before PUN is whatever we choose, and delivery latency eats it from the
 front one second per second. The only two things that work are (a) letting the
 schedule adapt per round, or (b) anchoring the deadline to something slower than
-the network. This task is (a); the human ready-tap discussed below is (b).
+the network. The adaptive lead was (a) and was not built; the readiness gate
+discussed below is (b), and (b) is what landed.
 
 ## Why the existing handshake is not already the fix
 
@@ -57,7 +71,10 @@ server: both prepared → shootAt = now + countdown ──▶ countdown {shootAt
 so the countdown then always has a full-length lead regardless of how slow the
 delivery was. The slow side's round starts later instead of losing its countdown.
 
-## What to build
+## What was built
+
+Every item in this list shipped. The adaptive lead was never one of them — it
+was the task's other half, and it was left out on the measurement above.
 
 - A `countdown` frame with no `shootAt`, meaning "prepare, acknowledge this". It
   is the existing event type carrying an absent field, not a new event type, so a
@@ -93,11 +110,12 @@ delivery was. The slow side's round starts later instead of losing its countdown
   rejected as unnecessary friction; it only added attention on top of presence,
   and attention is not observable by the server. This changed how a match starts,
   so it is not a silent part of this task.
-- **Interaction with the client-generated ack.** `/ready` now waits for a painted,
-  visible frame, so it proves more than it used to. If the prepare ack were to
-  remain a bare network ack, the adaptive lead would fix late delivery but not an
-  absent player, and the two symptoms would stay conflated. The prepare ack
-  should carry the same frame-and-visibility gate as `/ready` does now.
+- **Interaction with the client-generated ack.** `/ready` waits for a painted,
+  visible frame, so it proves more than it used to. The concern recorded here was
+  that the prepare ack might remain a bare network ack, in which case an adaptive
+  lead would have fixed late delivery but not an absent player and the two
+  symptoms would have stayed conflated. It does not: the prepare ack carries the
+  same frame-and-visibility gate, so one mechanism covers both.
 
 ## Required context
 
@@ -108,5 +126,6 @@ model. The code is `round.go` (the countdown schedule and the ready handshake),
 returns null without a plan, so a deadline-less frame is inert rather than
 destructive).
 
-[countdown-margin.md](countdown-margin.md) is the shallow version of this and
-becomes redundant if this lands; its measurement section stays useful either way.
+[countdown-margin.md](countdown-margin.md) is the shallow version of this. Its
+measurement is what decided the adaptive half, and its table is what a link that
+genuinely loses beats would be tuned against.

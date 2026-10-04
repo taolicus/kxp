@@ -6,22 +6,32 @@ gated-on: []
 
 # Buy the countdown a delivery margin
 
-> **Superseded in principle by
-> [countdown-readiness-anchor.md](countdown-readiness-anchor.md)**, which fixes the
-> same symptom for every connection instead of tuning for one link. Margin costs a
-> second of pre-PUN wait per second of tolerance and latency has no lower bound, so
-> it cannot be tuned to a player population. This task stands as the shallow
-> version and its measurement section is still the way to get the number; prefer
-> the anchor task unless its extra round trip is rejected.
+The report was a player going from `MATCH FOUND` straight to **PUN!**, with the
+pick window open and no cue that a round began, on a slow mobile link. The
+question this file was opened to answer: is the schedule too tight to survive real
+delivery latency, leaving a product trade-off about how long the wait before PUN
+should be?
 
-# Buy the countdown a delivery margin
+## The answer: measured, and no
 
-A player on a slow mobile link goes from `MATCH FOUND` straight to **PUN!**,
-with the pick window open and no cue that a round began. The cause is traced and
-pinned by a test; what is left is a product trade-off about how long the wait
-before PUN should be.
+On the link that reported the symptom, eight consecutive CPU matches each
+delivered all three beats plus `shoot` and `result` — no beat lost in any of them
+— with arrival spread around 90ms against a 1s beat spacing. The beats were never
+late. What was missing was a client that could fail to paint frames it had
+already received, which is what
+[client-countdown-painter.md](client-countdown-painter.md) turned out to be, and
+the symptom is reported gone against that build.
 
-## Confirmed mechanism
+So nothing here gets built, and the table further down stays a design space rather
+than a pending decision. What is worth keeping is the reasoning that margin is the
+wrong instrument in the first place, independent of this measurement: latency has
+no lower bound, so every second of tolerance is a second of pre-PUN wait paid by
+everyone to chase a tail that keeps growing, and a game with N players cannot be
+corrected per-player. The table is the shape of that trade for whoever hits a link
+that genuinely loses beats — on one that does not, widening the lead would only add
+waiting.
+
+## The schedule's shape
 
 `round.go` announces `shootAt` three seconds ahead and sends `READY` at *that
 same instant*, so the lead before the deadline equals the countdown length and
@@ -56,22 +66,24 @@ time.
 - **The lost-frame dedupe guard / late-frame filter.** Both are deployed and both
   work; they are not what produces the missing beats.
 
-So the deficit is margin, not correctness. Nothing here is a bug in the sense of
-a violated invariant, which is why this is a task rather than an issue.
+That last sentence is where the reasoning went wrong. Every measurement here is
+on the wire, so "the deficit is margin, not correctness" only ever cleared
+*transport* — the client's own paint path was not in scope for any of it, and
+correctness was assumed rather than checked.
 
-One client-side cause has been found and fixed since, and it is worth separating
-from the margin question because the evidence above does not cover it. Every
-measurement here is on the wire, so it can only clear transport; the client's own
-paint path was not in scope for any of it. That path could blank the countdown
-*entirely* — not lose a beat — when `clockSkew`, sampled once at connect, went
-stale: one bad clock reading parked the display on a single long timer and the
-repeat frames that could have corrected it were dropped as duplicates, leaving
-`MATCH FOUND` then **PUN!** with the window open. It is fixed and pinned in
-[client-countdown-painter.md](../closed/client-countdown-painter.md). Whether it
-accounts for the reported rounds is still unmeasured — this host cannot see a
-phone's wall clock step — so the margin deficit stands on its own, and a player
-who still loses beats with the fix deployed should be asked for the `/diag.html`
-run before the lead is widened.
+The paint path had a defect, and it produced exactly the reported symptom. It could
+blank the countdown *entirely*, not lose a beat: a countdown client that walked one
+beat per timer could be walked past its own deadline, because each delay was
+measured from the step before it, so one late timer step shifted every later beat
+with it, and a stale `clockSkew` sampled once at connect could do the same thing
+outright. Either way the count sat blank until **PUN!** with the window open, and
+the repeat frames that could have corrected it were dropped as duplicates. It is
+fixed in [client-countdown-painter.md](client-countdown-painter.md) and the symptom
+is reported gone against that build.
+
+So there was a violated invariant here after all, and it was on the client. The
+margin question below was never the live one for this report, which is why nothing
+here gets built.
 
 ## Measuring it, without a console
 
@@ -144,10 +156,10 @@ across the deploy survives.
 - [`window-shrink.md`](../../issues/window-shrink.md) is the sibling symptom on
   the same fixed timeline: latency there eats the *pick window*, here it eats the
   *countdown cue*.
-- [`latency-profile-visibility.md`](latency-profile-visibility.md) would size the
+- [`latency-profile-visibility.md`](../open/latency-profile-visibility.md) would size the
   margin from real players rather than from one report. It is gated on a `/ping`
   probe, so it cannot be waited on; a per-player margin is out of scope.
-- [`externalised-operational-settings.md`](externalised-operational-settings.md)
+- [`externalised-operational-settings.md`](../open/externalised-operational-settings.md)
   if the margin becomes a tuned constant rather than a literal.
 
 ## Required context

@@ -68,4 +68,4 @@ the code rather than on a captured instance. It is reported fixed by the player
 against `d6d9899`, which is evidence about the outcome and not about the
 mechanism.
 
-→ rationale: [protocol.md](../../features/protocol.md), [countdown-margin.md](../open/countdown-margin.md)
+→ rationale: [protocol.md](../../features/protocol.md), [countdown-margin.md](countdown-margin.md)
