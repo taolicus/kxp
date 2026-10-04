@@ -18,17 +18,26 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { loadApp } = require('./appHarness.cjs');
+const { loadApp, BGS } = require('./appHarness.cjs');
 const SM = require('./machine.js');
 
-// matched boots the client, connects, and has the server say a match was found.
-// It deliberately does NOT present a frame, because that is the interesting
-// state: matched, and nothing acknowledged yet.
-async function matched() {
+// matched boots the client, connects, has the server say a match was found, and
+// settles the announced background. It deliberately does NOT present a frame,
+// because that is the interesting state: matched, screen up, nothing acknowledged
+// yet.
+//
+// `settle` is what makes the background a precondition rather than an
+// assumption. Pass false to hold the ack at the image load instead, which is the
+// state the sequencing test needs.
+async function matched(opts = {}) {
   const app = loadApp({ next: SM.next });
   await app.boot();
   app.fire('connected', { id: 'test-client', now: 1700000000000, online: 0 });
-  app.fire('matched', { opponentName: 'Opponent' });
+  app.fire('matched', Object.assign({ opponentName: 'Opponent' }, opts));
+  if (opts.settle !== false) {
+    app.loadImages();
+    await app.settle();
+  }
   return app;
 }
 
@@ -88,4 +97,62 @@ test('a frame presented after the match ended acknowledges nothing', async () =>
   app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
   app.frame();
   assert.equal(readies(app), 0, 'no late ack once the countdown has begun');
+});
+// --- the announced stage, and what gates the ack on it ------------------------
+
+test('the announced background is the stage that gets applied', async () => {
+  // The server picks, per match, so both players see the same arena. A client
+  // that applied its own random choice here would be right half the time, which
+  // is the failure mode that hides: no error, just two players in two places.
+  for (const bg of BGS) {
+    const app = await matched({ background: bg });
+    assert.equal(app.bgName(), bg, `announced ${bg} should be applied`);
+  }
+});
+
+test('an unrecognised background name falls back to a known stage', async () => {
+  // Roster drift is the real hazard: a name the server sends that this client has
+  // no asset for would 404, and the game screen would come up unpainted. The Go
+  // suite pins the two rosters against each other; this pins what happens if they
+  // ever diverge anyway.
+  const app = await matched({ background: 'volcano' });
+  assert.ok(BGS.includes(app.bgName()), `got ${app.bgName()}, wanted a known stage`);
+  assert.notEqual(app.bgName(), 'volcano', 'the unknown name was not trusted');
+});
+
+test('a match with no announced background still gets a stage', async () => {
+  // The additive case: a new client against a server predating the field.
+  const app = await matched();
+  assert.ok(BGS.includes(app.bgName()), `got ${app.bgName()}, wanted a known stage`);
+});
+
+test('the ack waits for the announced background to load', async () => {
+  // The sequencing the previous version got wrong. rAF fires on the next paint of
+  // whatever is on screen, so arming the ack before the background resolved meant
+  // the countdown could begin while the client was still showing the queue view --
+  // the client acknowledged a match screen it had not yet drawn.
+  const app = await matched({ background: 'tomb', settle: false });
+  app.frame();
+  await app.settle();
+  assert.equal(readies(app), 0, 'no ack while the background is still downloading');
+  assert.equal(app.pendingFrames(), 0, 'not even a frame is armed yet');
+
+  app.loadImages();
+  await app.settle();
+  assert.equal(app.bgName(), 'tomb', 'stage applied once it loads');
+  assert.equal(app.pendingFrames(), 1, 'the frame is armed only now');
+
+  app.frame();
+  assert.equal(readies(app), 1, 'and the ack follows the paint');
+});
+
+test('a background that fails to load still acknowledges', async () => {
+  // A 404 on the stage must not hang the handshake. The server's 8s timeout would
+  // cancel the match, so a broken asset would cost the player the round rather
+  // than costing them a background. Measured: the ack still goes out.
+  const app = await matched({ background: 'tomb', settle: false });
+  app.loadImages(true);
+  await app.settle();
+  app.frame();
+  assert.equal(readies(app), 1, 'a failed asset defers nothing');
 });

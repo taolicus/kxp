@@ -113,6 +113,16 @@ same buffer *verified* rather than hoped-for: the client acks from the end of it
 `matched` handler, so a slow client waits as long as it needs and a fast one
 pays nothing. Landed in `32a3b02`.
 
+**The client-side gate has two conditions, and their order is load-bearing.** The
+ack waits for the announced background to decode *and* for a presented frame, in
+that order — see [backgrounds](backgrounds.md#selection). The order is the whole
+point: `requestAnimationFrame` fires on the next paint of whatever is on screen, so
+arming the ack before the image resolved would be waiting for a frame of the queue
+view rather than of the match screen, and the countdown could start with the fight
+not yet drawn. A background that fails to load still acknowledges, or the
+handshake timeout would cancel the match and cost the player the round over a
+background.
+
 The cost it does accept is a new failure mode: a CPU match whose human never acks
 is cancelled and re-queued after 8s, where before it could not happen. The 2s
 ack re-post plus the `pending` snapshot flag — which routes a reconnecting client

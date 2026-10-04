@@ -67,14 +67,29 @@ function preloadBg(bg) {
   ]);
 }
 
-function randomizeBg() {
-  const bg = BGS[Math.floor(Math.random() * BGS.length)];
-  bgReady = preloadBg(bg).then(() => {
+// setBg resolves the stage for an event and applies it. The server chooses (see
+// backgrounds.md): it announces a name on `matched`, so both players are put in
+// the same arena. The local fallback is what keeps that additive -- a client
+// against a server predating the field still gets a stage, and a name we do not
+// recognise would 404 on the asset rather than paint, so an unknown name falls
+// back instead of being trusted.
+function bgNameFor(d) {
+  const want = d && d.background;
+  if (want && BGS.includes(want)) return want;
+  return BGS[Math.floor(Math.random() * BGS.length)];
+}
+
+function applyBg(bg) {
+  return preloadBg(bg).then(() => {
     const r = document.documentElement.style;
     r.setProperty('--bg-anim', `url('/img/bg/${bg}.webp')`);
     r.setProperty('--bg-static', `url('/img/bg/${bg}-static.webp')`);
     return bg;
   });
+}
+
+function setBg(d) {
+  bgReady = applyBg(bgNameFor(d));
   return bgReady;
 }
 
@@ -97,22 +112,22 @@ function stopReadyLoop() {
 
 function sendReady() { post('/ready'); }
 
-// Advertise that we can actually receive the countdown; the server waits for both
-// sides before the round begins, so a slow network can never drop us straight
-// into an expired window. Re-posts while matched so a lost ack on a flaky link
-// self-heals.
+// The ack waits for the announced background to decode *and* for a presented
+// frame, in that order. The frame half is self-suppressing: rAF does not run in a
+// backgrounded tab, so an app in the background never acknowledges and the
+// server's timeout cancels the match instead of firing a round at somebody who is
+// not there.
 //
-// The ack waits for a presented frame rather than firing on the spot, and that
-// is the entire point. requestAnimationFrame does not run in a backgrounded tab,
-// so this self-suppresses: an app in the background never acknowledges, and the
-// server's 8s timeout cancels the match instead of firing a round at somebody who
-// is not there. An ack posted straight from the matched handler proved only that
-// bytes had reached this browser, which a backgrounded app does just as reliably
-// as one being watched -- and the round then began with nobody ready for it.
+// The background half is not a nicety. Sequencing them matters more than it
+// looks: rAF fires on the next paint of whatever is on screen, so without this
+// the callback runs while the client is still showing the queue view and the
+// background is still downloading -- the ack would go out and the countdown would
+// begin with the match screen not yet up, which is the exact failure the
+// background work was meant to remove.
 //
-// What it cannot prove is attention. A phone propped up, screen awake and
-// rendering, acknowledges happily while nobody is looking, so this fixes the
-// backgrounded case rather than the absent-minded one.
+// The ack proves presence, never attention. A phone propped up, screen awake and
+// rendering, acknowledges happily while nobody is looking; nothing client-side
+// can close that gap, because the server only ever sees an ack.
 //
 // The gate is a buffer, not a guarantee, and the cost is a lost round: if the
 // link is too slow to deliver an ack within the server's 8s, it cancels the
@@ -120,17 +135,26 @@ function sendReady() { post('/ready'); }
 // reason shown.
 function armReadyLoop() {
   if (state !== 'matched') return;
-  const go = () => {
-    if (state !== 'matched' || document.visibilityState === 'hidden') return;
-    sendReady();
-    stopReadyLoop();
-    readyTimer = setInterval(() => {
-      if (state !== 'matched') { stopReadyLoop(); return; }
+  // Behind bgReady, so the frame we wait for is a frame of the match screen
+  // rather than of whatever was on screen while the background downloaded.
+  // setBg() runs before this in every handler that reaches it, so bgReady is
+  // already this match's promise by the time we chain onto it.
+  bgReady.then(() => {
+    // The match can end while the background is still loading; arming then would
+    // ack a match that no longer exists.
+    if (state !== 'matched') return;
+    const go = () => {
+      if (state !== 'matched' || document.visibilityState === 'hidden') return;
       sendReady();
-    }, 2000);
-  };
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(go);
-  else go();
+      stopReadyLoop();
+      readyTimer = setInterval(() => {
+        if (state !== 'matched') { stopReadyLoop(); return; }
+        sendReady();
+      }, 2000);
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(go);
+    else go();
+  });
 }
 
 function show(view) {
@@ -395,7 +419,7 @@ const enter = {
     stopReadyLoop();
     clearTimeout(stallTimer);
     setNotice(null);
-    randomizeBg();
+    setBg(d);
     showGame();
     resetGame();
     setYouSlot();
@@ -410,7 +434,7 @@ const enter = {
       stopReadyLoop();
       showGame();
     } else if (!GAME_STATES.includes(from)) {
-      randomizeBg();
+      setBg(d);
       showGame();
       resetGame();
       setYouSlot();
@@ -433,7 +457,7 @@ const enter = {
     const plan = KXP.shootWindow(Date.now(), d.shootAt, d.windowMs, remainingWindowMs, clockSkew);
     armStallWatchdog();
     if (!GAME_STATES.includes(from)) {
-      randomizeBg();
+      setBg(d);
       showGame();
       resetGame();
       setYouSlot();

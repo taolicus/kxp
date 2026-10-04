@@ -72,6 +72,12 @@ function loadApp(opts = {}) {
   // the readiness gate depends on: app.js arms its ack from a rAF callback
   // because a backgrounded tab does not get one.
   let visibility = 'visible';
+  // Background assets resolve only when the test says so, because "the stage has
+  // decoded" is now a precondition for the readiness ack. A harness that resolved
+  // images on assignment could not tell a client that waits for one from one that
+  // does not.
+  const images = [];
+  const cssProps = [];
 
   const ctx = createContext({
     console,
@@ -113,13 +119,16 @@ function loadApp(opts = {}) {
       const i = timers.indexOf(t);
       if (i >= 0) timers.splice(i, 1);
     },
-    Image: function () { this.onload = null; this.onerror = null; this.src = ''; },
+    Image: function () {
+      this.onload = null; this.onerror = null; this.src = '';
+      images.push(this);
+    },
     requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
   });
 
   ctx.window = ctx;
   ctx.document = {
-    documentElement: { style: { setProperty() {} } },
+    documentElement: { style: { setProperty(k, v) { cssProps.push([k, v]); } } },
     body: { classList: { add() {}, remove() {}, toggle() {} } },
     get visibilityState() { return visibility; },
     querySelector: (sel) => {
@@ -172,6 +181,25 @@ function loadApp(opts = {}) {
     // async (it awaits the roster before wiring), so callers must await it or the
     // buttons will not exist yet.
     boot: () => docHandlers.DOMContentLoaded && docHandlers.DOMContentLoaded(),
+    // Settle every outstanding background image. fail=true simulates a 404 or a
+    // decode error, which preloadBg treats as resolution -- a missing asset must
+    // defer the game screen, never hang it.
+    loadImages: (fail) => {
+      const due = images.splice(0, images.length);
+      for (const img of due) (fail ? img.onerror : img.onload)();
+    },
+    pendingImages: () => images.length,
+    // Let queued promise callbacks run. loadImages resolves the image promises,
+    // but "the background is applied" and "the ack is armed" are separate
+    // microtask hops behind them, so a test that settles images and immediately
+    // presents a frame would be asserting against a client that had not caught
+    // up. setImmediate drains the whole queue; a bare await does not.
+    settle: () => new Promise((r) => setImmediate(r)),
+    css: () => cssProps.slice(),
+    bgName: () => {
+      const hit = cssProps.find(([k]) => k === '--bg-anim');
+      return hit ? /\/bg\/([a-z-]+)\.webp/.exec(hit[1])[1] : null;
+    },
     // Present a frame. Nothing is delivered until this is called, so a test can
     // assert that nothing has been acked while no frame has been shown.
     frame: () => {
@@ -218,4 +246,15 @@ function loadApp(opts = {}) {
   };
 }
 
-module.exports = { loadApp };
+// The stage roster, read out of app.js rather than restated here. A third literal
+// would be another thing to forget when a stage is added, and the whole point of
+// TestBackgroundRosterMatchesTheClient is that this list has exactly one other
+// home.
+const BGS = JSON.parse(
+  /const BGS = (\[[^\]]*\]);/.exec(
+    require('fs').readFileSync(require('path').join(__dirname, 'app.js'), 'utf8')
+  )[1].replace(/'/g, '"') // the roster is single-quoted; JSON only has doubles
+);
+
+module.exports = {
+  BGS, loadApp };

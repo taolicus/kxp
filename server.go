@@ -522,6 +522,13 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 		if i := m.indexOfMoves(c.moves); i >= 0 {
 			out["opponentName"] = m.opponentName(i)
 			out["opponentCharacter"] = m.opponentCharacter(i)
+			// The announced stage travels on the snapshot too, not just on
+			// `matched`, because a client that reconnects mid-handshake never sees
+			// `matched` -- it arrives straight at snapshot:matched. Without this it
+			// would fall back to picking for itself and quietly land in a different
+			// arena than its opponent, which is the one thing a shared stage exists
+			// to prevent.
+			out["background"] = m.background
 		}
 		// "preparing" is deliberately absent: the deadline is fixed at the far
 		// side of that phase, so there is nothing to leak during it.

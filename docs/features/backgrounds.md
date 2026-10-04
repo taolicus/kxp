@@ -39,8 +39,28 @@ fallback when the server's name is missing or unrecognised, and
 because a server-side entry with no client-side counterpart is exactly how the two
 lists would silently stop agreeing.
 
-`randomizeBg()` is what applies the choice: it sets the `--bg-anim`/`--bg-static`
-CSS variables on the document once the named stage has decoded.
+`setBg(d)` resolves the name and applies it, setting the `--bg-anim`/`--bg-static`
+CSS variables once the stage has decoded. It replaces `randomizeBg()`, which both
+decided and applied; separating the two is what let the decode become a precondition
+for the readiness ack (see below) rather than a side effect of showing the screen.
+
+**The stage is a precondition for acknowledging the match, not a decoration on it.**
+`setBg` runs before the ack is armed and `armReadyLoop` chains onto `bgReady`, so
+`POST /ready` waits for the stage to decode *and* for a presented frame. The
+sequencing is the point rather than a detail: `requestAnimationFrame` fires on the
+next paint of whatever is on screen, so an ack armed before the image resolved would
+be proving a frame of the queue view, not of the match screen — the countdown could
+begin with the fight not yet drawn. A stage that fails to load still acknowledges,
+because the server's handshake timeout would otherwise cancel the match and cost the
+player the round over a background.
+
+The name rides on the `connected` snapshot as well as on `matched`. A client that
+reconnects mid-handshake arrives straight at `snapshot:matched` and never sees
+`matched`, so without the field it would fall back to its own pick and land in a
+different arena than its opponent — the one outcome a shared stage exists to
+prevent.
+
+→ rationale: [client consumes the announced stage](../tasks/closed/client-uses-announced-background.md)
 
 ## Pipeline
 
