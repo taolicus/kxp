@@ -87,6 +87,24 @@ frames arriving but have no reference to measure delivery against, and there is
 no `/ping`. Handing a player a devtools snippet was tried first and is not a
 reasonable thing to ask of someone trying to play a game on a phone.
 
+**The number has since been taken on the link that reported the symptom, by a
+throwaway script rather than by `diag.html`, and it says there is no deficit to buy
+margin against.** Eight consecutive CPU matches against `d6d9899` each delivered
+`READY`, `KA`, `CHI`, `shoot` and `result` — no beat lost in any of them. Arrival
+spread across every frame of every match was about 90ms, against a beat spacing of
+1s, with no frame type arriving later than another. The apparent 2.17s figure is
+not latency at all: the same constant offset appears on `matched`, on `result` and
+on every beat, which identifies it as the phone's clock running ahead of the
+server's, and watching it over 24 fresh connections held it to a 94ms range rather
+than a lurch. `clockSkew` absorbs that offset; it is not the missing margin.
+
+So the beats arrive promptly on this link and always did. What was missing was a
+client that could fail to paint frames it had already received, which
+[client-countdown-painter.md](../closed/client-countdown-painter.md) fixed. The
+table below is therefore a design space rather than a pending decision, and it
+should stay unbuilt unless a link is measured losing beats — which this one does
+not do.
+
 ## The trade-off
 
 Margin is bought with seconds before PUN, one for one. The budget before the

@@ -166,25 +166,40 @@ call it and it reports the beat due now and how long until that could change. It
 replaces a generator walked one beat per timer, and that version blanked the whole
 countdown outright — not by losing a beat, but by losing all of them. Each delay
 was measured from the step before it, so anything a runtime did to a timer
-accumulated; the chain was built once, from the first frame, so the repeat frames
-carrying the same `shootAt` could never correct it. `clockSkew` is sampled once at
+accumulated down the chain, and the chain was built once from the first frame, so
+the repeats carrying the same `shootAt` could never correct it. Two things could
+put that chain past its own deadline, and re-deriving covers both rather than
+betting on which one occurred.
+
+A **late timer step** is the likelier of the two on a phone. Because each delay
+was measured from the step before it, one step firing late shifted every later beat
+with it, so ordinary main-thread contention — a background decode, a GC, a
+backgrounded tab — could compound three times inside a three-second lead. A
+**wrong clock** is the sharper but rarer case: `clockSkew` is sampled once at
 connect and never re-derived, so a phone whose wall clock stepped between the
-snapshot and the round left the client counting against a reading that was no
-longer true: one bad measurement parked the display on a single long timer and
-nothing repainted until it fired, with the pick window still open and every
-delivered frame dropped as a duplicate. Re-deriving bounds the damage to one
-check — the wait before the first beat is capped rather than trusted — so a wrong
-reading is re-read on the next frame instead of waited out. Repeats are no longer
-dropped either; they re-derive, which is invisible because a label is reported
-only when the beat actually changes, and a new stepper per round keeps that
-memory. The stepper is deliberately pure — `kxp.js` never touches a timer or the
-DOM — so the caller owns the scheduling and an injected clock can drive it, and
-`web/diag.html` paints its countdown with the same code the game does rather than
-modelling it separately. Pinned by "the countdown survives a clock that reads
-wrong and then comes back" in `web/app.countdown.test.cjs`; the reasoning is in
-[client-countdown-painter.md](../tasks/closed/client-countdown-painter.md). The `READY`/`KA`/`CHI` offsets live in one
-table shared by that logic and `countdownBeats` in `round.go`, and the two must
-stay in step.
+snapshot and the round counted against a reading no longer true. One bad
+measurement parked the display on a single long timer with nothing able to
+re-check, so nothing repainted until it fired — with the pick window still open and
+every frame delivered on time, then dropped as a duplicate. The harness
+reproduces that second case directly. Neither was isolated in the field, because
+this host cannot watch a phone's clock step; the link is measurably prompt
+(~90ms of jitter against 1s beats, no beat lost in eight consecutive matches), so
+margin was never the missing piece.
+
+Re-deriving bounds the damage to one check — the wait before the first beat is
+capped rather than trusted, so a wrong reading is re-read within a second instead
+of waited out — and the repeats are no longer dropped, which is invisible because a
+label is reported only when the beat actually changes, with one stepper per round
+keeping that memory across re-arms. The stepper is deliberately pure: `kxp.js`
+never touches a timer or the DOM, so the caller owns the scheduling and an injected
+clock can drive it, and `web/diag.html` paints its countdown with the same code the
+game does rather than modelling it separately. Pinned by "the countdown survives a
+clock that reads wrong and then comes back" in `web/app.countdown.test.cjs`; the
+reasoning is in
+[client-countdown-painter.md](../tasks/closed/client-countdown-painter.md).
+
+The `READY`/`KA`/`CHI` offsets live in one table shared by that logic and
+`countdownBeats` in `round.go`, and the two must stay in step.
 
 Because the window is scheduled client-side against the announced `shootAt`, a
 late or dropped `shoot` frame is harmless — the client has already acted on the
