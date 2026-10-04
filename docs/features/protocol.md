@@ -20,16 +20,38 @@ rejected with `400 not connected`.
 
 ## Match lifecycle
 
-Server side a match moves through four atomic phases:
+Server side a match moves through five atomic phases:
 
 ```
-idle → countdown → shoot → done
+idle → preparing → countdown → shoot → done
 ```
+
+`preparing` is the span where a match exists but no round has been announced: the
+round's background has been chosen, `matched` has gone out, each client is
+loading assets for the match screen, and the readiness gate is waiting on every
+human side. `countdown` begins only when that gate opens — every human's match
+screen is up and has acked — and is the first phase in which any countdown frame
+can exist.
+
+The phase used to be called `countdown` for that whole span, which meant a phase
+named after something that had not started yet. The split is what makes "assets
+loaded and everyone acked" a state the server can assert rather than an
+assumption buried in a client.
+
+> **`phase` in the reconnect snapshot changed from `countdown` to `preparing`, and
+> that is a deliberate break.** A client decides how to rejoin an in-flight
+> handshake by testing `phase === "countdown" && pending`, so a tab open across a
+> deploy would miss the test, take a different transition, and never re-arm its
+> readiness ack — the handshake would then time out against a correctly working
+> server. This is accepted because the project has no live users, so the client
+> that could be stranded does not exist; the alternative was keeping a name the
+> server has stopped believing. `app.js` accepts both names, so the only client
+> that breaks is one predating this change, talking to a server that has it.
 
 `shoot` is the **PUN!** instant: the server records `shootAt` and opens a 2s
 window. Any pick is judged by arrival time relative to `shootAt`.
 
-Every match runs a **ready handshake** between "matched" and the countdown: no
+Every match runs a **ready handshake** during `preparing`: no
 countdown may start until every *human* side has `POST`ed `/ready`. Clients
 re-send readiness every 2s while matched (self healing on a lost ack), and a
 client that reconnects mid-handshake is re-admitted by the `pending` snapshot
@@ -201,7 +223,7 @@ snapshot.
 
 | event | payload | meaning |
 | --- | --- | --- |
-| `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`countdown`/`shoot`/`done`) and opponent fields only when `ingame`; `shootAt`+`windowMs` whenever `phase` is `countdown` or `shoot` (`server.go:509`) — carrying the plan during countdown is what lets a client reconnect *inside* the window rather than being left without a deadline; `pending=true` only while a PvP handshake is still open. Used to reconcile on reconnect. |
+| `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`preparing`/`countdown`/`shoot`/`done`) and opponent fields only when `ingame`; `shootAt`+`windowMs` whenever `phase` is `countdown` or `shoot` (`server.go:509`) — carrying the plan during countdown is what lets a client reconnect *inside* the window rather than being left without a deadline, and `preparing` is excluded because no deadline exists yet to carry; `pending=true` only while a handshake is still open, i.e. `phase === "preparing"` and not every human ready. Used to reconcile on reconnect. |
 | `online` | `{count}` | Number of other clients currently connected. |
 | `waiting` | `{}` | Entered the queue. |
 | `matched` | `{opponentName, opponentCharacter}` | Opponent found; every client should start `POST /ready`. |
@@ -236,7 +258,7 @@ snapshot.
 | --- | --- | --- |
 | `POST /queue` | `{id}` | `200 {}` — joins the online queue (idempotent). `409 already in a match` while the client holds a live match. |
 | `POST /cancel` | `{id}` | `200 {}` — leaves the queue (best effort). |
-| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has already left the countdown phase and will send no countdown, and `409 not a side of this match` if the client's match pointer resolves to no side of it. Both 409s exist because a `200` is read by the client as "hold still, it is coming", so it must never be returned for an ack that did not register or for a match that will not run. Gates CPU and PvP alike. Idempotent while the match is live — every call renews the readiness lease — so a re-sent ack from a reconnecting client is still accepted, and a repeat ack from a client that is behaving correctly must not expire its own lease. |
+| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has left the open-gate phases (`preparing`/`countdown`) and will send no countdown, and `409 not a side of this match` if the client's match pointer resolves to no side of it. Both 409s exist because a `200` is read by the client as "hold still, it is coming", so it must never be returned for an ack that did not register or for a match that will not run. Gates CPU and PvP alike. Idempotent while the match is live — every call renews the readiness lease — so a re-sent ack from a reconnecting client is still accepted, and a repeat ack from a client that is behaving correctly must not expire its own lease. |
 | `POST /cpu` | `{id}` | `200 {}` — starts a CPU match (also drains/leaves the queue). The match still waits for the client's `/ready` ack before its countdown. `409 already in a match` while the client holds a live match. |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |

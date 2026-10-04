@@ -66,6 +66,14 @@ func abandonLabel(v int32) string {
 
 const (
 	phaseIdle int32 = iota
+	// phasePreparing covers the span between "a match exists" and "the countdown
+	// is announced": the round's background is chosen, `matched` has gone out,
+	// the client is loading assets for the match screen, and the readiness gate
+	// is waiting on every human side. It exists because that span used to be
+	// called phaseCountdown, which meant a phase named after something that had
+	// not started yet -- the countdown frames are only emitted on the far side of
+	// this phase, once every client has its screen up and has acked.
+	phasePreparing
 	phaseCountdown
 	phaseShoot
 	phaseDone
@@ -73,6 +81,13 @@ const (
 
 func phaseLabel(v int32) string {
 	switch v {
+	case phasePreparing:
+		// This string is on the wire -- the reconnect snapshot's `phase` -- and it
+		// changed from "countdown" to "preparing", which a tab open across the
+		// deploy would not recognise. That break is deliberate and recorded in
+		// docs/features/protocol.md: the honest name is worth more than
+		// compatibility with clients that do not exist.
+		return "preparing"
 	case phaseCountdown:
 		return "countdown"
 	case phaseShoot:
@@ -88,14 +103,19 @@ func phaseLabel(v int32) string {
 // legal (see allowedPhaseEdge) or when the current phase isn't "from" (e.g. a
 // stale goroutine racing a finished match), so only the first transition wins.
 //
-//	          idle       countdown   shoot
-//	countdown start
-//	shoot                run()
-//	done      --         abort()     abort(), finish(), run() after resolve
+//	          idle   preparing  countdown   shoot
+//	preparing  start()
+//	countdown          run() after the gate opens
+//	shoot                       run()
+//	done            abort()     abort(),        run() after resolve
+//	                             readyTimeout(),
+//	                             finish()
 func allowedPhaseEdge(from, to int32) bool {
 	switch from {
 	case phaseIdle:
-		return to == phaseCountdown
+		return to == phasePreparing
+	case phasePreparing:
+		return to == phaseCountdown || to == phaseDone
 	case phaseCountdown:
 		return to == phaseShoot || to == phaseDone
 	case phaseShoot:
@@ -359,7 +379,7 @@ func (m *match) waitReady() bool {
 // them; in a CPU match only the human is re-queued.
 func (m *match) readyTimeout() {
 	m.abandon = abandonTimeout
-	m.advance(phaseCountdown, phaseDone)
+	m.advance(phasePreparing, phaseDone)
 	m.requeueSide(0)
 	m.requeueSide(1)
 }
@@ -369,7 +389,7 @@ func (m *match) readyTimeout() {
 func (m *match) readyAbandon(i int) {
 	m.abandon = abandonOpponentLeft
 	m.abandonSide = i
-	m.advance(phaseCountdown, phaseDone)
+	m.advance(phasePreparing, phaseDone)
 	m.requeueSide(1 - i)
 }
 
@@ -390,7 +410,7 @@ func (m *match) abandonReason() string { return abandonLabel(m.abandon) }
 
 // start advances idle -> countdown and runs the match concurrently.
 func (m *match) start() {
-	m.advance(phaseIdle, phaseCountdown)
+	m.advance(phaseIdle, phasePreparing)
 	go m.run()
 }
 
@@ -417,6 +437,11 @@ func (m *match) run() {
 	if !m.waitReady() {
 		return
 	}
+	// Every human has its match screen up and has acked, so the countdown is
+	// about to be real. This is the boundary the phase exists to mark: before it
+	// the client was loading assets and waiting, after it the deadline is
+	// announced and countdown frames go out.
+	m.advance(phasePreparing, phaseCountdown)
 
 	// Announce the round schedule before the countdown starts: the deadline is
 	// fixed here and the loop sleeps to the announced slots. The client plays
@@ -734,7 +759,9 @@ func clientReactionMs(msg *moveMsg) *int64 {
 }
 
 func (m *match) abort() {
-	if !m.advance(phaseShoot, phaseDone) && !m.advance(phaseCountdown, phaseDone) {
+	if !m.advance(phaseShoot, phaseDone) &&
+		!m.advance(phaseCountdown, phaseDone) &&
+		!m.advance(phasePreparing, phaseDone) {
 		return
 	}
 	for i := range m.sides {

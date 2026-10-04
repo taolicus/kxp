@@ -499,8 +499,14 @@ function connect() {
       if (d.phase === 'done') {
         // Match already finished; there is no result to catch up on.
         transition('snapshot:idle', d);
-      } else if (d.phase === 'countdown' && d.pending) transition('snapshot:matched', d);
-      else if (d.phase === 'shoot' && d.shootAt && d.windowMs && Date.now() + clockSkew - d.shootAt >= d.windowMs) {
+      } else if ((d.phase === 'preparing' || d.phase === 'countdown') && d.pending) {
+        // Mid-handshake: the server is still holding the readiness gate open and
+        // has told us to re-admit, so come back as `matched`, which re-arms the
+        // ack. `preparing` is the server's name for this span; `countdown` is
+        // still accepted because a server predating the phase split reports the
+        // same state under the old name.
+        transition('snapshot:matched', d);
+      } else if (d.phase === 'shoot' && d.shootAt && d.windowMs && Date.now() + clockSkew - d.shootAt >= d.windowMs) {
         // PUN window already closed; nothing playable to rejoin.
         report('rejoin-past-window', 'shoot');
         transition('snapshot:idle', d);

@@ -506,11 +506,17 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 			out["opponentName"] = m.opponentName(i)
 			out["opponentCharacter"] = m.opponentCharacter(i)
 		}
+		// "preparing" is deliberately absent: the deadline is fixed at the far
+		// side of that phase, so there is nothing to leak during it.
 		if (out["phase"] == "shoot" || out["phase"] == "countdown") && m.hasShootAt() {
 			out["windowMs"] = shootWindow.Milliseconds()
 			out["shootAt"] = m.shootAtMs()
 		}
-		if out["phase"] == "countdown" && !m.allHumanReady() {
+		// pending means "this client is mid-handshake and must re-admit and
+		// re-ack", which is only true while the gate is still open and not yet
+		// satisfied. That is phasePreparing and nothing else -- once the countdown
+		// phase opens, the gate is closed by definition.
+		if out["phase"] == "preparing" && !m.allHumanReady() {
 			out["pending"] = true
 		}
 	} else if c.queueing {
@@ -637,6 +643,7 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 	h.active.Add(-1)
 	m.advance(phaseShoot, phaseDone)
 	m.advance(phaseCountdown, phaseDone)
+	m.advance(phasePreparing, phaseDone)
 	// A side can be re-paired into a *new* match before this teardown runs: an
 	// abandoned handshake re-queues both sides, and requeue -> tryMatch ->
 	// makeMatch overwrites their match pointer. Telling such a side to go idle
@@ -773,7 +780,11 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 	// docs/issues/silent-stuck.md, reached by telling the client it succeeded.
 	// 409 says the
 	// gate is gone, which the client can act on.
-	if p := m.phase.Load(); p != phaseCountdown {
+	// The gate is open across both phasePreparing and phaseCountdown: acks are
+	// what *closes* the preparing phase, so rejecting anything but phaseCountdown
+	// would reject every ack that matters. It closes at the end of phaseCountdown,
+	// where a timeout or a departure has already moved the match to done.
+	if p := m.phase.Load(); p != phasePreparing && p != phaseCountdown {
 		h.handlerError(w, http.StatusConflict, "ready gate closed")
 		return
 	}

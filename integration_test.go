@@ -390,8 +390,8 @@ func TestEndpointValidation(t *testing.T) {
 //
 // finishMatch nils c.match, so by the time a client acks a match that has
 // properly finished, handleReady already answers 400 "no active match" — correct,
-// and covered by the requeue tests. The narrow gap is the window between
-// advance(phaseCountdown, phaseDone) and finishMatch running: the phase is done
+// and covered by the requeue tests. The narrow gap is the window between the
+// advance to phaseDone and finishMatch running: the phase is done
 // but c.match is still set. An ack in that window used to be answered 200, which
 // claims the countdown is coming for a match that will never run one.
 func TestReadyAckOnAbandonedMatchIsRejected(t *testing.T) {
@@ -410,6 +410,9 @@ func TestReadyAckOnAbandonedMatchIsRejected(t *testing.T) {
 	// Drive the match to done but keep c.match set, which is exactly the window:
 	// the phase advances before the teardown clears the pointer. h.client takes
 	// h.mu itself, so it has to be called before the lock is held, not inside it.
+	// A match that has sent `matched` and not yet been acked is in phasePreparing,
+	// which is the phase the ready gate is open in -- acking from phaseCountdown
+	// here would be a no-op and the match would still accept acks.
 	c := h.client(id)
 	h.mu.Lock()
 	m := c.match
@@ -417,7 +420,10 @@ func TestReadyAckOnAbandonedMatchIsRejected(t *testing.T) {
 	if m == nil {
 		t.Fatal("no match attached to the client after matched")
 	}
-	m.advance(phaseCountdown, phaseDone)
+	if got := m.phase.Load(); got != phasePreparing {
+		t.Fatalf("phase after matched = %s, want preparing", phaseLabel(got))
+	}
+	m.advance(phasePreparing, phaseDone)
 
 	code, body := postJSON(t, srv.URL+"/ready", map[string]any{"id": id})
 	if code != http.StatusConflict {
