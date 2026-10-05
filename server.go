@@ -854,8 +854,9 @@ func validCPUSeriesTarget(n int) bool {
 
 func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID           string
-		RoundsTarget int
+		ID                string
+		RoundsTarget      int
+		OpponentCharacter string
 	}
 	if err := h.decode(w, r, &req); err != nil {
 		return
@@ -870,6 +871,19 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	if !validCPUSeriesTarget(target) {
 		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
 		return
+	}
+	// Which fighter the bot plays, for a ladder floor. Absent means the random
+	// pick this handler always made, so an older client and every probe are
+	// unaffected. Validated against the roster rather than passed through: the
+	// engine stores it on the side and sends it to the client, so an unvalidated
+	// string would put an unknown name on the wire and in the opponent slot.
+	opponent := randomCharacterID()
+	if req.OpponentCharacter != "" {
+		if !validCharacter(req.OpponentCharacter) {
+			h.handlerError(w, http.StatusBadRequest, "invalid opponent character")
+			return
+		}
+		opponent = req.OpponentCharacter
 	}
 	c := h.client(req.ID)
 	if c == nil {
@@ -904,7 +918,7 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		h.dequeueLocked(c)
 		c.queueing = false
 	}
-	m := h.makeMatch(newID(4), target, side{client: c}, side{bot: true, character: randomCharacterID()})
+	m := h.makeMatch(newID(4), target, side{client: c}, side{bot: true, character: opponent})
 	h.startMatchLocked(m)
 	h.mu.Unlock()
 	w.Write([]byte("{}"))

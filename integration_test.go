@@ -281,6 +281,46 @@ func TestCPUSeriesLengthIsTheOneRequested(t *testing.T) {
 	def.st.close()
 }
 
+// A ladder floor asks for the fighter it fights. The client may name the bot's
+// character, and the server puts that one on the wire; absent stays random, and a
+// name outside the roster is refused rather than passed through to the engine.
+func TestCPUOpponentIsTheOneAskedFor(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+
+	st, id := connectSSE(t, srv, "")
+	defer st.close()
+
+	if code, _ := postJSON(t, srv.URL+"/cpu", map[string]any{
+		"id": id, "opponentCharacter": "hielito",
+	}); code != 200 {
+		t.Fatalf("/cpu status: %d", code)
+	}
+	if got := st.readEventTyp(t, "matched", 5*time.Second)["opponentCharacter"]; got != "hielito" {
+		t.Errorf("matched opponentCharacter = %v, want hielito", got)
+	}
+	st.close()
+
+	// An unknown name is a 400 and no match, for the same reason /character
+	// refuses one: the value reaches the opponent slot and the wire unfiltered.
+	bad, badID := connectSSE(t, srv, "")
+	defer bad.close()
+	if code, _ := postJSON(t, srv.URL+"/cpu", map[string]any{
+		"id": badID, "opponentCharacter": "sub-zero",
+	}); code != http.StatusBadRequest {
+		t.Fatalf("/cpu with an unknown opponent: status %d, want 400", code)
+	}
+	// Read under the lock, but not through client(): that takes the lock too.
+	badClient := h.client(badID)
+	h.mu.Lock()
+	held := badClient.match
+	h.mu.Unlock()
+	if held != nil {
+		t.Fatal("a refused opponent character still produced a match")
+	}
+}
+
 // A length the lobby does not offer is rejected, and nothing is created: the
 // client stays matchless rather than being handed a series it did not ask for.
 func TestCPURejectsASeriesLengthItDoesNotOffer(t *testing.T) {
