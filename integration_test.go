@@ -239,10 +239,106 @@ func TestCPUIntegration(t *testing.T) {
 	if outcome != "win" && outcome != "loss" && outcome != "draw" {
 		t.Fatalf("unexpected outcome %q", outcome)
 	}
-	if data["roundsTarget"] != float64(seriesTarget) {
-		t.Errorf("roundsTarget = %v, want %d", data["roundsTarget"], seriesTarget)
+	if data["roundsTarget"] != float64(defaultSeriesTarget) {
+		t.Errorf("roundsTarget = %v, want %d", data["roundsTarget"], defaultSeriesTarget)
 	}
 	finishCPUSeries(t, st, data)
+}
+
+// The lobby offers a one-round CPU match as well as the default first to three,
+// so `roundsTarget` on POST /cpu decides how long the series is. Both halves
+// matter: a target the server ignores would make the lobby control a lie, and a
+// target it accepts blindly would let a hand-written request invent a series
+// nothing describes.
+func TestCPUSeriesLengthIsTheOneRequested(t *testing.T) {
+	one := startCPUWithTarget(t, 1)
+	if got := one.matched["roundsTarget"]; got != float64(1) {
+		t.Errorf("one round: matched roundsTarget = %v, want 1", got)
+	}
+	postJSON(t, one.url+"/ready", map[string]any{"id": one.id})
+	readCountdown(t, one.st, 5*time.Second)
+	if code, _ := postJSON(t, one.url+"/move", map[string]any{"id": one.id, "move": "rock"}); code != 200 {
+		t.Fatal("/move rejected the on-time pick")
+	}
+	res := one.st.readEventTyp(t, "result", 8*time.Second)
+	if res["roundsTarget"] != float64(1) {
+		t.Errorf("one round: result roundsTarget = %v, want 1", res["roundsTarget"])
+	}
+	// The whole point of asking for one round. That nothing follows the result is
+	// pinned in series_test.go, where the gap between rounds is short enough to
+	// wait out: here it is the real seriesBreak.
+	if res["seriesOver"] != true {
+		t.Errorf("one round: seriesOver = %v, want true after the only round", res["seriesOver"])
+	}
+	one.st.close()
+
+	// The default still applies when the request names none, which is what an
+	// older client and every probe send.
+	def := startCPUWithTarget(t, 0)
+	if got := def.matched["roundsTarget"]; got != float64(defaultSeriesTarget) {
+		t.Errorf("default: matched roundsTarget = %v, want %d", got, defaultSeriesTarget)
+	}
+	def.st.close()
+}
+
+// A length the lobby does not offer is rejected, and nothing is created: the
+// client stays matchless rather than being handed a series it did not ask for.
+func TestCPURejectsASeriesLengthItDoesNotOffer(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+
+	st, id := connectSSE(t, srv, "")
+	defer st.close()
+
+	c := h.client(id)
+	for _, target := range []int{2, 4, -1} {
+		code, _ := postJSON(t, srv.URL+"/cpu", map[string]any{"id": id, "roundsTarget": target})
+		if code != http.StatusBadRequest {
+			t.Errorf("/cpu roundsTarget %d: status %d, want 400", target, code)
+		}
+		h.mu.Lock()
+		held := c.match
+		h.mu.Unlock()
+		if held != nil {
+			t.Fatalf("/cpu roundsTarget %d: rejected, but the client was given a match", target)
+		}
+	}
+
+	// The same client can still start an offered one, so the rejection cost it
+	// nothing but the request.
+	if code, _ := postJSON(t, srv.URL+"/cpu", map[string]any{"id": id, "roundsTarget": 1}); code != 200 {
+		t.Fatalf("/cpu after a rejection: status %d", code)
+	}
+	st.readEventTyp(t, "matched", 5*time.Second)
+}
+
+// startCPUWithTarget posts /cpu with the given roundsTarget (0 for "not
+// mentioned") and returns the client, its hub's URL and its matched frame.
+func startCPUWithTarget(t *testing.T, target int) struct {
+	st      *sseStream
+	url     string
+	id      string
+	matched map[string]any
+} {
+	t.Helper()
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	st, id := connectSSE(t, srv, "")
+	body := map[string]any{"id": id}
+	if target != 0 {
+		body["roundsTarget"] = target
+	}
+	if code, _ := postJSON(t, srv.URL+"/cpu", body); code != 200 {
+		t.Fatalf("/cpu roundsTarget %d: status %d", target, code)
+	}
+	return struct {
+		st      *sseStream
+		url     string
+		id      string
+		matched map[string]any
+	}{st: st, url: srv.URL, id: id, matched: st.readEventTyp(t, "matched", 5*time.Second)}
 }
 
 func TestPVPIntegration(t *testing.T) {

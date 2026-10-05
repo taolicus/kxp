@@ -96,8 +96,9 @@ prospective fix, with the causes still unconfirmed.
 
 ## A match is a series of rounds
 
-A CPU match is played as a series: first to `seriesTarget` (3) decisive round
-wins, a draw replayed as a fresh round, and a `void` round ([connectivity-safe
+A CPU match is played as a series: first to `defaultSeriesTarget` (3) decisive
+round wins — or the length the lobby asked for, which today can also be a single
+round — a draw replayed as a fresh round, and a `void` round ([connectivity-safe
 scoring](../tasks/open/connectivity-safe-scoring.md)) counted as a round win for
 the opponent — a dropped connection costs a round, not the match. `run()` acks
 the ready handshake once per *match*, then loops `playRound()`; `playRound()`
@@ -106,6 +107,14 @@ series continues. PvP matches are still one round, which is the other half of
 [game-mode-architecture](../tasks/open/game-mode-architecture.md) and not an
 oversight: re-opening the ready handshake between rounds is a wire-visible
 decision that belongs with the series loop, not beside it.
+
+**The target is a constructor argument, not a constant.** `newMatch(id,
+roundsTarget)` takes the length, because the lobby offers a one-round CPU match
+alongside the default and a target fixed at construction would have to be
+overwritten afterwards — on a field documented as belonging to `run`'s own
+goroutine. The hub decides what it will accept (`cpuSeriesOffer`, a closed set
+of 1 and 3); the engine takes what it is handed and never validates a request it
+does not parse.
 
 **A target goes on the wire only where a series exists.** `seriesFields()` adds
 `roundsTarget` to `matched` and to every `result`, and only when

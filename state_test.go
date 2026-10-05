@@ -78,7 +78,7 @@ func TestAllowedTransitionTable(t *testing.T) {
 func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("da1", side{client: a}, side{client: b})
+	m := h.makeMatch("da1", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -114,7 +114,7 @@ func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 func TestCountdownPhaseBeginsOnlyWhenTheGateOpens(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("phase-split", side{client: a}, side{client: b})
+	m := h.makeMatch("phase-split", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 	waitForEvent(t, a, "matched")
 

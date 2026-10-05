@@ -135,7 +135,12 @@ function loadApp(opts = {}) {
       if (!elements.has(sel)) elements.set(sel, stubElement());
       return elements.get(sel);
     },
-    querySelectorAll: () => [],
+    // Resolves seeded selectors to the list a test put there, and nothing
+    // otherwise. A control wired from a NodeList -- the lobby's series-length
+    // toggle -- does not exist in a test unless the harness was told what the
+    // markup holds, and "return nothing" would leave its handler unwired rather
+    // than fail loudly, which is the wrong way to find out.
+    querySelectorAll: (sel) => elements.get(sel) || [],
     addEventListener(type, fn) { docHandlers[type] = fn; },
   };
   ctx.KXP = KXP;
@@ -176,6 +181,11 @@ function loadApp(opts = {}) {
     posted: () => posts.map((p) => String(p.url).replace(/^https?:\/\/[^/]+/, '')),
     // The stub itself, for assertions on a property other than text.
     el: (sel) => elements.get(sel),
+    // Seed the elements a selector is to resolve to, for controls the harness
+    // cannot model from markup it does not read. `.selected` selectors need the
+    // same stub under both spellings, since classList changes are per-object:
+    // seed the button, then seed the `.selected` selector with that same stub.
+    seed: (sel, el) => elements.set(sel, el),
     // Run app.js's wiring, which is otherwise only reachable from DOMContentLoaded
     // and so never runs in a test. Needed for anything a click handler does. It is
     // async (it awaits the roster before wiring), so callers must await it or the
@@ -257,4 +267,4 @@ const BGS = JSON.parse(
 );
 
 module.exports = {
-  BGS, loadApp };
+  BGS, loadApp, stubElement };

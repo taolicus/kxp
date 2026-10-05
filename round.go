@@ -49,10 +49,12 @@ var readyRecheck = 250 * time.Millisecond
 // it. A package var so tests do not have to wait it out.
 var seriesBreak = 3 * time.Second
 
-// seriesTarget is the number of decisive round wins that ends a series. Named
-// rather than a literal in newMatch so the engine, its tests and the protocol
-// docs all quote one number.
-const seriesTarget = 3
+// defaultSeriesTarget is the number of decisive round wins that ends a series
+// when the request that started it named none -- an older client, or a probe.
+// A CPU match may ask for a shorter one; the hub validates what it will accept
+// and hands the number here. Named rather than a literal in newMatch so the
+// engine, its tests and the protocol docs all quote one number.
+const defaultSeriesTarget = 3
 
 // Why a pending match was cancelled before its countdown began. Reported to the
 // client on the teardown frame so a bounced player learns the round was
@@ -269,12 +271,17 @@ type match struct {
 	requeued [2]bool
 }
 
-func newMatch(id string) *match {
+// newMatch builds a match that ends when one side has won roundsTarget decisive
+// rounds. It is a parameter rather than the default alone because the lobby lets
+// a player choose a one-round CPU match, and a target fixed at construction
+// would have to be overwritten afterwards -- on a field documented as belonging
+// to run's goroutine.
+func newMatch(id string, roundsTarget int) *match {
 	return &match{
 		id:           id,
 		readyCh:      make(chan struct{}),
 		now:          time.Now,
-		roundsTarget: seriesTarget,
+		roundsTarget: roundsTarget,
 		round:        1,
 	}
 }

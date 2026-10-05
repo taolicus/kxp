@@ -40,7 +40,7 @@ func TestRoundCarriesCharacters(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
 	b.character = "robok"
-	m := h.makeMatch("mc1", side{client: a}, side{client: b})
+	m := h.makeMatch("mc1", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	md := waitForEvent(t, a, "matched")
@@ -76,7 +76,7 @@ func TestMatchExposesBotCharacter(t *testing.T) {
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch("mc2", side{client: a}, side{bot: true, character: "rayito"})
+	m := h.makeMatch("mc2", defaultSeriesTarget, side{client: a}, side{bot: true, character: "rayito"})
 	m.start()
 
 	md := waitForEvent(t, a, "matched")

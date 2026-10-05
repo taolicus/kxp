@@ -8,7 +8,7 @@ import (
 func TestPvPReadyGate(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("rg", side{client: a}, side{client: b})
+	m := h.makeMatch("rg", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -41,7 +41,7 @@ func TestCPUWaitsForHumanReady(t *testing.T) {
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch("cpu0", side{client: a}, side{bot: true})
+	m := h.makeMatch("cpu0", defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -63,7 +63,7 @@ func TestCPUBotAckDoesNotReleaseGate(t *testing.T) {
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch("cpu1", side{client: a}, side{bot: true})
+	m := h.makeMatch("cpu1", defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -94,7 +94,7 @@ func TestCPUReadyTimeoutReturnsHumanToLobby(t *testing.T) {
 
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("cpu2", side{client: a}, side{bot: true})
+	m := h.makeMatch("cpu2", defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -128,7 +128,7 @@ func TestReadyTimeoutRequeuesAndExplainsBothSides(t *testing.T) {
 
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("to2", side{client: a}, side{client: b})
+	m := h.makeMatch("to2", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -160,7 +160,7 @@ func TestReadyTimeoutRequeuesAndExplainsBothSides(t *testing.T) {
 func TestReadyAbandonExplainsToSurvivor(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("ab2", side{client: a}, side{client: b})
+	m := h.makeMatch("ab2", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -191,7 +191,7 @@ func TestReadyAbandonExplainsToSurvivor(t *testing.T) {
 func TestFinishedMatchTeardownCarriesNoReason(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("fin1", side{client: a}, side{client: b})
+	m := h.makeMatch("fin1", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -217,7 +217,7 @@ func TestFinishedMatchTeardownCarriesNoReason(t *testing.T) {
 func TestReadyAbandonOnLeaveRequeuesSurvivor(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("ab1", side{client: a}, side{client: b})
+	m := h.makeMatch("ab1", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -241,7 +241,7 @@ func TestReadyTimeoutRequeuesBoth(t *testing.T) {
 
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("to1", side{client: a}, side{client: b})
+	m := h.makeMatch("to1", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")

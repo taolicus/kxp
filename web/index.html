@@ -25,6 +25,16 @@
       <button id="btn-online" class="primary" disabled>Play Online</button>
       <button id="btn-cpu">Play vs CPU</button>
     </div>
+    <!-- How many round wins end a CPU match. The numbers live in the markup
+         because they are a choice the player reads here; app.js posts whatever
+         is selected and the server decides whether it is one it offers. Online
+         is absent from this choice on purpose: a PvP match is one round, which
+         is the other half of docs/tasks/open/game-mode-architecture.md. -->
+    <div id="cpu-length" class="seg" role="group" aria-label="CPU match length">
+      <span class="seg-label">Vs CPU:</span>
+      <button class="seg-btn" data-rounds="1">1 round</button>
+      <button class="seg-btn selected" data-rounds="3">First to 3</button>
+    </div>
   </section>
 
   <section id="choose" class="view hidden">

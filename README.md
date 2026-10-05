@@ -9,9 +9,9 @@ original terminal game.
 - **Single-binary web app** — the UI is embedded in the executable.
 - **Play Online** — matchmaking pairs you with another player, synced countdown
   and a shared **PUN!** instant.
-- **Play vs CPU** — a bot picks a random move after a random reaction delay,
-  best of 5 rounds (first to 3; a draw replays), scored as pips under each
-  fighter.
+- **Play vs CPU** — a bot picks a random move after a random reaction delay, in
+  a series you pick in the lobby: one round, or best of 5 (first to 3; a draw
+  replays). Scored as pips under each fighter.
 - **Timing rules** — picks outside the shoot window are rejected with `400`
   (a second pick with `409`); no pick in time is a timeout loss.
 - Server-sent events (SSE) for push, plain `POST` for player actions — no

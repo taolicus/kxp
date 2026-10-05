@@ -595,7 +595,12 @@ func (h *Hub) tryMatch() {
 		b := h.queue[1]
 		h.queue = h.queue[2:]
 		a.queueing, b.queueing = false, false
-		m := h.makeMatch(newID(4), side{client: a}, side{client: b})
+		// A PvP match is one round, so this number is never read: seriesMatch()
+		// gates the series everywhere, from the scoreboard on the wire to the
+		// tally in judge. It is passed anyway rather than zeroed, so that the day
+		// the PvP half of game-mode-architecture lands the default is a series
+		// rather than a match that ends before its first round is judged.
+		m := h.makeMatch(newID(4), defaultSeriesTarget, side{client: a}, side{client: b})
 		h.startMatchLocked(m)
 	}
 	h.mu.Unlock()
@@ -603,9 +608,9 @@ func (h *Hub) tryMatch() {
 
 // makeMatch builds an engine match from concrete sides and wires the engine's
 // callbacks back to the hub. Callers must hold h.mu.
-func (h *Hub) makeMatch(id string, a, b side) *match {
+func (h *Hub) makeMatch(id string, roundsTarget int, a, b side) *match {
 	src := [2]side{a, b}
-	m := newMatch(id)
+	m := newMatch(id, roundsTarget)
 	m.background = pickBackground()
 	for i := range src {
 		p := matchParty{name: "Opponent", character: src[i].character}
@@ -831,9 +836,39 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("{}"))
 }
 
+// cpuSeriesOffer is the series lengths a CPU match may be asked for, as decisive
+// round wins that end it. A closed set rather than a range: the lobby offers
+// these and no others, so a target on the wire is always something the player
+// was shown. Accepting any number would let a hand-written request invent a
+// series the game has never described.
+var cpuSeriesOffer = []int{1, defaultSeriesTarget}
+
+func validCPUSeriesTarget(n int) bool {
+	for _, t := range cpuSeriesOffer {
+		if n == t {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
-	var req struct{ ID string }
+	var req struct {
+		ID           string
+		RoundsTarget int
+	}
 	if err := h.decode(w, r, &req); err != nil {
+		return
+	}
+	// Absent means the client predates the choice, so it gets the default rather
+	// than an error: the field is additive and a tab open across the deploy must
+	// still be able to start a match.
+	target := req.RoundsTarget
+	if target == 0 {
+		target = defaultSeriesTarget
+	}
+	if !validCPUSeriesTarget(target) {
+		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
 		return
 	}
 	c := h.client(req.ID)
@@ -869,7 +904,7 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		h.dequeueLocked(c)
 		c.queueing = false
 	}
-	m := h.makeMatch(newID(4), side{client: c}, side{bot: true, character: randomCharacterID()})
+	m := h.makeMatch(newID(4), target, side{client: c}, side{bot: true, character: randomCharacterID()})
 	h.startMatchLocked(m)
 	h.mu.Unlock()
 	w.Write([]byte("{}"))

@@ -218,6 +218,37 @@ button.primary:hover {
   font-size: 0.9rem;
 }
 
+/* The CPU series-length choice in the lobby: a segmented pair. It reads as part
+   of the lobby rather than as a dialog, because it only qualifies the button
+   above it. */
+.seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: var(--s2);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.seg-btn {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border-2);
+  border-radius: 0.6rem;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.seg-btn.selected {
+  border-color: var(--accent);
+  background: var(--panel-3);
+  color: var(--text);
+  font-weight: 700;
+}
+
 /* Cancelled-handshake notice. Sits above whichever view is showing and states
    only what the server can prove — the handshake was cancelled — never which
    player was responsible, which the server cannot know. */

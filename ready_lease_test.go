@@ -29,7 +29,7 @@ func advance(c *fakeClock, d time.Duration) {
 func twoSided(id string) (*Hub, *match, *Client, *Client, *fakeClock) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch(id, side{client: a}, side{client: b})
+	m := h.makeMatch(id, defaultSeriesTarget, side{client: a}, side{client: b})
 	clk := leaseClock()
 	m.now = clk.get
 	return h, m, a, b, clk
@@ -87,7 +87,7 @@ func TestRenewalReopensTheGate(t *testing.T) {
 // keeps the lease alive. An implementation that did that would stall every match
 // for a client behaving perfectly.
 func TestRepeatedAckRenewsTheLease(t *testing.T) {
-	m := newMatch("renew-lease")
+	m := newMatch("renew-lease", defaultSeriesTarget)
 	clk := leaseClock()
 	m.now = clk.get
 
@@ -113,7 +113,7 @@ func TestRepeatedAckRenewsTheLease(t *testing.T) {
 // this passed vacuously, everything above would be satisfied by a gate that never
 // expires anything.
 func TestStaleAckExpiresTheGate(t *testing.T) {
-	m := newMatch("expire")
+	m := newMatch("expire", defaultSeriesTarget)
 	clk := leaseClock()
 	m.now = clk.get
 
@@ -129,7 +129,7 @@ func TestStaleAckExpiresTheGate(t *testing.T) {
 func TestBotNeverSatisfiesTheGateLease(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("cpu-lease", side{client: a}, side{bot: true})
+	m := h.makeMatch("cpu-lease", defaultSeriesTarget, side{client: a}, side{bot: true})
 	clk := leaseClock()
 	m.now = clk.get
 

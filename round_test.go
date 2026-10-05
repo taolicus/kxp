@@ -64,7 +64,7 @@ func waitEventWithin(t *testing.T, c *Client, typ string, within time.Duration) 
 func TestPVPRound(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("m1", side{client: a}, side{client: b})
+	m := h.makeMatch("m1", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -99,7 +99,7 @@ func TestPVPRound(t *testing.T) {
 func TestEarlyPickDisqualifies(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("m2", side{client: a}, side{client: b})
+	m := h.makeMatch("m2", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -124,7 +124,7 @@ func TestEarlyPickDisqualifies(t *testing.T) {
 func TestTimeoutLoses(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("m3", side{client: a}, side{client: b})
+	m := h.makeMatch("m3", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -153,7 +153,7 @@ func TestTimeoutLoses(t *testing.T) {
 func TestShootEventCarriesWindow(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("sw1", side{client: a}, side{bot: true, character: "rayito"})
+	m := h.makeMatch("sw1", defaultSeriesTarget, side{client: a}, side{bot: true, character: "rayito"})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -173,7 +173,7 @@ func TestShootEventCarriesWindow(t *testing.T) {
 func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("pl1", side{client: a}, side{bot: true, character: "rayito"})
+	m := h.makeMatch("pl1", defaultSeriesTarget, side{client: a}, side{bot: true, character: "rayito"})
 	m.start()
 	m.ackReady(0)
 
@@ -223,7 +223,7 @@ func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
 func TestCountdownBeatsLeadPUN(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("pl1", side{client: a}, side{bot: true, character: "rayito"})
+	m := h.makeMatch("pl1", defaultSeriesTarget, side{client: a}, side{bot: true, character: "rayito"})
 	m.start()
 	m.ackReady(0)
 
@@ -250,7 +250,7 @@ func TestCPURound(t *testing.T) {
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch("m4", side{client: a}, side{bot: true})
+	m := h.makeMatch("m4", defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.start()
 	m.ackReady(0)
 
@@ -277,7 +277,7 @@ func TestCPURound(t *testing.T) {
 func TestDrainPendingCountsBufferedMove(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("dr1", side{client: a}, side{bot: true})
+	m := h.makeMatch("dr1", defaultSeriesTarget, side{client: a}, side{bot: true})
 	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}
 
 	m.drainPending()
@@ -293,7 +293,7 @@ func TestDrainPendingCountsBufferedMove(t *testing.T) {
 func TestDrainPendingLeavesEmptyChannelAsTimeout(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("dr0", side{client: a}, side{bot: true})
+	m := h.makeMatch("dr0", defaultSeriesTarget, side{client: a}, side{bot: true})
 
 	m.drainPending()
 

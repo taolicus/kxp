@@ -301,13 +301,32 @@ snapshot.
 | `POST /queue` | `{id}` | `200 {}` — joins the online queue (idempotent). `409 already in a match` while the client holds a live match. |
 | `POST /cancel` | `{id}` | `200 {}` — leaves the queue (best effort). |
 | `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has left the open-gate phases (`preparing`/`countdown`) and will send no countdown, and `409 not a side of this match` if the client's match pointer resolves to no side of it. Both 409s exist because a `200` is read by the client as "hold still, it is coming", so it must never be returned for an ack that did not register or for a match that will not run. Gates CPU and PvP alike. Idempotent while the match is live — every call renews the readiness lease — so a re-sent ack from a reconnecting client is still accepted, and a repeat ack from a client that is behaving correctly must not expire its own lease. |
-| `POST /cpu` | `{id}` | `200 {}` — starts a CPU match (also drains/leaves the queue). The match still waits for the client's `/ready` ack before its countdown. `409 already in a match` while the client holds a live match. |
+| `POST /cpu` | `{id, roundsTarget?}` | `200 {}` — starts a CPU match (also drains/leaves the queue), ending when one side has won `roundsTarget` decisive rounds. `roundsTarget` is the length the lobby offers (`1` or `3`); absent means `3`, so a client predating the field still starts a match. Any other value is `400 unsupported roundsTarget` — the set is closed rather than a range, so a hand-written request cannot invent a series the game has never described. `409 already in a match` while the client holds a live match. The match still waits for the client's `/ready` ack before its countdown. |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
 | `GET /characters` | — | `200 [{id, name, emoji}]` — the full roster; the single source of truth for character data. The client fetches it at startup and no longer bundles its own copy. |
 | `GET /health` | — | `200 {status, uptime, online, queue, activeMatches, build}` — liveness/readiness probe. Exempt from rate limiting. `build` is `{sha, modified, source}`: the commit the running binary was built from, whether that build tree had uncommitted changes, and how the identity was obtained (`vcs`, `ldflags`, or `unknown`). `sha` is `"unknown"` when the binary carries no VCS metadata. The probe suite's `t1` compares it against the local HEAD — without it, a green live result cannot be distinguished from a stale binary serving traffic. |
 | `GET /metrics` | — | `200 {uptime, online, queue, matches, counts}` where `counts` carries cumulative request/reject/join/leave/drop/rate-limit/beacon streams plus breakdowns `byStatus`, `byCode`, `byMsg`, `byBeaconKind`. Read-only; exempt from rate limiting. |
 | `POST /report` | `{id, kind, state, detail?, ts?}` | `200 {}` — fire-and-forget client-side error beacon (SSE stall, fetch failure, machine-rejected transition). Unknown/stale `id` accepted and logged — a beacon from a reaped client is itself diagnostic data. `kind` required (`400 missing kind`); rate-limited like other POSTs; the client throttles (see `beaconGate` in `web/kxp.js`). |
+
+### Why the series length is a closed set
+
+`roundsTarget` on `POST /cpu` is validated against the two lengths the lobby
+offers, not against a range. A range would accept `2`, which nothing in the UI
+describes: the client would be asked to draw a two-pip row for a mode that does
+not exist, and the server would be maintaining series behaviour for a request
+that no player can make. Absent is not an error either — it means the client
+predates the field, and it gets the default so a tab open across the deploy can
+still start a match.
+
+The choice is CPU-only, and deliberately: a PvP match is one round until the
+ready-per-round half of
+[game-mode-architecture](../tasks/open/game-mode-architecture.md) lands, so
+honouring a series there would park two players in a match neither can leave.
+`/queue` therefore takes no length at all, and the online path passes
+`defaultSeriesTarget` to `makeMatch` unused — passing the default rather than
+zero, so that if the PvP half ever lands the default is a series rather than a
+match that ends before its first round is judged.
 
 ### One live match per client
 

@@ -4,6 +4,12 @@ const SM = window.StateMachine;
 let id = null;
 let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
 let lastMode = 'online'; // online | cpu — mode of the finished match
+// The CPU series length the lobby has selected, and the one the finished match
+// actually played. Both come off the wire rather than from a literal here: the
+// selection is read from the control that offers it, and a rematch repeats what
+// the player just played rather than what the lobby happens to show now.
+let cpuTarget = 0;
+let lastTarget = 0;
 let pendingMode = null; // online | cpu — mode picked on the lobby, awaiting fighter confirmation
 let es = null;
 let shootTimer = null;
@@ -584,6 +590,7 @@ const enter = {
     clearTimeout(stallTimer);
     lockMoves();
     lastMode = d.mode || 'online';
+    lastTarget = Number(d.roundsTarget) || 0;
     const s = KXP.applyResult(getStats(), d.outcome);
     saveStats(s);
     setStats();
@@ -711,7 +718,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     pendingMode = '';
     btn.disabled = true;
     if (mode === 'online') transition('queue');
-    const p = post(mode === 'online' ? '/queue' : '/cpu');
+    const p = mode === 'online' ? post('/queue') : post('/cpu', { roundsTarget: cpuTarget });
     Promise.resolve(p).then((res) => {
       if (res && res.ok) return;
       btn.disabled = false;
@@ -719,6 +726,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (res && res.status === 409) setNotice('You are already in a match.');
     });
   });
+  // The length a CPU match runs for. The numbers are the control's own, so the
+  // client posts a choice it was shown rather than a copy of the rules; the
+  // server decides whether it is a length it offers.
+  document.querySelectorAll('#cpu-length .seg-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#cpu-length .seg-btn').forEach((o) => {
+        o.classList.toggle('selected', o === b);
+      });
+      cpuTarget = Number(b.dataset.rounds) || 0;
+    });
+  });
+  cpuTarget = Number($('#cpu-length .seg-btn.selected').dataset.rounds) || 0;
+
   $('#btn-back').addEventListener('click', () => show('lobby'));
   $('#btn-cancel').addEventListener('click', () => {
     transition('cancel');
@@ -728,7 +748,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-again').addEventListener('click', () => {
     if (lastMode === 'cpu') {
       $('#btn-again').disabled = true;
-      post('/cpu').then((res) => {
+      // The match that just ended, not the lobby's current selection: "Play
+      // Again" means the same match again. Falls back to the selection for a
+      // server that reported no target, which is the same "older server" reading
+      // as a result without the field.
+      post('/cpu', { roundsTarget: lastTarget || cpuTarget }).then((res) => {
         if (!res || !res.ok) $('#btn-again').disabled = false;
       });
     } else {

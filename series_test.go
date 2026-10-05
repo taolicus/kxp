@@ -29,7 +29,7 @@ func seriesMatchForTest(t *testing.T) (*match, *Client) {
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel)
-	m := h.makeMatch("s1", side{client: a}, side{bot: true})
+	m := h.makeMatch("s1", defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.phase.Store(phaseDone)
 	return m, a
 }
@@ -104,7 +104,7 @@ func TestSeriesTallyCountsWinsAndIgnoresDraws(t *testing.T) {
 
 func TestSeriesEndsWhenTheTargetIsReached(t *testing.T) {
 	m, a := seriesMatchForTest(t)
-	m.win = [2]int{0, seriesTarget - 1}
+	m.win = [2]int{0, defaultSeriesTarget - 1}
 
 	if judgeRoundAs(t, m, a, [2]Result{ResultLoss, ResultWin}) {
 		t.Fatal("judge kept playing after the opponent reached the target")
@@ -112,8 +112,8 @@ func TestSeriesEndsWhenTheTargetIsReached(t *testing.T) {
 	if !m.seriesOver {
 		t.Error("seriesOver = false, want true on the round that reached the target")
 	}
-	if m.win[1] != seriesTarget {
-		t.Errorf("tally = %v, want the opponent on %d", m.win, seriesTarget)
+	if m.win[1] != defaultSeriesTarget {
+		t.Errorf("tally = %v, want the opponent on %d", m.win, defaultSeriesTarget)
 	}
 	// The winning round is still a round that was played and reported, so the
 	// round number the client was told does not move past it.
@@ -144,7 +144,7 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 	noSeriesBreak(t)
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("pvps", side{client: a}, side{client: b})
+	m := h.makeMatch("pvps", defaultSeriesTarget, side{client: a}, side{client: b})
 	if m.seriesMatch() {
 		t.Fatal("a PvP match reports itself as a series")
 	}
@@ -192,6 +192,42 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 	}
 }
 
+// A series one round long ends on that round. The lobby offers it as the quick
+// option, so this is the difference between a mode and a decoration: judge has to
+// stop the loop, or the player asked for one round and got five.
+func TestASeriesOfOneRoundEndsImmediately(t *testing.T) {
+	noSeriesBreak(t)
+	h := NewHub()
+	a := newClient()
+	m := h.makeMatch("one", 1, side{client: a}, side{bot: true})
+	m.start()
+	m.ackReady(0)
+
+	first := waitEventWithin(t, a, "result", 20*time.Second)
+	if first["roundsTarget"] != float64(1) {
+		t.Errorf("roundsTarget = %v, want 1", first["roundsTarget"])
+	}
+	if first["seriesOver"] != true {
+		t.Errorf("seriesOver = %v, want true -- one round was the whole series", first["seriesOver"])
+	}
+	if first["youRoundWins"] != float64(0) && first["oppRoundWins"] != float64(0) {
+		t.Errorf("a void should have been tallied 0/1, got %v/%v",
+			first["youRoundWins"], first["oppRoundWins"])
+	}
+
+	select {
+	case b, ok := <-a.send:
+		if ok {
+			et, data := parseChunk(t, b)
+			if et != "state" || data["state"] != "idle" {
+				t.Fatalf("a one-round match sent %s/%v; want the idle teardown, not another round", et, data)
+			}
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("a one-round match neither went idle nor carried on")
+	}
+}
+
 // Only a match with a series announces a target. The client draws a pip per
 // round win still needed and needs the target to know how many, so it has to
 // arrive before round one's result -- but a PvP match is one round, and a
@@ -201,17 +237,17 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	h := NewHub()
 
 	cpu := newClient()
-	cm := h.makeMatch("cs", side{client: cpu}, side{bot: true})
+	cm := h.makeMatch("cs", defaultSeriesTarget, side{client: cpu}, side{bot: true})
 	cm.start()
 	md := waitForEvent(t, cpu, "matched")
-	if md["roundsTarget"] != float64(seriesTarget) {
+	if md["roundsTarget"] != float64(defaultSeriesTarget) {
 		t.Errorf("cpu matched roundsTarget = %v, want %d -- the scoreboard has to be drawable before round one",
-			md["roundsTarget"], seriesTarget)
+			md["roundsTarget"], defaultSeriesTarget)
 	}
 	cpu.cancel()
 
 	pvpA, pvpB := newClient(), newClient()
-	pm := h.makeMatch("pvps", side{client: pvpA}, side{client: pvpB})
+	pm := h.makeMatch("pvps", defaultSeriesTarget, side{client: pvpA}, side{client: pvpB})
 	pm.start()
 	for name, c := range map[string]*Client{"a": pvpA, "b": pvpB} {
 		frame := waitForEvent(t, c, "matched")
@@ -232,7 +268,7 @@ func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
 	noSeriesBreak(t)
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("cs", side{client: a}, side{bot: true})
+	m := h.makeMatch("cs", defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.start()
 	m.ackReady(0)
 
@@ -252,8 +288,8 @@ func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
 	if first["seriesOver"] != false {
 		t.Errorf("round 1 seriesOver = %v, want false", first["seriesOver"])
 	}
-	if first["roundsTarget"] != float64(seriesTarget) {
-		t.Errorf("roundsTarget = %v, want %d", first["roundsTarget"], seriesTarget)
+	if first["roundsTarget"] != float64(defaultSeriesTarget) {
+		t.Errorf("roundsTarget = %v, want %d", first["roundsTarget"], defaultSeriesTarget)
 	}
 
 	// The second round is announced by a fresh countdown: same opponent, same
@@ -272,7 +308,7 @@ func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
 		t.Errorf("round 2 tally = %v/%v, want 0/2", r2["youRoundWins"], r2["oppRoundWins"])
 	}
 	if r2["seriesOver"] != false {
-		t.Errorf("round 2 seriesOver = %v, want false at 2 of %d", r2["seriesOver"], seriesTarget)
+		t.Errorf("round 2 seriesOver = %v, want false at 2 of %d", r2["seriesOver"], defaultSeriesTarget)
 	}
 
 	a.cancel()
@@ -284,7 +320,7 @@ func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
 func TestBeginRoundClearsTheLastRoundsPicks(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("s2", side{client: a}, side{bot: true})
+	m := h.makeMatch("s2", defaultSeriesTarget, side{client: a}, side{bot: true})
 
 	m.moves[0] = &moveMsg{move: MoveRock, arrive: time.Now()}
 	m.moves[1] = &moveMsg{move: MoveRock, arrive: time.Now()}
