@@ -284,6 +284,10 @@ snapshot.
 | `youCharacter`, `opponentCharacter` | Characters chosen for each side. |
 | `opponentName` | `CPU` or `Opponent`. |
 | `mode` | `online` or `cpu`. |
+| `round` | Current round number (1-based). |
+| `youRoundWins`, `oppRoundWins` | Number of decisive round wins for each side. |
+| `roundsTarget` | Target number of decisive wins to win the series (default 3). |
+| `seriesOver` | `true` if the series ended with this result, else `false`. |
 
 ## HTTP endpoints
 
