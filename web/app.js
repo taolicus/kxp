@@ -16,6 +16,14 @@ let slotStep = null; // pure stepper for the round being counted down
 let plannedShootAt = 0; // announced deadline (epoch-ms) slotStep belongs to
 let punTimer = null; // local PUN entry scheduled from the announced round plan
 
+// The running series tally, as the last result reported it. A CPU match is a
+// series, so the score is the thing being played for and it has to outlive the
+// round panel: resetGame hides the result panel when the next countdown starts,
+// and the score has to still be there. Empty when the mode has no series (PvP
+// rounds, and any match against a server predating these fields, which is why
+// renderResult treats a missing roundsTarget as "no score to show").
+let seriesScore = '';
+
 // Last-resort recovery: if a PUN result never arrives (dropped SSE event,
 // wedged connection) we're stuck in a game state with nothing left to do.
 // Reconnect so the server snapshot reconciles us out of it. The watchdog is
@@ -276,6 +284,7 @@ function resetGame() {
   $('#banner').classList.add('hidden');
   $('#timing').classList.add('hidden');
   $('#game-stats').classList.add('hidden');
+  $('#series-score').classList.add('hidden');
   $('#btn-again').classList.add('hidden');
   $('#btn-mode').classList.add('hidden');
   flashPick(null);
@@ -350,11 +359,41 @@ function renderResult(d) {
   $('#timing').innerHTML = lines.join('<br>');
   $('#timing').classList.toggle('hidden', lines.length === 0);
   $('#game-stats').classList.remove('hidden');
-  $('#btn-again').classList.remove('hidden');
-  $('#btn-again').disabled = false;
-  $('#btn-mode').classList.remove('hidden');
+  // A round that is not the last is not a finished match: offering "Play Again"
+  // here is what made a series look like it had ended after round one, and the
+  // player pressing it would abandon a match still being played. The series
+  // fields are additive, so a server that predates them (an open tab across a
+  // deploy) sends none and every result is final, which is what `!== false` says.
+  const over = d.seriesOver !== false;
+  if (over) {
+    $('#btn-again').classList.remove('hidden');
+    $('#btn-again').disabled = false;
+    $('#btn-mode').classList.remove('hidden');
+  }
+  renderSeriesScore(d);
   setYouSlot();
   setOppSlot(d.opponentCharacter, d.opponentName);
+}
+
+// The scoreboard. Kept out of resetGame's hide list and repainted from
+// seriesScore on the next countdown instead, because a series spans rounds: the
+// tally the player just earned has to still be on screen while the next round
+// counts down. A match with no series leaves the element hidden.
+function renderSeriesScore(d) {
+  const target = d && d.roundsTarget ? d.roundsTarget : 0;
+  seriesScore = target > 0
+    ? `Round ${d.round || 1} \u00b7 ${d.youRoundWins} \u2013 ${d.oppRoundWins} of ${target}`
+    : '';
+  $('#series-score').textContent = seriesScore;
+  $('#series-score').classList.toggle('hidden', !seriesScore);
+}
+
+// Repaint what the last result put there, after resetGame has cleared the panel
+// it belongs to. A no-op outside a series.
+function restoreSeriesScore() {
+  if (!seriesScore) return;
+  $('#series-score').textContent = seriesScore;
+  $('#series-score').classList.remove('hidden');
 }
 
 async function post(path, body = {}) {
@@ -415,6 +454,9 @@ const enter = {
     stopReadyLoop();
     clearTimeout(stallTimer);
     resetGame();
+    // The match is over -- finished, cancelled or abandoned -- so the series it
+    // belonged to is too, and the next one starts from no score.
+    seriesScore = '';
     show('lobby');
     setNotice(d && d.reason);
   },
@@ -435,6 +477,9 @@ const enter = {
     setBg(d);
     showGame();
     resetGame();
+    // A new match has no score until its first result reports one, whatever the
+    // previous match left on screen.
+    seriesScore = '';
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
     setCount('MATCH FOUND');
@@ -456,6 +501,9 @@ const enter = {
       // would otherwise sit on screen through the next round.
       showGame();
       resetGame();
+      // ...and the score the round just produced goes back up: it belongs to the
+      // series, not to the round panel resetGame just cleared.
+      restoreSeriesScore();
     } else if (!GAME_STATES.includes(from)) {
       setBg(d);
       showGame();

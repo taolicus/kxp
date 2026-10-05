@@ -215,6 +215,98 @@ test('a second round arrives on a countdown frame that carries none of the match
   assert.ok(app.el('#timing').classList.contains('hidden'), 'no stale timing panel');
 });
 
+// playsRounds drives the real app.js through `n` rounds of a CPU series: each
+// one is announced, opened, and then judged with the tally the server would
+// report for it. It returns after the last result has been rendered, so a test
+// can assert on the screen the player is left looking at.
+async function playRound(app, base, { you, opp, over }) {
+  app.fire('countdown', { n: 'READY', shootAt: base, windowMs: 2000 });
+  app.fire('shoot', { windowMs: 2000, shootAt: base });
+  app.runUntil(base + 2500);
+  app.fire('result', {
+    outcome: you > opp ? 'win' : 'loss',
+    mode: 'cpu',
+    opponentName: 'CPU',
+    round: you + opp + 1,
+    youRoundWins: you,
+    oppRoundWins: opp,
+    roundsTarget: 3,
+    seriesOver: over,
+  });
+}
+
+async function cpuSeries(app) {
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  app.fire('matched', { opponentName: 'CPU', background: BGS[0] });
+  app.loadImages();
+  await app.settle();
+}
+
+test('a series round shows the running score and withholds the rematch until the last round', async () => {
+  // A CPU match is a series, so the score is the thing being played for and has
+  // to be on screen for every round -- including through the next countdown,
+  // which clears the round panel the score arrived with. "Play Again" has to
+  // mean "the match is over": offering it after round one made a series look
+  // finished, and a tap on it abandoned a match still being played.
+  const app = loadApp({ next: SM.next });
+  await cpuSeries(app);
+
+  await playRound(app, 1700000003000, { you: 1, opp: 0, over: false });
+  const score = app.el('#series-score').textContent;
+  assert.match(score, /1 \u2013 0 of 3/, 'the score after round one');
+  assert.ok(app.el('#btn-again').classList.contains('hidden'), 'no rematch mid-series');
+  assert.ok(app.el('#btn-mode').classList.contains('hidden'), 'and no mode switch either');
+
+  // The next round counts down over the panel resetGame just cleared; the score
+  // is not part of that panel.
+  app.fire('countdown', { n: 'READY', shootAt: 1700000010000, windowMs: 2000 });
+  assert.equal(app.el('#series-score').textContent, score, 'the score survives into round two');
+  assert.ok(app.el('#btn-again').classList.contains('hidden'), 'still no rematch');
+
+  await playRound(app, 1700000013000, { you: 2, opp: 1, over: false });
+  assert.match(app.el('#series-score').textContent, /2 \u2013 1 of 3/, 'the score after round two');
+
+  await playRound(app, 1700000023000, { you: 3, opp: 1, over: true });
+  assert.match(app.el('#series-score').textContent, /3 \u2013 1 of 3/, 'the final score');
+  assert.ok(!app.el('#btn-again').classList.contains('hidden'), 'the final round offers the rematch');
+});
+
+test('a result with no series fields still offers the rematch', async () => {
+  // The pin against over-correcting. The series fields are additive on the wire,
+  // so a tab open across a deploy sees results without them until it
+  // refreshes; treating that as "not over" would strand the player on a result
+  // screen with no way to play again. A missing roundsTarget means the mode has
+  // no series, and every result in it is final.
+  const app = loadApp({ next: SM.next });
+  await cpuSeries(app);
+
+  app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
+  app.fire('shoot', { windowMs: 2000, shootAt: 1700000003000 });
+  app.runUntil(1700000005500);
+  app.fire('result', { outcome: 'win', mode: 'cpu', opponentName: 'CPU' });
+
+  assert.ok(!app.el('#btn-again').classList.contains('hidden'), 'the rematch is offered');
+  assert.ok(!app.el('#btn-mode').classList.contains('hidden'), 'and so is the mode switch');
+  assert.ok(app.el('#series-score').classList.contains('hidden'), 'with no scoreboard to show');
+});
+
+test('the score does not outlive the match', async () => {
+  // The lobby is where a match ends -- finished, cancelled or abandoned -- so
+  // that is where the series it belonged to ends. A score left on screen would
+  // be the previous match's, showing above the next one's countdown.
+  const app = loadApp({ next: SM.next });
+  await cpuSeries(app);
+  await playRound(app, 1700000003000, { you: 1, opp: 0, over: false });
+  assert.ok(!app.el('#series-score').classList.contains('hidden'), 'sanity: a score is up');
+
+  // "Change mode" is one of the two ways off a result screen, and it goes to
+  // the lobby -- which is where enter.lobby forgets the series.
+  runInContext("transition('mode', {})", app.ctx);
+  assert.equal(runInContext('seriesScore', app.ctx), '', 'the series is forgotten');
+  assert.ok(app.el('#series-score').classList.contains('hidden'), 'and off the screen');
+});
+
 test('a client that misses the whole countdown is still told to shoot', () => {
   // The other half of the symptom. Losing the beats must not also lose the pick
   // window: whatever buys the margin back, a client whose first frame arrives
