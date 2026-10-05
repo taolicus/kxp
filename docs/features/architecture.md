@@ -108,6 +108,16 @@ series continues. PvP matches are still one round, which is the other half of
 oversight: re-opening the ready handshake between rounds is a wire-visible
 decision that belongs with the series loop, not beside it.
 
+**A match one round long is over whatever that round was.** A draw is worth
+nothing to either side and replays — but replaying it means playing a second
+round, which is the series a player declined by choosing one round. So at a
+target of one, `judge()` ends the match on the draw as well, and the result
+frame carries `seriesOver: true` like any other final result, which is what makes
+the client offer "Play Again". This is also the behaviour one round had before
+there was a series at all: a single round, whose result is final whatever it
+came to. Scoped to the length rather than the mode, because it is a statement
+about the number of rounds there are, not about who is playing.
+
 **The target is a constructor argument, not a constant.** `newMatch(id,
 roundsTarget)` takes the length, because the lobby offers a one-round CPU match
 alongside the default and a target fixed at construction would have to be

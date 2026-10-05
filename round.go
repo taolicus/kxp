@@ -692,9 +692,10 @@ func (m *match) discardStragglers() {
 //
 // The tally is read from the judged result rather than recomputed from the moves,
 // so the score the client was told and the score the server keeps cannot drift.
-// A draw is worth nothing to either side and replays, which is why the series has
+// A draw is worth nothing to either side and replays, which is why a series has
 // no round cap: two sides that keep drawing never end it, by design rather than
-// by omission.
+// by omission. The one exception is a match a single round long, where a replay
+// would be a second round -- see below.
 func (m *match) judge() bool {
 	res, ps := m.judgeRound()
 	for i := range m.sides {
@@ -706,6 +707,14 @@ func (m *match) judge() bool {
 	// expression covers "first to N" and "one round" without a branch.
 	m.seriesOver = !m.seriesMatch() ||
 		m.win[0] >= m.roundsTarget || m.win[1] >= m.roundsTarget
+	// ...and a match one round long is over whatever that round produced, a draw
+	// included. A drawn round is worth nothing to either side and replays, but
+	// replaying it means playing a second round -- the series the player declined
+	// when they chose one round. What they asked for was one round and whatever
+	// it came to, which is how this mode worked before there was a series at all.
+	if m.roundsTarget <= 1 && res[0] == ResultDraw {
+		m.seriesOver = true
+	}
 	m.announce(res, ps)
 	if m.seriesOver {
 		return false

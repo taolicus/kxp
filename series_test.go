@@ -34,6 +34,19 @@ func seriesMatchForTest(t *testing.T) (*match, *Client) {
 	return m, a
 }
 
+// oneRoundMatchForTest is seriesMatchForTest for the one-round length: same CPU
+// shape, the length the lobby offers as the quick option.
+func oneRoundMatchForTest(t *testing.T) (*match, *Client) {
+	t.Helper()
+	noSeriesBreak(t)
+	h := NewHub()
+	a := newClient()
+	t.Cleanup(a.cancel)
+	m := h.makeMatch("one", 1, side{client: a}, side{bot: true})
+	m.phase.Store(phaseDone)
+	return m, a
+}
+
 // judgeRoundAs runs judge over a round whose outcome is given, so a series test
 // can reach a third or fourth round without playing two countdowns to get there.
 // The moves are set to make the *stated* outcome true: a win needs the beats, a
@@ -119,6 +132,65 @@ func TestSeriesEndsWhenTheTargetIsReached(t *testing.T) {
 	// round number the client was told does not move past it.
 	if m.round != 1 {
 		t.Errorf("round = %d, want 1 -- the final round is counted, not skipped", m.round)
+	}
+}
+
+// A drawn round in a one-round match is the last round. The lobby offers one
+// round as the quick option, and the offer is one round: replaying the draw
+// would play a second one, which is the series the player declined. It is also
+// the behaviour this mode had before there was a series -- a single round, whose
+// result is final whatever it was -- so a draw ends it and the client offers the
+// rematch like any other final result.
+func TestADrawEndsAOneRoundMatch(t *testing.T) {
+	m, a := oneRoundMatchForTest(t)
+
+	if judgeRoundAs(t, m, a, [2]Result{ResultDraw, ResultDraw}) {
+		t.Fatal("judge kept playing after the only round of a one-round match")
+	}
+	if !m.seriesOver {
+		t.Error("seriesOver = false, want true -- the draw was the whole match")
+	}
+	// A draw is still worth nothing to either side; the round is not retroactively
+	// a win for whoever the player might have preferred.
+	if m.win != [2]int{0, 0} {
+		t.Errorf("tally = %v, want 0-0", m.win)
+	}
+
+	// On the wire, because that is what the client acts on: the frame says the
+	// match is over, so the result screen offers the rematch exactly as it does
+	// after a win. Driven through judge directly because the CPU's move is
+	// random -- an end-to-end draw would be a coin flip, not a test.
+	typ, frame := parseChunk(t, <-a.send)
+	if typ != "result" {
+		t.Fatalf("announced %q, want the result", typ)
+	}
+	if frame["seriesOver"] != true {
+		t.Errorf("result seriesOver = %v, want true -- the client reads this to offer the rematch",
+			frame["seriesOver"])
+	}
+	if frame["outcome"] != "draw" {
+		t.Errorf("result outcome = %v, want draw", frame["outcome"])
+	}
+	if frame["youRoundWins"] != float64(0) || frame["oppRoundWins"] != float64(0) {
+		t.Errorf("announced tally = %v/%v, want 0/0", frame["youRoundWins"], frame["oppRoundWins"])
+	}
+}
+
+// The other direction, and the reason the rule is scoped to a single round: in
+// a series a draw still replays, so two sides that cannot finish each other off
+// never reach a result nobody won. Pinned by TestSeriesTallyCountsWinsAndIgnores
+// Draws at length three; this is the same fact at the one-round length's
+// neighbour, where the draw ends it.
+func TestADrawStillReplaysInALongerSeries(t *testing.T) {
+	m, a := seriesMatchForTest(t)
+	if !judgeRoundAs(t, m, a, [2]Result{ResultDraw, ResultDraw}) {
+		t.Fatal("a draw ended a first-to-three series")
+	}
+	if m.seriesOver {
+		t.Error("seriesOver set on a drawn round of a first-to-three series")
+	}
+	if m.round != 2 {
+		t.Errorf("round = %d, want 2 -- the draw is replayed", m.round)
 	}
 }
 

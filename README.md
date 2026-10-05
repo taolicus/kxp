@@ -10,8 +10,8 @@ original terminal game.
 - **Play Online** — matchmaking pairs you with another player, synced countdown
   and a shared **PUN!** instant.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay, in
-  a series you pick in the lobby: one round, or best of 5 (first to 3; a draw
-  replays). Scored as pips under each fighter.
+  a series you pick in the lobby: one round (a draw is the result), or best of 5
+  (first to 3; a draw replays). Scored as pips under each fighter.
 - **Timing rules** — picks outside the shoot window are rejected with `400`
   (a second pick with `409`); no pick in time is a timeout loss.
 - Server-sent events (SSE) for push, plain `POST` for player actions — no
