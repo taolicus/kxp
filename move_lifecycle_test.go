@@ -9,7 +9,7 @@ func TestStartDrainsLeftoverMoves(t *testing.T) {
 	h := NewHub()
 	a := newClient()
 	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}
-	m := h.makeMatch("ml1", defaultSeriesTarget, side{client: a}, side{bot: true, character: "rayito"})
+	m := h.makeMatch("ml1", defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
 
 	m.start()
 

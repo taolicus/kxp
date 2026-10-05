@@ -21,7 +21,10 @@ func TestRosterDefaults(t *testing.T) {
 }
 
 func TestValidCharacterRejectsUnknown(t *testing.T) {
-	for _, id := range []string{"", "goku", "dragon\x00", strings.Repeat("x", 100)} {
+	// "juan-cajeta\x00" is a real id with one byte of junk on the end: the check is
+	// not just a lookup against the roster, so a name that is on the list cannot
+	// smuggle a NUL through the id that reaches the wire and the ladder.
+	for _, id := range []string{"", "goku", "juan-cajeta\x00", strings.Repeat("x", 100)} {
 		if validCharacter(id) {
 			t.Errorf("expected %q to be rejected", id)
 		}
@@ -39,14 +42,20 @@ func TestRandomCharacter(t *testing.T) {
 func TestRoundCarriesCharacters(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	b.character = "robok"
+	b.character = "kamo"
 	m := h.makeMatch("mc1", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
+	// a chose nothing, so its side carries the default. Spelled as the default
+	// rather than as the fighter that happens to be first: what this test claims is
+	// that both characters reach the result frame, and which fighter is the default
+	// is roster content (docs/features/characters.md), not part of that claim.
+	wantA := defaultCharacterID()
+
 	md := waitForEvent(t, a, "matched")
 	opp := md["opponentCharacter"].(string)
-	if opp != "robok" {
-		t.Errorf("a matched opponentCharacter = %q, want robok", opp)
+	if opp != "kamo" {
+		t.Errorf("a matched opponentCharacter = %q, want kamo", opp)
 	}
 	m.ackReady(0)
 	m.ackReady(1)
@@ -56,19 +65,19 @@ func TestRoundCarriesCharacters(t *testing.T) {
 	b.moves <- moveMsg{move: MovePaper, arrive: time.Now()}
 
 	ra := waitForEvent(t, a, "result")
-	if ra["youCharacter"] != "dragon" {
-		t.Errorf("a youCharacter = %q, want dragon", ra["youCharacter"])
+	if ra["youCharacter"] != wantA {
+		t.Errorf("a youCharacter = %q, want %s", ra["youCharacter"], wantA)
 	}
-	if ra["opponentCharacter"] != "robok" {
-		t.Errorf("a opponentCharacter = %q, want robok", ra["opponentCharacter"])
+	if ra["opponentCharacter"] != "kamo" {
+		t.Errorf("a opponentCharacter = %q, want kamo", ra["opponentCharacter"])
 	}
 
 	rb := waitForEvent(t, b, "result")
-	if rb["youCharacter"] != "robok" {
-		t.Errorf("b youCharacter = %q, want robok", rb["youCharacter"])
+	if rb["youCharacter"] != "kamo" {
+		t.Errorf("b youCharacter = %q, want kamo", rb["youCharacter"])
 	}
-	if rb["opponentCharacter"] != "dragon" {
-		t.Errorf("b opponentCharacter = %q, want dragon", rb["opponentCharacter"])
+	if rb["opponentCharacter"] != wantA {
+		t.Errorf("b opponentCharacter = %q, want %s", rb["opponentCharacter"], wantA)
 	}
 }
 
@@ -76,12 +85,12 @@ func TestMatchExposesBotCharacter(t *testing.T) {
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch("mc2", defaultSeriesTarget, side{client: a}, side{bot: true, character: "rayito"})
+	m := h.makeMatch("mc2", defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
 	m.start()
 
 	md := waitForEvent(t, a, "matched")
-	if md["opponentCharacter"] != "rayito" {
-		t.Errorf("matched opponentCharacter = %v, want rayito", md["opponentCharacter"])
+	if md["opponentCharacter"] != "lucio" {
+		t.Errorf("matched opponentCharacter = %v, want lucio", md["opponentCharacter"])
 	}
 	if !validCharacter(m.opponentCharacter(0)) {
 		t.Errorf("bot character not in roster")

@@ -9,18 +9,13 @@ type Character struct {
 }
 
 var characters = []Character{
-	{ID: "dragon", Name: "Dragon", Emoji: "🐉"},
-	{ID: "sombrero", Name: "Sombrero", Emoji: "🎩"},
-	{ID: "lentes", Name: "Lentes", Emoji: "🕶️"},
-	{ID: "lagartijo", Name: "Lagartijo", Emoji: "🦎"},
-	{ID: "hielito", Name: "Hielito", Emoji: "🧊"},
-	{ID: "cambiaformas", Name: "Cambiaformas", Emoji: "🎭"},
-	{ID: "fabulosa", Name: "Fabulosa", Emoji: "🪭"},
-	{ID: "robok", Name: "Robok", Emoji: "🦾"},
-	{ID: "rafaela", Name: "Rafaela", Emoji: "⚔️"},
-	{ID: "bicho-raro", Name: "Bicho Raro", Emoji: "🦗"},
-	{ID: "alakran", Name: "Alakran", Emoji: "🦂"},
-	{ID: "rayito", Name: "Rayito", Emoji: "⚡"},
+	{ID: "juan-cajeta", Name: "Juan Cajeta", Emoji: "🕶️"},
+	{ID: "kamo", Name: "Kamo", Emoji: "🔴"},
+	{ID: "ema", Name: "Ema", Emoji: "⚡"},
+	{ID: "taolikus", Name: "Taolikus", Emoji: "🐉"},
+	{ID: "lucio", Name: "Lucio", Emoji: "🦂"},
+	{ID: "hielitalo", Name: "Hielítalo", Emoji: "🧊"},
+	{ID: "ko-shi-nin", Name: "Ko Shi Nin", Emoji: "🗡️"},
 }
 
 func characterByID(id string) (Character, bool) {

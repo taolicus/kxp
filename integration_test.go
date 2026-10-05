@@ -293,12 +293,12 @@ func TestCPUOpponentIsTheOneAskedFor(t *testing.T) {
 	defer st.close()
 
 	if code, _ := postJSON(t, srv.URL+"/cpu", map[string]any{
-		"id": id, "opponentCharacter": "hielito",
+		"id": id, "opponentCharacter": "hielitalo",
 	}); code != 200 {
 		t.Fatalf("/cpu status: %d", code)
 	}
-	if got := st.readEventTyp(t, "matched", 5*time.Second)["opponentCharacter"]; got != "hielito" {
-		t.Errorf("matched opponentCharacter = %v, want hielito", got)
+	if got := st.readEventTyp(t, "matched", 5*time.Second)["opponentCharacter"]; got != "hielitalo" {
+		t.Errorf("matched opponentCharacter = %v, want hielitalo", got)
 	}
 	st.close()
 

@@ -21,9 +21,11 @@ the opponent slot, and the result line).
     placeholder emoji: the `emoji` field carries a single glyph per fighter,
     not an image asset. See [backgrounds](backgrounds.md) for the one asset
     pipeline that does use real images.
-- Roster contents (ids, names, emojis) are intentionally **not** documented
-  here — `characters.go` + the `GET /characters` endpoint are the source of
-  truth. Pair the roster with the UI in the app itself.
+- Roster contents (who is playable, in what order) are listed in
+  [characters](characters.md), the file the roster is changed in. `characters.go`
+  holds the same list in the same order for the server to serve, so there is one
+  place to edit and the picker, the CPU's randomiser, and the
+  [arcade ladder](../tasks/closed/arcade-ladder.md)'s floors all follow it.
 
 ## Data flow
 
@@ -39,7 +41,7 @@ the opponent slot, and the result line).
 
 ## Server changes
 
-- `characters.go` (new): `Character{id, name}` roster (3 fighters), plus
+- `characters.go`: `Character{id, name, emoji}` roster, plus
   `validCharacter`, `randomCharacterID`, and a default.
 - `server.go`:
   - `Client.character` field (default = first roster fighter).
@@ -70,10 +72,14 @@ the opponent slot, and the result line).
 
 ## Adding a fighter
 
-1. Add `Character{id, name, emoji}` to the roster in `characters.go`.
+1. List it in [characters](characters.md) under **Playable**, and add the same
+   entry to the roster in `characters.go` — same order, same id. The order decides
+   who the default fighter is.
 2. Done — the picker, validation, and CPU randomiser pick it up automatically
    (the client loads the roster from `GET /characters`, so there is no second
-   copy to update).
+   copy to update). A fighter dropped from the list stops being offered at once;
+   see the fallbacks in [characters](characters.md#how-the-list-lands) for what
+   happens to a selection or a saved ladder that named it.
 
 ## Out of scope
 

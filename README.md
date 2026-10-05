@@ -72,6 +72,8 @@ two players share. See [architecture](docs/features/architecture.md) for the int
   [protocol](docs/features/protocol.md) (the full wire format: events, endpoints,
   the client state table, clock handling),
   [character selection](docs/features/character-selection.md),
+  [characters](docs/features/characters.md) (who is playable, and what happens to
+  a selection or a saved ladder when the list changes),
   [backgrounds](docs/features/backgrounds.md) (asset pipeline).
 - [development/](docs/development/) — how this repo is built and verified on
   this host: [environment.md](docs/development/environment.md) (the measured
