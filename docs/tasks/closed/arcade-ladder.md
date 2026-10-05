@@ -78,7 +78,7 @@ Floor index and high-water mark live in `localStorage`, per-browser and
 per-origin. That is what makes this buildable now: server-side progress needs the
 identity primitive, which is still an open decision
 ([player-identity](../../issues/player-identity.md)). This is the recorded debt —
-the same debt [solo-campaign](solo-campaign.md) carries — and both get
+the same debt [solo-campaign](../open/solo-campaign.md) carries — and both get
 retrofitted onto whatever that decision is.
 
 ## Not in this build
@@ -89,9 +89,16 @@ retrofitted onto whatever that decision is.
 - **Anything server-side about progression.** The server judges every round; the
   client decides which floor it climbs and remembers how far it got.
 
+## Where the reasoning lives
+
+[architecture](../../features/architecture.md#the-arcade-ladder) — why the order
+is stored rather than redrawn, why a saved order is repaired instead of trusted or
+discarded, why clearing the mirror is a state rather than a wrapped floor, and why
+progress waits for the final result of a floor.
+
 ## Depends on
 
-[game-mode-architecture](game-mode-architecture.md) — a floor is a CPU match, so
+[game-mode-architecture](../open/game-mode-architecture.md) — a floor is a CPU match, so
 it runs under the mode selector. The CPU half has landed (the series and the
 length choice); the PvP half is irrelevant here and stays open on its own.
 

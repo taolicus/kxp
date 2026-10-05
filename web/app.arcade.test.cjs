@@ -265,3 +265,194 @@ test('a plain CPU match is not announced as a floor', async () => {
   app.fire('matched', { opponentName: 'CPU', roundsTarget: 3 });
   assert.strictEqual(app.count(), 'MATCH FOUND');
 });
+
+// Progression: what a decided floor does to the run, and what the result screen
+// offers next. Everything here is driven by the same real frames the client gets.
+
+const MATCHED = { opponentName: 'Opponent', roundsTarget: 3 };
+const series = (over, outcome, wins = 1, losses = 0) => ({
+  outcome, mode: 'cpu', round: wins + losses, youRoundWins: wins, oppRoundWins: losses,
+  roundsTarget: 3, seriesOver: over,
+});
+
+// Climb to `floor` by winning every floor below it, then leave the match that
+// would advance past it unplayed. Each floor is a full request -> matched ->
+// final result, because that is the sequence a player's floor actually is, and a
+// test that only set the store would not notice progress being applied twice.
+async function climbTo(app, floor) {
+  for (let f = 0; f < floor; f++) {
+    await fight(app);
+    app.fire('matched', { ...MATCHED, opponentCharacter: saved(app).order[f] });
+    app.fire('result', series(true, 'win'));
+  }
+}
+
+const ladderLabel = (app) => text(app, '#btn-again');
+
+test('winning a floor advances to the next one', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await fight(app);
+  const first = saved(app).order[0];
+
+  app.fire('matched', { ...MATCHED, opponentCharacter: first });
+  app.fire('result', series(true, 'win'));
+
+  assert.strictEqual(saved(app).floor, 1, 'one floor higher');
+  assert.strictEqual(saved(app).best, 1, 'and one floor cleared');
+  assert.strictEqual(saved(app).cleared, false);
+  assert.strictEqual(ladderLabel(app), 'Next Floor');
+
+  // The button must ask for the floor it says, not repeat the one just fought.
+  await app.tap('#btn-again');
+  await app.settle();
+  assert.strictEqual(askedFor(app).opponentCharacter, saved(app).order[1],
+    'the next floor is a different fighter');
+});
+
+test('progress moves on the final result only', async () => {
+  // The pin: a mid-series round is not a decided floor. Advancing on one would
+  // hand out a floor for a round; restarting on one would drop the player down the
+  // ladder mid-series, which is the bug `seriesOver` exists to prevent.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await fight(app);
+  app.fire('matched', { ...MATCHED, opponentCharacter: saved(app).order[0] });
+
+  // Each round is separated by the next round's countdown, as a real series is:
+  // the machine drops a result that arrives while already in a result, so firing
+  // them back to back would test nothing.
+  const nextRound = () => app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
+
+  app.fire('result', series(false, 'win'));
+  assert.strictEqual(saved(app).floor, 0, 'round one of three is not a floor');
+  assert.strictEqual(app.el('#btn-again').classList.contains('hidden'), true,
+    'and no next floor is offered');
+  assert.strictEqual(saved(app).best, 0, 'nor counted as cleared');
+
+  nextRound();
+  app.fire('result', series(false, 'loss', 1, 1));
+  assert.strictEqual(saved(app).floor, 0, 'nor does losing one restart the ladder');
+
+  nextRound();
+  app.fire('result', series(true, 'win', 2, 1));
+  assert.strictEqual(saved(app).floor, 1, 'the final result is what moves it');
+});
+
+test('losing a floor puts the player back on the first, without redrawing', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, 2);
+  const order = saved(app).order;
+
+  const atFloor = saved(app).floor;
+  app.fire('matched', { ...MATCHED, opponentCharacter: order[atFloor] });
+  app.fire('result', series(true, 'loss'));
+
+  assert.strictEqual(saved(app).floor, 0, 'back to the bottom');
+  assert.deepStrictEqual(saved(app).order, order, 'the ladder is the same one -- a loss does not redraw');
+  assert.strictEqual(saved(app).best, 2, 'and the high-water mark is not forgotten');
+  assert.strictEqual(ladderLabel(app), 'Back to Floor 1');
+
+  await app.tap('#btn-again');
+  await app.settle();
+  assert.strictEqual(askedFor(app).opponentCharacter, order[0], 'which is where it says it goes');
+});
+
+test('a draw counts as not clearing the floor', async () => {
+  // A one-round ladder floor can end in a draw -- that was made final deliberately
+  // -- so the draw has to land somewhere. Restarting is the honest reading: no
+  // floor was cleared.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, 1);
+  app.fire('matched', { ...MATCHED, opponentCharacter: saved(app).order[1] });
+  app.fire('result', { outcome: 'draw', mode: 'cpu', roundsTarget: 1, seriesOver: true });
+
+  assert.strictEqual(saved(app).floor, 0, 'the floor is not cleared by a draw');
+  assert.strictEqual(saved(app).best, 1, 'and the earlier floor still counts');
+});
+
+test('clearing the mirror completes the ladder, and the next request draws a new one', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, ROSTER.length - 1);
+
+  const last = saved(app).order[ROSTER.length - 1];
+  assert.strictEqual(last, 'hielito', 'the mirror is what is left to fight');
+  app.fire('matched', { ...MATCHED, opponentCharacter: last });
+  app.fire('result', series(true, 'win'));
+
+  assert.strictEqual(saved(app).cleared, true, 'the run says it is complete');
+  assert.strictEqual(saved(app).best, ROSTER.length, 'with every floor counted');
+  assert.strictEqual(ladderLabel(app), 'New Ladder');
+
+  // A cleared run must still be startable -- the player has just beaten the whole
+  // ladder and the button cannot dead-end them.
+  const doneOrder = saved(app).order;
+  await app.tap('#btn-again');
+  await app.settle();
+  const fresh = saved(app);
+  assert.strictEqual(fresh.cleared, false, 'and starts un-cleared');
+  assert.strictEqual(fresh.floor, 0, 'from the bottom');
+  assert.strictEqual(fresh.best, ROSTER.length, 'keeping the high-water mark');
+  assert.strictEqual(askedFor(app).opponentCharacter, fresh.order[0],
+    'the new ladder is fought at its first floor');
+  assert.notDeepStrictEqual(fresh.order, doneOrder, 'and the order was redrawn');
+});
+
+test('a cleared ladder says so in the lobby, and the entry starts a new one', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, ROSTER.length - 1);
+  app.fire('matched', { ...MATCHED, opponentCharacter: saved(app).order[ROSTER.length - 1] });
+  app.fire('result', series(true, 'win'));
+
+  // Back to the lobby the only way a player can: the Change mode button.
+  await app.tap('#btn-mode');
+  assert.match(text(app, '#ladder-info'), /Ladder complete/, 'the lobby reports the completed run');
+  assert.strictEqual(app.el('#btn-ladder').textContent, 'New Ladder', 'and the entry says what it does');
+
+  await app.tap('#btn-ladder');
+  await app.tap('#btn-start');
+  await app.settle();
+  assert.strictEqual(saved(app).floor, 0);
+  assert.strictEqual(saved(app).cleared, false);
+});
+
+test('a plain CPU match is still offered as the same match again', async () => {
+  // The over-correction pin. "Play Again" on a non-ladder match must keep its own
+  // meaning: a ladder must not leave the button relabelled, or a player who was
+  // climbing a floor and then played a normal CPU match would find "Next Floor"
+  // pointing at somebody else's ladder.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await fight(app, 'cpu');
+  app.fire('matched', { ...MATCHED, opponentName: 'CPU' });
+  app.fire('result', { ...series(true, 'win'), mode: 'cpu' });
+
+  assert.strictEqual(ladderLabel(app), 'Play Again', 'a plain CPU match keeps its own button');
+
+  await app.tap('#btn-again');
+  await app.settle();
+  assert.strictEqual(askedFor(app).opponentCharacter, undefined,
+    'and still names no opponent, so it is the same open-ended match again');
+});
+
+test('the next floor repeats the length just fought', async () => {
+  // The pin from the other side: a player who chose one round on the lobby and
+  // changed it mid-ladder must keep fighting one-round floors, or the pips and the
+  // rules would disagree.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  lengthToggle(app, 1);
+  await started(app);
+  await fight(app);
+  app.fire('matched', { ...MATCHED, roundsTarget: 1, opponentCharacter: saved(app).order[0] });
+  app.fire('result', { ...series(true, 'win'), roundsTarget: 1 });
+
+  // The lobby's selection moves to three while the result is on screen.
+  lengthToggle(app, 3);
+  await app.tap('#btn-again');
+  await app.settle();
+  assert.strictEqual(askedFor(app).roundsTarget, 1, 'the next floor is the match that just finished');
+});

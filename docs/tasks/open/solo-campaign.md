@@ -18,7 +18,7 @@ Fights run under the mode selector (best-of-5 default; draws replayed).
 under is the series work.
 
 Not blocked on the identity primitive: this persists to `localStorage` like the
-[arcade ladder](arcade-ladder.md), and will need retrofitting onto whatever
+[arcade ladder](../closed/arcade-ladder.md), and will need retrofitting onto whatever
 [player-identity](../../issues/player-identity.md) decides.
 
 ## Relationship to the arcade ladder

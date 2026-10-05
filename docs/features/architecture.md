@@ -205,6 +205,27 @@ What is in `localStorage` is untrusted input: it is writable by hand and outlive
 the code that wrote it, so a saved run is parsed defensively and anything that is
 not a usable order draws a fresh ladder.
 
+Progress moves on the match's **final** result only — `seriesOver` — never on a
+mid-series round, which is the whole reason the series fields exist. A win climbs
+one floor; a loss or a draw puts the player back on the first, as in the arcade
+original, without redrawing. `best` is only raised by a win: a lost floor is not a
+cleared floor, and a mark that rose as the player lost would be the opposite of a
+high-water mark.
+
+Clearing the mirror is a **state**, not a position. The run records `cleared`
+rather than leaving the floor wrapping to zero, because a run sitting on floor one
+is a run in progress, and the lobby would invite the player to resume a ladder they
+had already beaten. A cleared run draws a new order on the next request — the one
+redraw in the code, shared by the result screen's "New Ladder" and the lobby's
+entry, so neither can leave a player with nothing to do. The high-water mark
+survives it, being a count.
+
+The result button stops being "Play Again" for a ladder match, because it is not
+the same match: it is a different fighter. It says which of the three things comes
+next — the next floor, the first floor again, or a new ladder — and it repeats the
+series length just fought rather than the lobby's current selection, so a player who
+changed the length mid-ladder keeps fighting the length they are looking at.
+
 Server-side persistence is deferred to
 [player identity](../issues/player-identity.md); a per-tab localStorage ladder
 means two browsers each climb their own, which is the visible consequence of that

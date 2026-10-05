@@ -14,6 +14,9 @@ let lastTarget = 0;
 // ladder match. The mode on the wire is `cpu` for both, so the distinction has to
 // live here; the server has no ladder to know about.
 let ladderFloor = -1;
+// What the result screen offers a ladder match: 'next', 'retry', 'done', or null
+// when the match that ended was not a ladder match.
+let ladderNext = null;
 let pendingMode = null; // online | cpu — mode picked on the lobby, awaiting fighter confirmation
 let es = null;
 let shootTimer = null;
@@ -243,7 +246,14 @@ function readArcade() {
   // count of floors cleared and means the same thing across any two orders.
   const floor = fresh ? 0
     : Math.min(Math.max(Number(s.floor) || 0, 0), order.length - 1);
-  return { order, floor, best: Math.max(Number(s.best) || 0, 0) };
+  // Cleared is a fact about the run -- the mirror is down -- not a position in the
+  // order, so it survives a repair and does not survive a redraw.
+  return {
+    order,
+    floor,
+    best: Math.max(Number(s.best) || 0, 0),
+    cleared: !fresh && !!s.cleared,
+  };
 }
 
 function saveArcade(a) {
@@ -289,13 +299,47 @@ function shuffle(ids) {
   return a;
 }
 
-// ladderOpponent is the fighter on the floor the player is standing on, or null
-// when there is no ladder to climb -- no roster yet, or a saved run pointing past
-// the end of a roster that has since shrunk.
-function ladderOpponent(order, floor) {
-  if (!order.length || floor >= order.length) return null;
-  return order[floor];
+// advanceLadder moves the run on after a ladder match has been decided and says
+// which floor is next. A win climbs one floor; a loss, or a draw on a one-round
+// ladder, puts the player back on the first, as in the arcade original. It reads
+// and writes the run with the same repair on the way in, so a ladder that crossed a
+// deploy which changed the roster progresses on the repaired order rather than on
+// one that is no longer valid.
+//
+// Returns what the result screen should offer, since the honest label differs: the
+// next floor after a win, the first again after a loss, and a new ladder once the
+// mirror is down. 'done' is not a stage of the run -- the cleared run stays where
+// it is, so the high-water mark and the next request are both still readable --
+// but it is what the button says.
+function advanceLadder(outcome) {
+  const a = readArcade();
+  // Counted from the run's own floor, not from the floor the request was made on:
+  // the two agree in the normal sequence, and the run cannot disagree with itself.
+  // The request-time copy goes stale if a match is ever reached without going
+  // through postCPU, and it is the run that the high-water mark has to agree with.
+  // Only a win clears a floor -- counting a lost floor here would report a run that
+  // got further the more it lost, which is the opposite of a high-water mark.
+  if (outcome === 'win') a.best = Math.max(a.best, a.floor + 1);
+  if (outcome === 'win') {
+    if (a.floor >= a.order.length - 1) {
+      // The mirror is down. The run stays where it is and says it is cleared,
+      // rather than the floor wrapping to zero and the ladder reading as a run in
+      // progress that has already been beaten -- which is what the lobby would
+      // otherwise invite the player to resume.
+      a.cleared = true;
+      a.floor = 0;
+      saveArcade(a);
+      return 'done';
+    }
+    a.floor += 1;
+  } else {
+    a.floor = 0;
+  }
+  a.cleared = false;
+  saveArcade(a);
+  return outcome === 'win' ? 'next' : 'retry';
 }
+
 
 // The lobby's ladder line: which floor the player would resume on, who is
 // standing on it, and how far the run has ever got. Read-only -- resuming is a
@@ -303,13 +347,19 @@ function ladderOpponent(order, floor) {
 function setLadderInfo() {
   const el = $('#ladder-info');
   if (!el) return;
-  const btn = $('#btn-ladder');
-  if (btn) btn.disabled = !CHARACTERS.length;
-  if (!CHARACTERS.length) { el.textContent = ''; return; }
   const a = readArcade();
-  const opp = ladderOpponent(a.order, a.floor);
-  const c = opp ? characterByID(opp) : null;
-  const at = `Floor ${a.floor + 1} of ${a.order.length}${c ? ` \u00b7 ${c.name}` : ''}`;
+  const btn = $('#btn-ladder');
+  if (btn) {
+    btn.disabled = !CHARACTERS.length;
+    // A cleared ladder has nothing to resume, so the entry says it will draw a new
+    // one. Leaving the label alone would have the player pick a fighter and be told
+    // there is nothing to fight.
+    btn.textContent = a.cleared ? 'New Ladder' : 'Arcade Ladder';
+  }
+  if (!CHARACTERS.length) { el.textContent = ''; return; }
+  const c = a.cleared ? null : characterByID(a.order[a.floor]);
+  const at = a.cleared ? 'Ladder complete'
+    : `Floor ${a.floor + 1} of ${a.order.length}${c ? ` \u00b7 ${c.name}` : ''}`;
   el.textContent = a.best > 0 ? `Arcade Ladder \u00b7 ${at} \u00b7 Best ${a.best}` : `Arcade Ladder \u00b7 ${at}`;
 }
 
@@ -397,6 +447,8 @@ function resetGame() {
   $('#game-stats').classList.add('hidden');
   $('#you-pips').classList.add('hidden');
   $('#opp-pips').classList.add('hidden');
+  ladderNext = null;
+  $('#btn-again').textContent = 'Play Again';
   $('#btn-again').classList.add('hidden');
   $('#btn-mode').classList.add('hidden');
   flashPick(null);
@@ -480,6 +532,13 @@ function renderResult(d) {
   if (over) {
     $('#btn-again').classList.remove('hidden');
     $('#btn-again').disabled = false;
+    // A ladder match offers the next floor rather than "the same match again",
+    // because it is not the same match: it is a different fighter, and the button
+    // saying otherwise would be the one piece of the ladder a player never sees.
+    if (ladderNext) {
+      $('#btn-again').textContent = ladderNext === 'done' ? 'New Ladder'
+        : ladderNext === 'retry' ? 'Back to Floor 1' : 'Next Floor';
+    }
     $('#btn-mode').classList.remove('hidden');
   }
   renderPips(d.youRoundWins, d.oppRoundWins, d.roundsTarget);
@@ -529,20 +588,24 @@ function pipHTML(wins, target) {
 // against; a plain CPU match does not, and lets the server pick. The ladder's
 // order is saved *before* the request, so a reload mid-climb resumes the same
 // ladder rather than drawing a new one under the player.
-function postCPU(mode) {
+function postCPU(mode, { roundsTarget = cpuTarget } = {}) {
   if (mode !== 'ladder') {
     ladderFloor = -1;
-    return post('/cpu', { roundsTarget: cpuTarget });
+    return post('/cpu', { roundsTarget });
   }
+  // A cleared run -- or a stored position past the end of the order, which the
+  // clamp cannot produce but a hand-edited store can -- starts a new ladder. This is
+  // the only redraw, so both the result screen's "New Ladder" and the lobby's entry
+  // go through it, and neither can leave a player with nothing to do.
   const a = readArcade();
-  const opponent = ladderOpponent(a.order, a.floor);
-  if (!opponent) {
-    setNotice('No ladder to climb yet.');
-    return null;
+  if (a.cleared || a.floor >= a.order.length) {
+    a.order = drawOrder();
+    a.floor = 0;
+    a.cleared = false;
   }
   ladderFloor = a.floor;
   saveArcade(a);
-  return post('/cpu', { roundsTarget: cpuTarget, opponentCharacter: opponent });
+  return post('/cpu', { roundsTarget, opponentCharacter: a.order[a.floor] });
 }
 
 async function post(path, body = {}) {
@@ -730,6 +793,15 @@ const enter = {
     const s = KXP.applyResult(getStats(), d.outcome);
     saveStats(s);
     setStats();
+    // Ladder progress moves on the match's final result and nothing else. A
+    // mid-series round is not a decided floor: advancing on one would hand out a
+    // floor for a round, and restarting on one would drop the player down the
+    // ladder mid-series. `seriesOver !== false` is the same "older server reads
+    // every result as final" rule the Play Again button uses, so an open tab
+    // across a deploy still progresses once.
+    const wasFloor = ladderFloor;
+    if (wasFloor >= 0 && d.seriesOver !== false) ladderNext = advanceLadder(d.outcome);
+    else if (wasFloor >= 0) ladderNext = null;
     renderResult(d);
   },
 };
@@ -884,6 +956,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   $('#btn-again').addEventListener('click', () => {
+    if (ladderNext) {
+      // The ladder's own action, ahead of the CPU branch below: both are CPU
+      // matches, and a plain rematch must never be able to stand in for the next
+      // floor -- that would ask for floor one again and read as a ladder that had
+      // reset itself.
+      $('#btn-again').disabled = true;
+      const p = postCPU('ladder', { roundsTarget: lastTarget || cpuTarget });
+      Promise.resolve(p).then((res) => {
+        if (!res || !res.ok) $('#btn-again').disabled = false;
+      });
+      return;
+    }
     if (lastMode === 'cpu') {
       $('#btn-again').disabled = true;
       // The match that just ended, not the lobby's current selection: "Play
