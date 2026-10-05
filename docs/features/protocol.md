@@ -366,10 +366,18 @@ Notes:
   `seriesOver: false` is followed by the next round's countdown frames. The
   countdown frame carries only the schedule (`n`, `shootAt`, `windowMs`), so
   `enter.countdown` treats a `result` origin as *the same match continuing* — it
-  clears the finished round's panel and rematch buttons but keeps the background
-  and the opponent slot. Rebuilding the screen from the frame instead would
-  re-roll the stage and revert the opponent to a generic name, which is invisible
-  in round one and wrong in every round after it.
+  clears the finished round's panel and rematch buttons but keeps the background,
+  the opponent slot and the series pips. Rebuilding the screen from the frame
+  instead would re-roll the stage and revert the opponent to a generic name,
+  which is invisible in round one and wrong in every round after it.
+- The series score is drawn as a **pip per round win still needed**, one row
+  under each fighter, filled from the left as the wins come in. The rows are
+  `roundsTarget` pips wide because that is what the server says, so the client
+  holds no copy of the series rules — and a result with no `roundsTarget` (a
+  pre-series server, or PvP) draws no pips at all rather than guessing one. The
+  pips are module state beside the round panel for the same reason the opponent
+  slot is kept: a tally that reset with each round would read as the score
+  having been thrown away.
 
 ## Clock handling
 

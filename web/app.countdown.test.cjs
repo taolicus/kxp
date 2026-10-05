@@ -215,10 +215,22 @@ test('a second round arrives on a countdown frame that carries none of the match
   assert.ok(app.el('#timing').classList.contains('hidden'), 'no stale timing panel');
 });
 
-// playsRounds drives the real app.js through `n` rounds of a CPU series: each
-// one is announced, opened, and then judged with the tally the server would
-// report for it. It returns after the last result has been rendered, so a test
-// can assert on the screen the player is left looking at.
+// The pip rows, read the way a player reads them: how many pips, and how many
+// of them are filled. Counted off the rendered markup rather than re-derived,
+// because what is on screen *is* the contract here.
+const pips = (app, who) => {
+  const html = app.el(who === 'you' ? '#you-pips' : '#opp-pips').innerHTML;
+  return {
+    total: (html.match(/class="pip/g) || []).length,
+    filled: (html.match(/class="pip on"/g) || []).length,
+    hidden: app.el(who === 'you' ? '#you-pips' : '#opp-pips').classList.contains('hidden'),
+  };
+};
+
+// playRound drives the real app.js through one round of a CPU series: announced,
+// opened, then judged with the tally the server would report for it. It returns
+// after the result has been rendered, so a test can assert on the screen the
+// player is left looking at.
 async function playRound(app, base, { you, opp, over }) {
   app.fire('countdown', { n: 'READY', shootAt: base, windowMs: 2000 });
   app.fire('shoot', { windowMs: 2000, shootAt: base });
@@ -243,36 +255,56 @@ async function cpuSeries(app) {
   await app.settle();
 }
 
-test('a series round shows the running score and withholds the rematch until the last round', async () => {
+test('a series fills a pip per round won, and withholds the rematch until the last round', async () => {
   // A CPU match is a series, so the score is the thing being played for and has
   // to be on screen for every round -- including through the next countdown,
-  // which clears the round panel the score arrived with. "Play Again" has to
+  // which clears the round panel the result arrived with. "Play Again" has to
   // mean "the match is over": offering it after round one made a series look
   // finished, and a tap on it abandoned a match still being played.
   const app = loadApp({ next: SM.next });
   await cpuSeries(app);
 
   await playRound(app, 1700000003000, { you: 1, opp: 0, over: false });
-  const score = app.el('#series-score').textContent;
-  assert.match(score, /1 \u2013 0 of 3/, 'the score after round one');
+  assert.deepEqual(pips(app, 'you'), { total: 3, filled: 1, hidden: false }, 'one of your three lit');
+  assert.deepEqual(pips(app, 'opp'), { total: 3, filled: 0, hidden: false }, 'none of theirs');
   assert.ok(app.el('#btn-again').classList.contains('hidden'), 'no rematch mid-series');
   assert.ok(app.el('#btn-mode').classList.contains('hidden'), 'and no mode switch either');
 
-  // The next round counts down over the panel resetGame just cleared; the score
-  // is not part of that panel.
+  // The next round counts down over the panel resetGame just cleared; the pips
+  // are not part of that panel.
   app.fire('countdown', { n: 'READY', shootAt: 1700000010000, windowMs: 2000 });
-  assert.equal(app.el('#series-score').textContent, score, 'the score survives into round two');
+  assert.deepEqual(pips(app, 'you'), { total: 3, filled: 1, hidden: false }, 'still lit into round two');
   assert.ok(app.el('#btn-again').classList.contains('hidden'), 'still no rematch');
 
-  await playRound(app, 1700000013000, { you: 2, opp: 1, over: false });
-  assert.match(app.el('#series-score').textContent, /2 \u2013 1 of 3/, 'the score after round two');
+  await playRound(app, 1700000013000, { you: 1, opp: 2, over: false });
+  assert.deepEqual(pips(app, 'opp'), { total: 3, filled: 2, hidden: false }, 'two of theirs after round two');
 
-  await playRound(app, 1700000023000, { you: 3, opp: 1, over: true });
-  assert.match(app.el('#series-score').textContent, /3 \u2013 1 of 3/, 'the final score');
+  await playRound(app, 1700000023000, { you: 3, opp: 2, over: true });
+  assert.deepEqual(pips(app, 'you'), { total: 3, filled: 3, hidden: false }, 'all three of yours lit at the end');
+  assert.deepEqual(pips(app, 'opp'), { total: 3, filled: 2, hidden: false }, 'and two of theirs');
   assert.ok(!app.el('#btn-again').classList.contains('hidden'), 'the final round offers the rematch');
 });
 
-test('a result with no series fields still offers the rematch', async () => {
+test('the pip rows are as long as the series the server asked for', async () => {
+  // The client holds no copy of the rules: the row is `roundsTarget` pips wide
+  // because the server says so. A hardcoded three would look right today and
+  // quietly lie the day the target changes, and nothing else here would notice.
+  const app = loadApp({ next: SM.next });
+  await cpuSeries(app);
+
+  app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
+  app.fire('shoot', { windowMs: 2000, shootAt: 1700000003000 });
+  app.runUntil(1700000005500);
+  app.fire('result', {
+    outcome: 'win', mode: 'cpu', opponentName: 'CPU', round: 1,
+    youRoundWins: 1, oppRoundWins: 0, roundsTarget: 5, seriesOver: false,
+  });
+
+  assert.equal(pips(app, 'you').total, 5);
+  assert.equal(pips(app, 'opp').total, 5);
+});
+
+test('a result with no series fields still offers the rematch and shows no pips', async () => {
   // The pin against over-correcting. The series fields are additive on the wire,
   // so a tab open across a deploy sees results without them until it
   // refreshes; treating that as "not over" would strand the player on a result
@@ -288,23 +320,23 @@ test('a result with no series fields still offers the rematch', async () => {
 
   assert.ok(!app.el('#btn-again').classList.contains('hidden'), 'the rematch is offered');
   assert.ok(!app.el('#btn-mode').classList.contains('hidden'), 'and so is the mode switch');
-  assert.ok(app.el('#series-score').classList.contains('hidden'), 'with no scoreboard to show');
+  assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'no pips to show');
 });
 
-test('the score does not outlive the match', async () => {
+test('the pips do not outlive the match', async () => {
   // The lobby is where a match ends -- finished, cancelled or abandoned -- so
-  // that is where the series it belonged to ends. A score left on screen would
+  // that is where the series it belonged to ends. A lit pip left on screen would
   // be the previous match's, showing above the next one's countdown.
   const app = loadApp({ next: SM.next });
   await cpuSeries(app);
   await playRound(app, 1700000003000, { you: 1, opp: 0, over: false });
-  assert.ok(!app.el('#series-score').classList.contains('hidden'), 'sanity: a score is up');
+  assert.equal(pips(app, 'you').filled, 1, 'sanity: a pip is lit');
 
   // "Change mode" is one of the two ways off a result screen, and it goes to
   // the lobby -- which is where enter.lobby forgets the series.
   runInContext("transition('mode', {})", app.ctx);
-  assert.equal(runInContext('seriesScore', app.ctx), '', 'the series is forgotten');
-  assert.ok(app.el('#series-score').classList.contains('hidden'), 'and off the screen');
+  assert.equal(runInContext('seriesTally', app.ctx), null, 'the series is forgotten');
+  assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'and off the screen');
 });
 
 test('a client that misses the whole countdown is still told to shoot', () => {

@@ -44,9 +44,15 @@
 
   <section id="game" class="view hidden">
     <div class="fighters-bar">
-      <div id="you-slot" class="slot"></div>
+      <div class="fighter-col">
+        <div id="you-slot" class="slot"></div>
+        <div id="you-pips" class="pips hidden"></div>
+      </div>
       <div class="vs-tag">VS</div>
-      <div id="opp-slot" class="slot"></div>
+      <div class="fighter-col">
+        <div id="opp-slot" class="slot"></div>
+        <div id="opp-pips" class="pips hidden"></div>
+      </div>
     </div>
     <div id="stage" class="stage">
       <div id="count" class="count">&#8203;</div>
@@ -58,7 +64,6 @@
     </div>
     <div id="banner" class="banner hidden"></div>
     <div id="timing" class="timing hidden"></div>
-    <p id="series-score" class="stats hidden"></p>
     <p id="game-stats" class="stats hidden"></p>
     <div class="result-actions">
       <button id="btn-again" class="primary hidden">Play Again</button>

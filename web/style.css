@@ -318,6 +318,35 @@ button.primary:hover {
   font-weight: 800;
 }
 
+/* The series scoreboard: one pip per round a side still needs, filled as it wins
+   them. It sits under the fighter rather than inside the slot, because
+   setYouSlot/setOppSlot rewrite the slot's innerHTML on every result and would
+   take the pips with it. */
+.fighter-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pips {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.pip {
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 1px solid var(--border-2);
+  border-radius: 50%;
+  background: var(--panel);
+}
+
+.pip.on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
 .stage {
   position: relative;
   min-height: 7rem;

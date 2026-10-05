@@ -16,13 +16,13 @@ let slotStep = null; // pure stepper for the round being counted down
 let plannedShootAt = 0; // announced deadline (epoch-ms) slotStep belongs to
 let punTimer = null; // local PUN entry scheduled from the announced round plan
 
-// The running series tally, as the last result reported it. A CPU match is a
-// series, so the score is the thing being played for and it has to outlive the
-// round panel: resetGame hides the result panel when the next countdown starts,
-// and the score has to still be there. Empty when the mode has no series (PvP
-// rounds, and any match against a server predating these fields, which is why
-// renderResult treats a missing roundsTarget as "no score to show").
-let seriesScore = '';
+// The series tally as the last result reported it. A CPU match is a series, so
+// the score is the thing being played for and it has to outlive the round panel:
+// resetGame hides the result panel when the next countdown starts, and the pips
+// have to still be there. Null when the mode has no series (PvP rounds, and any
+// match against a server predating these fields, which is why renderResult
+// treats a missing roundsTarget as "no pips to show").
+let seriesTally = null;
 
 // Last-resort recovery: if a PUN result never arrives (dropped SSE event,
 // wedged connection) we're stuck in a game state with nothing left to do.
@@ -284,7 +284,8 @@ function resetGame() {
   $('#banner').classList.add('hidden');
   $('#timing').classList.add('hidden');
   $('#game-stats').classList.add('hidden');
-  $('#series-score').classList.add('hidden');
+  $('#you-pips').classList.add('hidden');
+  $('#opp-pips').classList.add('hidden');
   $('#btn-again').classList.add('hidden');
   $('#btn-mode').classList.add('hidden');
   flashPick(null);
@@ -370,30 +371,41 @@ function renderResult(d) {
     $('#btn-again').disabled = false;
     $('#btn-mode').classList.remove('hidden');
   }
-  renderSeriesScore(d);
+  renderPips(d.youRoundWins, d.oppRoundWins, d.roundsTarget);
   setYouSlot();
   setOppSlot(d.opponentCharacter, d.opponentName);
 }
 
-// The scoreboard. Kept out of resetGame's hide list and repainted from
-// seriesScore on the next countdown instead, because a series spans rounds: the
-// tally the player just earned has to still be on screen while the next round
-// counts down. A match with no series leaves the element hidden.
-function renderSeriesScore(d) {
-  const target = d && d.roundsTarget ? d.roundsTarget : 0;
-  seriesScore = target > 0
-    ? `Round ${d.round || 1} \u00b7 ${d.youRoundWins} \u2013 ${d.oppRoundWins} of ${target}`
-    : '';
-  $('#series-score').textContent = seriesScore;
-  $('#series-score').classList.toggle('hidden', !seriesScore);
+// The series scoreboard: one pip per round win a side still needs, filled as it
+// takes them. Driven by the server's roundsTarget rather than a count written
+// here, so the row is exactly as long as the series is and the client holds no
+// copy of the rules.
+function renderPips(you, opp, target) {
+  seriesTally = target > 0 ? { you, opp, target } : null;
+  paintPips();
 }
 
-// Repaint what the last result put there, after resetGame has cleared the panel
-// it belongs to. A no-op outside a series.
-function restoreSeriesScore() {
-  if (!seriesScore) return;
-  $('#series-score').textContent = seriesScore;
-  $('#series-score').classList.remove('hidden');
+// Repaint from the remembered tally, after resetGame has cleared the panel the
+// pips live beside. A series spans rounds, and the score the player just earned
+// has to still be on screen while the next round counts down.
+function paintPips() {
+  const s = seriesTally;
+  paintPipRow('#you-pips', s ? s.you : 0, s ? s.target : 0);
+  paintPipRow('#opp-pips', s ? s.opp : 0, s ? s.target : 0);
+}
+
+function paintPipRow(sel, wins, target) {
+  const el = $(sel);
+  el.innerHTML = target > 0 ? pipHTML(wins, target) : '';
+  el.classList.toggle('hidden', target === 0);
+}
+
+// Filled pips lead, left to right: the row reads as filling up rather than as a
+// count, which is the whole point of drawing it.
+function pipHTML(wins, target) {
+  let out = '';
+  for (let i = 0; i < target; i++) out += `<span class="pip${i < wins ? ' on' : ''}"></span>`;
+  return out;
 }
 
 async function post(path, body = {}) {
@@ -455,8 +467,9 @@ const enter = {
     clearTimeout(stallTimer);
     resetGame();
     // The match is over -- finished, cancelled or abandoned -- so the series it
-    // belonged to is too, and the next one starts from no score.
-    seriesScore = '';
+    // belonged to is too, and the next one starts from empty pips.
+    seriesTally = null;
+    paintPips();
     show('lobby');
     setNotice(d && d.reason);
   },
@@ -479,7 +492,8 @@ const enter = {
     resetGame();
     // A new match has no score until its first result reports one, whatever the
     // previous match left on screen.
-    seriesScore = '';
+    seriesTally = null;
+    paintPips();
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
     setCount('MATCH FOUND');
@@ -501,9 +515,9 @@ const enter = {
       // would otherwise sit on screen through the next round.
       showGame();
       resetGame();
-      // ...and the score the round just produced goes back up: it belongs to the
+      // ...and the pips the round just moved go back up: they belong to the
       // series, not to the round panel resetGame just cleared.
-      restoreSeriesScore();
+      paintPips();
     } else if (!GAME_STATES.includes(from)) {
       setBg(d);
       showGame();
