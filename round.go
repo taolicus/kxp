@@ -176,6 +176,14 @@ type match struct {
 	// only carries the value and announces it.
 	background string
 	phase      atomic.Int32
+
+	// series state (best-of-N, first to 3 decisive wins by default)
+	roundsTarget int
+	round        int
+	win          [2]int // decisive round wins (void counts as win for opponent per task)
+
+	series     bool // CPU matches start series; PvP behavior defined by task
+	seriesOver bool
 	// shootAt is the announced PUN deadline, fixed at countdown start. It is
 	// held as a time.Time rather than epoch-ns so it carries a monotonic
 	// reading alongside the wall clock, because three separate judgements are
