@@ -76,6 +76,7 @@ func TestBothSidesAreSentTheSameBackground(t *testing.T) {
 func TestCPUMatchAnnouncesABackground(t *testing.T) {
 	h := NewHub()
 	a := newClient()
+	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
 	m := h.makeMatch("bgcpu", side{client: a}, side{bot: true})
 	m.start()
 

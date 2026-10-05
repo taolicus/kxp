@@ -285,7 +285,7 @@ snapshot.
 | `opponentName` | `CPU` or `Opponent`. |
 | `mode` | `online` or `cpu`. |
 | `round` | Current round number (1-based). |
-| `youRoundWins`, `oppRoundWins` | Number of decisive round wins for each side. |
+| `youRoundWins`, `oppRoundWins` | Decisive round wins per side **including the round this result reports** — a scoreboard read, not a running total the client has to add up. A `void` round counts for the opponent. |
 | `roundsTarget` | Target number of decisive wins to win the series (default 3). |
 | `seriesOver` | `true` if the series ended with this result, else `false`. |
 
@@ -358,8 +358,10 @@ Notes:
 
 - A `shoot` event arriving in `shoot`/`locked` is upgraded client-side into a
   shortened catch-up window (see the README) instead of being dropped.
-- The `result` event is the only terminal signal; a `mode`/`rematch:online`
-  choice after it returns to the lobby or queue.
+- `result` is the only signal that ends a *round*; a `mode`/`rematch:online`
+  choice after it returns to the lobby or queue. It ends the *match* only when
+  `seriesOver` is `true` — a client that offers "Play Again" on a non-final
+  result is offering to abandon a match still being played.
 - `result` + `countdown` is how a series plays its next round: a result with
   `seriesOver: false` is followed by the next round's countdown frames. The
   countdown frame carries only the schedule (`n`, `shootAt`, `windowMs`), so

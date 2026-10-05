@@ -167,6 +167,51 @@ func readCountdown(t *testing.T, st *sseStream, timeout time.Duration) {
 	}
 }
 
+// finishCPUSeries plays out the rounds left in a CPU match and asserts the
+// teardown that ends it. A CPU match is a series now, so one result is not the
+// end of the story: while `seriesOver` is false the next frames are the next
+// round's countdown, and only the final result is followed by `state`.
+//
+// The client stops picking after the round its caller played. A silent side is
+// void every round, which the opponent wins, so the series ends at the target in
+// at most four rounds and how long the test takes does not depend on what the bot
+// happens to play -- a client that kept picking against a freshly randomised bot
+// won about one round in three and ran to seven or eight.
+//
+// It also checks the tallies as they stream past, which is the wire half of the
+// series bookkeeping: each result must carry the running sum of the round results
+// seen so far, seeded by `prev`, the result of the round the caller played.
+func finishCPUSeries(t *testing.T, st *sseStream, prev map[string]any) {
+	t.Helper()
+	noSeriesBreak(t)
+	you, opp := int(prev["youRoundWins"].(float64)), int(prev["oppRoundWins"].(float64))
+	for {
+		readCountdown(t, st, 10*time.Second)
+		data := st.readEventTyp(t, "result", 10*time.Second)
+		switch data["outcome"] {
+		case "win":
+			you++
+		case "loss", "void":
+			opp++
+		case "draw":
+		default:
+			t.Fatalf("unexpected outcome %v", data["outcome"])
+		}
+		if data["youRoundWins"] != float64(you) || data["oppRoundWins"] != float64(opp) {
+			t.Fatalf("result scores %v/%v, want the running tally %d/%d",
+				data["youRoundWins"], data["oppRoundWins"], you, opp)
+		}
+		if data["seriesOver"] != true {
+			continue
+		}
+		data = st.readEventTyp(t, "state", 5*time.Second)
+		if data["state"] != "idle" {
+			t.Fatalf("expected state idle, got %v", data)
+		}
+		return
+	}
+}
+
 func TestCPUIntegration(t *testing.T) {
 	h := NewHub()
 	srv := httptest.NewServer(h.routes())
@@ -194,11 +239,10 @@ func TestCPUIntegration(t *testing.T) {
 	if outcome != "win" && outcome != "loss" && outcome != "draw" {
 		t.Fatalf("unexpected outcome %q", outcome)
 	}
-
-	data = st.readEventTyp(t, "state", 5*time.Second)
-	if data["state"] != "idle" {
-		t.Fatalf("expected state idle, got %v", data)
+	if data["roundsTarget"] != float64(seriesTarget) {
+		t.Errorf("roundsTarget = %v, want %d", data["roundsTarget"], seriesTarget)
 	}
+	finishCPUSeries(t, st, data)
 }
 
 func TestPVPIntegration(t *testing.T) {
@@ -375,11 +419,8 @@ func TestEndpointValidation(t *testing.T) {
 		t.Fatalf("invalid character: want 400, got %d", code)
 	}
 
-	st.readEventTyp(t, "result", 8*time.Second)
-	data := st.readEventTyp(t, "state", 5*time.Second)
-	if data["state"] != "idle" {
-		t.Fatalf("expected state idle, got %v", data)
-	}
+	data := st.readEventTyp(t, "result", 8*time.Second)
+	finishCPUSeries(t, st, data)
 	if code, _ := postJSON(t, srv.URL+"/move", map[string]any{"id": id, "move": "rock"}); code != 400 {
 		t.Fatalf("move after match: want 400, got %d", code)
 	}
@@ -503,8 +544,8 @@ func TestSecondMatchRefusedForLiveClient(t *testing.T) {
 	if code, _ := postJSON(t, srv.URL+"/move", map[string]any{"id": id, "move": "rock"}); code != 200 {
 		t.Fatal("/move rejected the on-time pick")
 	}
-	st.readEventTyp(t, "result", 8*time.Second)
-	st.readEventTyp(t, "state", 5*time.Second)
+	data := st.readEventTyp(t, "result", 8*time.Second)
+	finishCPUSeries(t, st, data)
 
 	if code, body := postJSON(t, srv.URL+"/cpu", map[string]any{"id": id}); code != 200 {
 		t.Fatalf("/cpu after teardown: status %d (body %v), want 200", code, body)

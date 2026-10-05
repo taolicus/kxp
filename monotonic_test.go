@@ -79,7 +79,7 @@ func TestArrivalTimingUsesElapsedNotWallClock(t *testing.T) {
 	onTime := time.Now().Add(300 * time.Millisecond)
 	m.moves[0] = &moveMsg{move: MoveRock, arrive: onTime}
 	m.moves[1] = &moveMsg{move: MoveScissors, arrive: onTime}
-	m.resolve()
+	m.judge()
 
 	ra := waitForEvent(t, a, "result")
 	rb := waitForEvent(t, b, "result")

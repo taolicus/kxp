@@ -43,6 +43,17 @@ var readyLease = 4 * time.Second
 // be coarse.
 var readyRecheck = 250 * time.Millisecond
 
+// seriesBreak is the pause between one round of a series and the next. It exists
+// so the client is still showing the round it just finished -- the result panel,
+// the moves, the scoreboard -- before the next countdown starts repainting over
+// it. A package var so tests do not have to wait it out.
+var seriesBreak = 3 * time.Second
+
+// seriesTarget is the number of decisive round wins that ends a series. Named
+// rather than a literal in newMatch so the engine, its tests and the protocol
+// docs all quote one number.
+const seriesTarget = 3
+
 // Why a pending match was cancelled before its countdown began. Reported to the
 // client on the teardown frame so a bounced player learns the round was
 // *cancelled* rather than lost — silence here is what made a slow link look
@@ -110,6 +121,11 @@ func phaseLabel(v int32) string {
 //	done            abort()     abort(),        run() after resolve
 //	                             readyTimeout(),
 //	                             finish()
+//	done -> countdown is the series loop: a resolved-but-not-final round walks
+//	back to the countdown for the next one. It is the only edge out of done, so a
+//	stale goroutine holding a match that has already finished cannot restart a
+//	round -- done is terminal for every other path (finishMatch advances into it,
+//	but only to stop there).
 func allowedPhaseEdge(from, to int32) bool {
 	switch from {
 	case phaseIdle:
@@ -120,6 +136,8 @@ func allowedPhaseEdge(from, to int32) bool {
 		return to == phaseShoot || to == phaseDone
 	case phaseShoot:
 		return to == phaseDone
+	case phaseDone:
+		return to == phaseCountdown
 	default:
 		return false
 	}
@@ -177,13 +195,23 @@ type match struct {
 	background string
 	phase      atomic.Int32
 
-	// series state (best-of-N, first to 3 decisive wins by default)
+	// Series state: a match that plays more than one round. A CPU match is a
+	// series; a PvP match still ends on its first round, which is the CPU-first
+	// half of docs/tasks/open/game-mode-architecture.md -- the PvP half re-opens
+	// the ready handshake per round, and until it does, honouring a series there
+	// would park two players in a match neither can leave.
+	//
+	// roundsTarget is the number of decisive round wins that ends the series, win
+	// the tally so far (a round lost on a `void` timeout is not decisive for the
+	// side that caused it, per connectivity-safe scoring), round the 1-based
+	// round number, and seriesOver whether the last result ended the match.
+	// Written and read on run's own goroutine, so plain ints: see the abandon
+	// field for why these are not atomics.
 	roundsTarget int
 	round        int
-	win          [2]int // decisive round wins (void counts as win for opponent per task)
+	win          [2]int
+	seriesOver   bool
 
-	series     bool // CPU matches start series; PvP behavior defined by task
-	seriesOver bool
 	// shootAt is the announced PUN deadline, fixed at countdown start. It is
 	// held as a time.Time rather than epoch-ns so it carries a monotonic
 	// reading alongside the wall clock, because three separate judgements are
@@ -246,7 +274,7 @@ func newMatch(id string) *match {
 		id:           id,
 		readyCh:      make(chan struct{}),
 		now:          time.Now,
-		roundsTarget: 3,
+		roundsTarget: seriesTarget,
 		round:        1,
 	}
 }
@@ -464,6 +492,31 @@ func (m *match) run() {
 	// announced and countdown frames go out.
 	m.advance(phasePreparing, phaseCountdown)
 
+	// Rounds play until judge says the match is over. There is no branch here for
+	// the single-round case: judge decides that from seriesMatch, so the mode
+	// rule lives in one place instead of once per caller.
+	//
+	// The ready handshake is deliberately *not* repeated per round. Neither side
+	// left the match screen to be ready for the next one, so re-opening the gate
+	// would add a stall no client can act on -- a client that tried would be
+	// acking a screen it is already showing.
+	for m.playRound() {
+	}
+}
+
+// seriesMatch reports whether this match plays more than one round. It is derived
+// from the sides rather than carried as a flag: a CPU opponent is the whole of
+// the current rule, so when the PvP half of the task lands this is the one line
+// that changes.
+func (m *match) seriesMatch() bool { return m.sides[1].bot }
+
+// playRound runs one round, from announcing its schedule to emitting its result.
+// It returns false when the match cannot continue -- a side left, or the phase
+// was lost to a stale transition -- in which case it has already told the client
+// what it needed to and the caller must advance nothing.
+func (m *match) playRound() bool {
+	m.beginRound()
+
 	// Announce the round schedule before the countdown starts: the deadline is
 	// fixed here and the loop sleeps to the announced slots. The client plays
 	// the countdown against a deadline it already knows, so a stalled or dropped
@@ -483,7 +536,7 @@ func (m *match) run() {
 
 	if m.left() {
 		m.abort()
-		return
+		return false
 	}
 
 	planPayload := func(n string) map[string]any {
@@ -499,7 +552,7 @@ func (m *match) run() {
 	for i := countdownSlots; i > 0; i-- {
 		if m.waitUntil(m.shootAtTime().Add(-time.Duration(i) * countStep)) {
 			m.abort()
-			return
+			return false
 		}
 		n := countdownBeats[countdownSlots-i]
 		for j := range m.sides {
@@ -508,11 +561,11 @@ func (m *match) run() {
 	}
 	if m.waitUntil(m.shootAtTime()) {
 		m.abort()
-		return
+		return false
 	}
 	if m.left() {
 		m.abort()
-		return
+		return false
 	}
 
 	m.advance(phaseCountdown, phaseShoot)
@@ -547,15 +600,100 @@ loop:
 			break loop
 		case <-m.leftCh(0):
 			m.abort()
-			return
+			return false
 		case <-m.leftCh(1):
 			m.abort()
-			return
+			return false
 		}
 	}
 
-	m.resolve()
+	// The round is over, so the phase says so before the picks are judged. A late
+	// move arriving after this point is refused by the hub's move handler rather
+	// than being judged into a round that has already been reported.
 	m.advance(phaseShoot, phaseDone)
+	return m.closeRound()
+}
+
+// closeRound ends the finished round and reports whether the match continues.
+// Judging and discarding stragglers are one step because they are one event: the
+// moment the result is reported, anything still buffered belonged to a window
+// that has already been reported to both sides.
+func (m *match) closeRound() bool {
+	cont := m.judge()
+	m.discardStragglers()
+	return cont
+}
+
+// beginRound clears the state that belongs to one round rather than to the
+// match, so a round starts from nothing: no deadline and no picks carried over.
+func (m *match) beginRound() {
+	m.shootAt.Store(nil)
+	m.moves[0], m.moves[1] = nil, nil
+}
+
+// discardStragglers drops any pick still buffered once a round has been judged.
+//
+// The shoot loop stops reading when the window closes, so a pick accepted before
+// the deadline can still be sitting in the channel when the round is judged, and
+// the next round's loop would take it as that round's pick -- judged against a
+// deadline its arrival predates, so it would surface as an `early` loss in a
+// round the player never saw it belong to. That is the defect
+// `drainPending`'s own comment already names and rules out ("a straggler can
+// only lose an already-closed round"); in a single-round match the rule was
+// free, and in a series it is this call.
+//
+// It runs after the judgement, not before the round, because the engine does not
+// pre-filter what it receives: a pick that arrived *before* its round's window
+// opened is judged `early` and loses (see `judgeRound`), and discarding it at
+// the start of the round would silently convert that into a timeout `void`.
+func (m *match) discardStragglers() {
+	for i := range m.sides {
+		for {
+			if _, ok := m.takeFirst(i); !ok {
+				break
+			}
+		}
+	}
+}
+
+// judge resolves the round, keeps the series tally, announces the result, and
+// reports whether another round is to be played. It returns false when the match
+// is over.
+//
+// The order matters and is the reason this is one function rather than three:
+// the result frames must carry the tally *including* this round, and the final
+// one must carry seriesOver: true. Deciding either after announcing would tell
+// the client a score the server does not hold, and would end the match on a
+// frame that claims it is still going.
+//
+// The tally is read from the judged result rather than recomputed from the moves,
+// so the score the client was told and the score the server keeps cannot drift.
+// A draw is worth nothing to either side and replays, which is why the series has
+// no round cap: two sides that keep drawing never end it, by design rather than
+// by omission.
+func (m *match) judge() bool {
+	res, ps := m.judgeRound()
+	for i := range m.sides {
+		if res[i] == ResultWin {
+			m.win[i]++
+		}
+	}
+	// A non-series match is over the moment its only round is judged, so the same
+	// expression covers "first to N" and "one round" without a branch.
+	m.seriesOver = !m.seriesMatch() ||
+		m.win[0] >= m.roundsTarget || m.win[1] >= m.roundsTarget
+	m.announce(res, ps)
+	if m.seriesOver {
+		return false
+	}
+	m.round++
+	// The client is mid-round-break: it has just been told the outcome and still
+	// has the result panel up. This is client pacing, not a safety margin, so it
+	// is a var for tests to shrink rather than a rule to tune.
+	if m.wait(seriesBreak) {
+		return false
+	}
+	return m.advance(phaseDone, phaseCountdown)
 }
 
 func (m *match) wait(d time.Duration) bool {
@@ -684,7 +822,11 @@ type pickOutcome struct {
 	clientMs *int64
 }
 
-func (m *match) resolve() {
+// judgeRound scores the round's picks and returns the outcome per side together
+// with the per-side detail the result frame reports. It reads m.moves and emits
+// nothing: judge announces once the series tally is settled, so the frames can
+// carry the score this round produced.
+func (m *match) judgeRound() ([2]Result, [2]pickOutcome) {
 	var ps [2]pickOutcome
 	for i := 0; i < 2; i++ {
 		msg := m.moves[i]
@@ -748,6 +890,12 @@ func (m *match) resolve() {
 		}
 	}
 
+	return res, ps
+}
+
+// announce sends each side its result frame, carrying the series state as it
+// stands after this round -- which is why judge calls it last.
+func (m *match) announce(res [2]Result, ps [2]pickOutcome) {
 	for i := range m.sides {
 		opp := 1 - i
 		mode := "online"

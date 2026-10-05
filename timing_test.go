@@ -28,7 +28,7 @@ func resolveTimed(t *testing.T, aOff, bOff time.Duration) (map[string]any, map[s
 	m.setShootAt(shootAt)
 	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(aOff)}
 	m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(bOff)}
-	m.resolve()
+	m.judge()
 	ra := waitForEvent(t, a, "result")
 	rb := waitForEvent(t, b, "result")
 	return ra, rb
@@ -142,7 +142,7 @@ func TestResolveLateIsNotATimeout(t *testing.T) {
 	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(shootWindow + 10*time.Millisecond)}
 	// b makes no pick at all, so the round has one valid move and one absent
 	// side -- the case the planned void rule keys on.
-	m.resolve()
+	m.judge()
 
 	ra := waitForEvent(t, a, "result")
 	rb := waitForEvent(t, b, "result")
@@ -165,7 +165,7 @@ func resolveTimedClient(t *testing.T, aArrive time.Duration, aReaction time.Dura
 	const sawPunAt = int64(1_000_000_000)
 	m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(aArrive), sawPunAt: sawPunAt, clickedAt: sawPunAt + aReaction.Milliseconds()}
 	m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(time.Millisecond)}
-	m.resolve()
+	m.judge()
 	ra := waitForEvent(t, a, "result")
 	rb := waitForEvent(t, b, "result")
 	return ra, rb
@@ -214,7 +214,7 @@ func TestClientReactionSpoofedIgnored(t *testing.T) {
 			m.setShootAt(shootAt)
 			m.moves[0] = &moveMsg{move: MoveRock, arrive: shootAt.Add(time.Millisecond), sawPunAt: tc.sawPunAt, clickedAt: tc.clickedAt}
 			m.moves[1] = &moveMsg{move: MoveScissors, arrive: shootAt.Add(2 * time.Millisecond)}
-			m.resolve()
+			m.judge()
 			ra := waitForEvent(t, a, "result")
 			if ra["youClientMs"] != nil {
 				t.Errorf("youClientMs = %v, want nil for spoofed timestamps", ra["youClientMs"])

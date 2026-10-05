@@ -3,7 +3,10 @@
 // This is the whole game loop in one shot and the single most valuable thing
 // to run when the app feels wrong on a phone: the ready handshake, the
 // countdown, the PUN window, a scored move, and a result — every frame type the
-// client depends on, in the documented order.
+// client depends on, in the documented order. A CPU match is a series, so it
+// plays to the target: every round after the first arrives on a `result` with
+// `seriesOver: false` followed by the next round's countdown, and the tally is
+// checked as a running sum on the way through.
 //
 // It is also the only probe here that verifies TIMING rather than shape, and
 // timing is the thing a moving train breaks. The server pre-announces the round
@@ -17,7 +20,7 @@
 // frame reaches the phone the window is gone, so every round silently
 // timeouts. The `pun headroom` line is the number that predicts it.
 //
-// Consumes one real match and ~6 rate-limit tokens.
+// Consumes one real match (up to 4 rounds) and ~8 rate-limit tokens.
 //
 //   npm run t5
 
@@ -122,11 +125,13 @@ await script('t5 · CPU match end-to-end', async () => {
   rep.eq('move accepted', moveRes.status, 200, errMsg(moveRes));
 
   const result = await sse.wait('result', { timeout: BOUNDS.match, from: sse.marked(shoot) });
-  const r = result.data || {};
-  const types = sse.types();
+  let r = result.data || {};
+  // The frame order is asserted for round one only: in a series the next
+  // round's countdown can already be on the wire by the time the result is read,
+  // so a whole-match filter would race the server rather than measure it.
+  const round1 = sse.since(0).slice(0, sse.marked(result)).map((f) => f.type);
   const order = ['matched', 'countdown', 'countdown', 'countdown', 'shoot', 'result'];
-  const seenOrder = types.filter((t) => order.includes(t));
-  rep.eq('frame order matched → countdown ×3 → shoot → result', seenOrder, order, types.join(' → '));
+  rep.eq('frame order matched → countdown ×3 → shoot → result', round1, order, round1.join(' → '));
 
   rep.eq('result reports CPU mode', r.mode, 'cpu');
   rep.eq('result echoes the move we sent', r.you, move);
@@ -146,14 +151,47 @@ await script('t5 · CPU match end-to-end', async () => {
     rep.truthy('no-move round is void or draw, never a loss', r.outcome === 'void' || r.outcome === 'draw', `outcome=${r.outcome} youNote="${r.yourNote}"`);
   }
 
-  const totalMs = result.at - connected.at;
-  console.log(`  note: match wall time ${totalMs}ms (server's own schedule is ~4s + handshake)`);
+  // A CPU match is a series (protocol.md, `roundsTarget`), so the first result is
+  // not the end of it: a non-final one is followed by the next round's countdown.
+  // Play the rounds out so the teardown assertions below are made against a real
+  // finished match rather than against a round the series was about to abandon.
+  // The series fields are asserted on the way through, because a server that
+  // stopped sending them would look exactly like a server playing one round.
+  // The tally is checked as a running sum, the same invariant the Go integration
+  // tests assert, because "the numbers move" and "the numbers are right" are
+  // different failures and only one of them is obvious on a phone.
+  let rounds = 1;
+  let last = result;
+  cursor = sse.marked(result);
+  let you = r.youRoundWins;
+  let opp = r.oppRoundWins;
+  while (r.seriesOver !== true && rounds <= 9) {
+    console.log(`  note: round ${r.round} scored ${you}-${opp}, series continues`);
+    const nextShoot = await sse.wait('shoot', { timeout: BOUNDS.countdown, from: cursor, where: `round ${r.round + 1}` });
+    const { res: nextMove } = await submitMove(id, ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)]);
+    rep.eq(`round ${rounds + 1} move accepted`, nextMove.status, 200, errMsg(nextMove));
+    cursor = sse.marked(nextShoot);
+    last = await sse.wait('result', { timeout: BOUNDS.match, from: cursor, where: `round ${rounds + 1}` });
+    const d = last.data || {};
+    if (d.outcome === 'win') you += 1;
+    else if (d.outcome === 'loss' || d.outcome === 'void') opp += 1;
+    rep.eq(`round ${rounds + 1} reports its number`, d.round, rounds + 1);
+    rep.eq(`round ${rounds + 1} reports the target`, d.roundsTarget, 3);
+    rep.eq(`round ${rounds + 1} reports the running tally`, `${d.youRoundWins}-${d.oppRoundWins}`, `${you}-${opp}`);
+    r = d;
+    rounds += 1;
+  }
+  rep.truthy('the final result ends the series', r.seriesOver === true, `round ${r.round} seriesOver=${r.seriesOver}`);
+  console.log(`  note: series settled after ${rounds} rounds at ${r.youRoundWins}-${r.oppRoundWins}`);
+
+  const totalMs = last.at - connected.at;
+  console.log(`  note: match wall time ${totalMs}ms (server's own schedule is ~4s per round + handshake)`);
 
   // A completed match's trailing `state idle` must stay bare. It carries a
   // `reason`/`requeued` only when a handshake was *cancelled*, and this match was
   // not — a stale reason here would tell the player their finished round was
   // cancelled. Asserted on the real teardown every CPU match ends with.
-  const teardown = await sse.wait('state', { timeout: BOUNDS.teardown, from: sse.marked(result) });
+  const teardown = await sse.wait('state', { timeout: BOUNDS.teardown, from: sse.marked(last) });
   const td = teardown.data || {};
   rep.eq('finished match teardown reports idle', td.state, 'idle');
   rep.truthy('finished match teardown carries no cancellation reason', td.reason === undefined, `reason=${td.reason}`);

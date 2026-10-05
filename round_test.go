@@ -36,7 +36,17 @@ func nextEvent(t *testing.T, c *Client) (string, map[string]any) {
 
 func waitForEvent(t *testing.T, c *Client, typ string) map[string]any {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	return waitEventWithin(t, c, typ, 5*time.Second)
+}
+
+// waitEventWithin is waitForEvent with a deadline the caller picks. Five seconds
+// covers a frame or two, but not a whole round from `start` -- three countdown
+// beats and then the two-second pick window -- so a test that plays real rounds
+// asks for the time it needs rather than reporting a timeout for a round that was
+// about to arrive.
+func waitEventWithin(t *testing.T, c *Client, typ string, within time.Duration) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(within)
 	for {
 		select {
 		case b := <-c.send:
@@ -239,6 +249,7 @@ func TestCountdownBeatsLeadPUN(t *testing.T) {
 func TestCPURound(t *testing.T) {
 	h := NewHub()
 	a := newClient()
+	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
 	m := h.makeMatch("m4", side{client: a}, side{bot: true})
 	m.start()
 	m.ackReady(0)

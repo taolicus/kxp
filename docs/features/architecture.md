@@ -15,7 +15,10 @@ Matches progress through four phases: `idle` → `countdown` → `shoot` (PUN) �
 `done`, tracked via an `atomic.Int32` on the `match` struct. Every phase change
 goes through `advance(from, to)`, which rejects illegal edges (see
 `allowedPhaseEdge`) and uses `CompareAndSwap` so a stale goroutine can never
-clobber a newer phase. The engine never prints debug state (no
+clobber a newer phase. A match that is still in a series goes back from `done`
+to `countdown` for the next round — the only edge out of `done`, and allowed
+only from there, so a goroutine stranded in `shoot` cannot restart a round that
+has already been judged. The engine never prints debug state (no
 `stateDebug`-style diagnostics); observability is the structured `log` in
 `server.go`.
 
@@ -90,6 +93,54 @@ not remove are recorded in [docs/issues/](../issues/) — in particular
 [reconnect-loss](../issues/reconnect-loss.md) and
 [window-shrink](../issues/window-shrink.md), each of which carries its own
 prospective fix, with the causes still unconfirmed.
+
+## A match is a series of rounds
+
+A CPU match is played as a series: first to `seriesTarget` (3) decisive round
+wins, a draw replayed as a fresh round, and a `void` round ([connectivity-safe
+scoring](../tasks/open/connectivity-safe-scoring.md)) counted as a round win for
+the opponent — a dropped connection costs a round, not the match. `run()` acks
+the ready handshake once per *match*, then loops `playRound()`; `playRound()`
+begins the round, plays it, and hands it to `judge()`, which returns whether the
+series continues. PvP matches are still one round, which is the other half of
+[game-mode-architecture](../tasks/open/game-mode-architecture.md) and not an
+oversight: re-opening the ready handshake between rounds is a wire-visible
+decision that belongs with the series loop, not beside it.
+
+**The series bookkeeping lives in `judge()`, and the result is announced after
+it.** The tally is updated, `seriesOver` is decided, and only then does
+`announce()` build the frame — so `youRoundWins`/`oppRoundWins` on the wire are the
+score *after* the round that frame reports. Announcing first and accounting after
+would put the score a round behind, which reads on screen as a stale scoreboard
+and cannot be fixed client-side without the client re-deriving the rules.
+
+**`seriesBreak` is a pause for the player, not for the protocol.** Three seconds
+between rounds so the result panel, the moves and the score are readable before
+the next countdown repaints over them. It is a package var purely so tests do not
+have to wait it out.
+
+**A round starts from nothing and closes completely.** `beginRound()` clears the
+announced deadline and both sides' previous picks before the countdown restarts.
+`closeRound()` is the other end: the shoot loop stops reading when the window
+closes, so a pick accepted before the deadline can still be buffered when the
+result goes out, and the *next* round's loop would take it as that round's pick —
+judged against a deadline its arrival predates, surfacing as an `early` loss in a
+round whose window it was never part of. `discardStragglers()` drops them the
+moment the round is judged, which is the rule `drainPending` already states and
+could not enforce while a match played one round.
+
+It runs after the judgement rather than at the start of the next round because
+the engine does not pre-filter what it receives: a pick that arrived before its
+round's window opened is judged `early` and loses, and discarding it up front
+would silently convert that loss into a timeout `void`. Both directions are
+pinned — `TestAJudgedRoundDiscardsPicksStillBuffered` and
+`TestAPickBeforeTheWindowIsJudgedEarlyNotDiscarded`.
+
+The loop is pinned where it can be: `series_test.go` drives `judge()` directly to
+check the tally, the draw, the target and the void accounting without waiting on
+the clock, and the CPU/PvP tests play real rounds end to end. The integration
+tests assert the wire tally as a running sum across a whole series, and that a
+CPU match does not stop after one round.
 
 ## Matchmaking
 

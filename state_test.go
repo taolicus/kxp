@@ -55,8 +55,15 @@ func TestAllowedTransitionTable(t *testing.T) {
 		{phaseShoot, phaseCountdown, false},
 		{phasePreparing, phaseIdle, false},
 		{phasePreparing, phaseShoot, false},
-		{phaseDone, phaseIdle, false},
 		{phaseDone, phaseShoot, false},
+		// done -> countdown is the one edge out of done, and it exists only for the
+		// series loop: judge walking a resolved-but-not-final round back to the
+		// countdown. Nothing else may leave done, because every other path that
+		// reaches it is a teardown -- a stale goroutine must not be able to restart
+		// a round the match has already finished.
+		{phaseDone, phaseCountdown, true},
+		{phaseDone, phaseIdle, false},
+		{phaseDone, phasePreparing, false},
 	}
 	for i, tc := range cases {
 		m := &match{}
