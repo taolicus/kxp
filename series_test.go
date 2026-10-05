@@ -170,6 +170,12 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 		if r["round"] != float64(1) {
 			t.Errorf("%s round = %v, want 1", name, r["round"])
 		}
+		// Same rule as `matched`, on the frame a scoreboard would be drawn from.
+		// A client that took the target here would draw a three-pip row over a
+		// match that has exactly one round in it.
+		if _, ok := r["roundsTarget"]; ok {
+			t.Errorf("%s result carries roundsTarget = %v, want none", name, r["roundsTarget"])
+		}
 	}
 
 	// Nothing follows it: a second countdown is the series, and this match must
@@ -184,6 +190,38 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 		}
 	case <-time.After(1200 * time.Millisecond):
 	}
+}
+
+// Only a match with a series announces a target. The client draws a pip per
+// round win still needed and needs the target to know how many, so it has to
+// arrive before round one's result -- but a PvP match is one round, and a
+// target on its frames is a promise the match cannot keep.
+func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
+	noSeriesBreak(t)
+	h := NewHub()
+
+	cpu := newClient()
+	cm := h.makeMatch("cs", side{client: cpu}, side{bot: true})
+	cm.start()
+	md := waitForEvent(t, cpu, "matched")
+	if md["roundsTarget"] != float64(seriesTarget) {
+		t.Errorf("cpu matched roundsTarget = %v, want %d -- the scoreboard has to be drawable before round one",
+			md["roundsTarget"], seriesTarget)
+	}
+	cpu.cancel()
+
+	pvpA, pvpB := newClient(), newClient()
+	pm := h.makeMatch("pvps", side{client: pvpA}, side{client: pvpB})
+	pm.start()
+	for name, c := range map[string]*Client{"a": pvpA, "b": pvpB} {
+		frame := waitForEvent(t, c, "matched")
+		if _, ok := frame["roundsTarget"]; ok {
+			t.Errorf("%s matched carries roundsTarget = %v; a one-round match has no series to score",
+				name, frame["roundsTarget"])
+		}
+	}
+	pvpA.cancel()
+	pvpB.cancel()
 }
 
 // TestCPUSeriesPlaysTheNextRound plays two real rounds. The human side sends

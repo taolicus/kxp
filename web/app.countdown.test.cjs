@@ -191,7 +191,7 @@ test('a second round arrives on a countdown frame that carries none of the match
   const app = loadApp({ next: SM.next });
   runInContext('connect()', app.ctx);
   app.fire('connected', { id: null, now: 1700000000000, online: 0 });
-  app.fire('matched', { opponentName: 'CPU', background: BGS[0] });
+  app.fire('matched', { opponentName: 'CPU', background: BGS[0], roundsTarget: 3 });
   app.loadImages();
   await app.settle();
   app.fire('countdown', { n: 'READY', shootAt, windowMs: 2000 });
@@ -254,6 +254,43 @@ async function cpuSeries(app) {
   app.loadImages();
   await app.settle();
 }
+
+test('the pip rows are up empty the moment the match is found', async () => {
+  // The target rides in on `matched`, so the scoreboard exists before the first
+  // round does. Waiting for round one's result to draw it left the first round
+  // of a series with no score on screen, and the row appeared a moment after
+  // the number it is counting had already changed.
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  app.fire('matched', { opponentName: 'CPU', background: BGS[0], roundsTarget: 3 });
+  assert.deepEqual(pips(app, 'you'), { total: 3, filled: 0, hidden: false }, 'three empty pips, up front');
+  assert.deepEqual(pips(app, 'opp'), { total: 3, filled: 0, hidden: false }, 'and three for the CPU');
+
+  // ...and the countdown does not take them down: they are the series, not the
+  // round panel resetGame clears.
+  app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
+  assert.deepEqual(pips(app, 'you'), { total: 3, filled: 0, hidden: false }, 'still up through the countdown');
+});
+
+test('a match with no series draws no pips, before a round or after one', async () => {
+  // The pin against over-correcting in the other direction. The fields are
+  // additive on the wire, so a PvP match -- and any match against a server
+  // predating them -- reports no target at all. An empty row of pips over a
+  // match that can only ever be one round is a scoreboard for a series that
+  // does not exist.
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  app.fire('matched', { opponentName: 'Someone', background: BGS[0] });
+  assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'nothing to show at the match');
+
+  app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
+  app.fire('shoot', { windowMs: 2000, shootAt: 1700000003000 });
+  app.runUntil(1700000005500);
+  app.fire('result', { outcome: 'win', mode: 'online', opponentName: 'Someone', round: 1 });
+  assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'and nothing after its only round');
+});
 
 test('a series fills a pip per round won, and withholds the rematch until the last round', async () => {
   // A CPU match is a series, so the score is the thing being played for and has

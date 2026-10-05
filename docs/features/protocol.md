@@ -264,7 +264,7 @@ snapshot.
 | `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, background?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`preparing`/`countdown`/`shoot`/`done`), the opponent fields and `background?` (the same stage name `matched` carries, so a reconnecting client restores the arena instead of picking its own) only when `ingame`; `shootAt`+`windowMs` whenever `phase` is `countdown` or `shoot` (`server.go:509`) — carrying the plan during countdown is what lets a client reconnect *inside* the window rather than being left without a deadline, and `preparing` is excluded because no deadline exists yet to carry; `pending=true` only while a handshake is still open, i.e. `phase === "preparing"` and not every human ready. Used to reconcile on reconnect. |
 | `online` | `{count}` | Number of other clients currently connected. |
 | `waiting` | `{}` | Entered the queue. |
-| `matched` | `{opponentName, opponentCharacter, background, ts}` | Opponent found, and the stage to play on: `background` is a name from the server's roster, chosen once per match so both sides are sent the same one. Only the name travels — the WebPs are client-side assets. Every client should start `POST /ready`. |
+| `matched` | `{opponentName, opponentCharacter, background, ts, roundsTarget?}` | Opponent found, and the stage to play on: `background` is a name from the server's roster, chosen once per match so both sides are sent the same one. Only the name travels — the WebPs are client-side assets. `roundsTarget?` is present only for a match that is a series (see below), and is what lets the client draw the scoreboard before round one rather than after it. Every client should start `POST /ready`. |
 | `countdown` | `{n, shootAt, windowMs, ts}` | `n` is `READY`, `KA` or `CHI`. The plan fields are present on every countdown frame — see v1.1 below. |
 | `shoot` | `{windowMs, shootAt}` | **PUN!** Window opens. `windowMs` is authoritative (2000); `shootAt` is server clock epoch-ms. |
 | `lock` | (none — client timer) | Client closes its own input after `windowMs - elapsed` of the window remains reachable. |
@@ -286,7 +286,7 @@ snapshot.
 | `mode` | `online` or `cpu`. |
 | `round` | Current round number (1-based). |
 | `youRoundWins`, `oppRoundWins` | Decisive round wins per side **including the round this result reports** — a scoreboard read, not a running total the client has to add up. A `void` round counts for the opponent. |
-| `roundsTarget` | Target number of decisive wins to win the series (default 3). |
+| `roundsTarget?` | Target number of decisive wins to win the series (3 today). **Only on a match that has a series** — a PvP match is one round and omits it. A client reads a missing target as "no series", so it draws no scoreboard, which is the only honest reading for a match that cannot go past round one. |
 | `seriesOver` | `true` if the series ended with this result, else `false`. |
 
 ## HTTP endpoints
@@ -371,13 +371,15 @@ Notes:
   instead would re-roll the stage and revert the opponent to a generic name,
   which is invisible in round one and wrong in every round after it.
 - The series score is drawn as a **pip per round win still needed**, one row
-  under each fighter, filled from the left as the wins come in. The rows are
-  `roundsTarget` pips wide because that is what the server says, so the client
-  holds no copy of the series rules — and a result with no `roundsTarget` (a
-  pre-series server, or PvP) draws no pips at all rather than guessing one. The
-  pips are module state beside the round panel for the same reason the opponent
-  slot is kept: a tally that reset with each round would read as the score
-  having been thrown away.
+  under each fighter, filled from the left as the wins come in. The rows go up
+  empty on `matched` and are `roundsTarget` pips wide because that is what the
+  server says, so the client holds no copy of the series rules — and a `matched`
+  or a result with no `roundsTarget` (PvP, or a pre-series server) draws no pips
+  at all rather than guessing a width. The pips are module state beside the
+  round panel for the same reason the opponent slot is kept: a tally that reset
+  with each round would read as the score having been thrown away.
+  A reconnect mid-series does not restore the tally — `snapshot:countdown` is a
+  schedule, and the score returns with that round's `result`.
 
 ## Clock handling
 

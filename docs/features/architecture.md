@@ -107,6 +107,16 @@ series continues. PvP matches are still one round, which is the other half of
 oversight: re-opening the ready handshake between rounds is a wire-visible
 decision that belongs with the series loop, not beside it.
 
+**A target goes on the wire only where a series exists.** `seriesFields()` adds
+`roundsTarget` to `matched` and to every `result`, and only when
+`seriesMatch()` is true. On `matched` it is what lets the client draw the
+scoreboard before round one rather than after it — the width of the pip row has
+to come from the server, or the client ends up holding a copy of the rules. On a
+PvP match the field is absent, and absent is the meaning: the client draws no
+scoreboard, which is the only honest rendering of a match that cannot go past
+round one. Sending `3` there instead would put a three-pip row over a one-round
+game and promise rounds that never arrive.
+
 **The series bookkeeping lives in `judge()`, and the result is announced after
 it.** The tally is updated, `seriesOver` is decided, and only then does
 `announce()` build the frame — so `youRoundWins`/`oppRoundWins` on the wire are the

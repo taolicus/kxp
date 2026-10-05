@@ -475,12 +475,17 @@ func (m *match) run() {
 	}
 
 	for i := range m.sides {
-		m.send(i, evt("matched", map[string]any{
+		data := map[string]any{
 			"opponentName":      m.opponentName(i),
 			"opponentCharacter": m.opponentCharacter(i),
 			"background":        m.background,
 			"ts":                tsNow(),
-		}))
+		}
+		// With the target, so the client can put an empty scoreboard up for the
+		// match it has just been given rather than waiting for round one's result
+		// to tell it how long the row it will keep updating is.
+		m.seriesFields(data)
+		m.send(i, evt("matched", data))
 	}
 
 	if !m.waitReady() {
@@ -509,6 +514,18 @@ func (m *match) run() {
 // the current rule, so when the PvP half of the task lands this is the one line
 // that changes.
 func (m *match) seriesMatch() bool { return m.sides[1].bot }
+
+// seriesFields adds the scoreboard's one shape-changing field to a frame, and
+// only to a match that has a series to score. A PvP match is a single round, so
+// a target on its frames would promise rounds that never come -- and the client
+// reads the target as the width of the pip row it draws, so a "3" there puts a
+// three-pip scoreboard over a match that has no score. Absent means "no series",
+// which is the reading every client already has for a pre-series server.
+func (m *match) seriesFields(data map[string]any) {
+	if m.seriesMatch() {
+		data["roundsTarget"] = m.roundsTarget
+	}
+}
 
 // playRound runs one round, from announcing its schedule to emitting its result.
 // It returns false when the match cannot continue -- a side left, or the phase
@@ -920,9 +937,9 @@ func (m *match) announce(res [2]Result, ps [2]pickOutcome) {
 			"round":             m.round,
 			"youRoundWins":      m.win[i],
 			"oppRoundWins":      m.win[opp],
-			"roundsTarget":      m.roundsTarget,
 			"seriesOver":        m.seriesOver,
 		}
+		m.seriesFields(data)
 		m.send(i, evt("result", data))
 	}
 }

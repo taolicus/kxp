@@ -19,9 +19,9 @@ let punTimer = null; // local PUN entry scheduled from the announced round plan
 // The series tally as the last result reported it. A CPU match is a series, so
 // the score is the thing being played for and it has to outlive the round panel:
 // resetGame hides the result panel when the next countdown starts, and the pips
-// have to still be there. Null when the mode has no series (PvP rounds, and any
-// match against a server predating these fields, which is why renderResult
-// treats a missing roundsTarget as "no pips to show").
+// have to still be there. Null when the match has no series: a `matched` or a
+// result without `roundsTarget` means exactly that, whether because the mode is
+// PvP or because the server predates the field.
 let seriesTally = null;
 
 // Last-resort recovery: if a PUN result never arrives (dropped SSE event,
@@ -490,10 +490,13 @@ const enter = {
     setBg(d);
     showGame();
     resetGame();
-    // A new match has no score until its first result reports one, whatever the
-    // previous match left on screen.
-    seriesTally = null;
-    paintPips();
+    // The target arrives with the match, not with its first result, so the pips
+    // go up empty and are there for every round of the series instead of
+    // appearing partway into it. Whatever the previous match left on screen goes
+    // with it. A `matched` without a target -- PvP, or a server predating the
+    // field -- draws nothing, which is the same "no series" reading as a result
+    // without one.
+    renderPips(0, 0, d.roundsTarget);
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
     setCount('MATCH FOUND');
