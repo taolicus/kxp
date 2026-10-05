@@ -763,6 +763,11 @@ func (m *match) resolve() {
 			"opponentName":      m.opponentName(i),
 			"mode":              mode,
 			"ts":                tsNow(),
+			"round":             m.round,
+			"youRoundWins":      m.win[i],
+			"oppRoundWins":      m.win[opp],
+			"roundsTarget":      m.roundsTarget,
+			"seriesOver":        m.seriesOver,
 		}
 		m.send(i, evt("result", data))
 	}
