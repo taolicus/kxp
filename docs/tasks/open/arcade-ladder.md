@@ -25,14 +25,20 @@ other fighter appears exactly once.
 
 A random order means "floor 3" only means something relative to the order that
 was drawn, so the order itself is stored — otherwise a reload reshuffles the
-ladder under a player who is halfway up it. Stored is `{order, floor}`:
+ladder under a player who is halfway up it. Stored is `{order, floor, best}`:
 
 - `order` is the draw, the player's own character last. A loss does not redraw:
   climbing the same ladder again is the arcade original's behaviour, and
   redrawing would make "which floor was that" unanswerable.
 - `floor` is how far up that order the player is.
-- The high-water mark is a count of floors **cleared**, not an index — the only
-  figure that means the same thing across two different orders.
+- `best` is the high-water mark, a count of floors **cleared** rather than an
+  index — the only figure that means the same thing across two different orders,
+  which is also why it survives a redraw that the order does not.
+
+What is in `localStorage` is untrusted input: it is writable by hand and outlives
+the code that wrote it. A stored run that cannot be read as one — unparseable, not
+an object, an order that is not an array, or an order none of whose fighters are
+still on the roster — is a first run, and draws a fresh ladder.
 
 ## Repairing a stored order against a changed roster
 
@@ -89,7 +95,7 @@ retrofitted onto whatever that decision is.
 it runs under the mode selector. The CPU half has landed (the series and the
 length choice); the PvP half is irrelevant here and stays open on its own.
 
-## One server change it needs
+## The one server change it needed
 
 `POST /cpu` takes `opponentCharacter?`, validated against the roster, so a floor
 can be fought against a specific fighter instead of a random one. The client

@@ -21,9 +21,13 @@
     <h1 class="mkx-title">KACHIPUN TOURNAMENT</h1>
     <p id="online" class="online">&hellip;</p>
     <p id="stats" class="stats"></p>
+    <!-- Where the ladder stands: the floor it would resume on, the fighter
+         standing on it, and the run's high-water mark. -->
+    <p id="ladder-info" class="stats"></p>
     <div class="buttons">
       <button id="btn-online" class="primary" disabled>Play Online</button>
       <button id="btn-cpu">Play vs CPU</button>
+      <button id="btn-ladder">Arcade Ladder</button>
     </div>
     <!-- How many round wins end a CPU match. The numbers live in the markup
          because they are a choice the player reads here; app.js posts whatever

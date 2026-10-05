@@ -10,6 +10,10 @@ let lastMode = 'online'; // online | cpu — mode of the finished match
 // the player just played rather than what the lobby happens to show now.
 let cpuTarget = 0;
 let lastTarget = 0;
+// The floor of the ladder match in progress, and -1 when the match is not a
+// ladder match. The mode on the wire is `cpu` for both, so the distinction has to
+// live here; the server has no ladder to know about.
+let ladderFloor = -1;
 let pendingMode = null; // online | cpu — mode picked on the lobby, awaiting fighter confirmation
 let es = null;
 let shootTimer = null;
@@ -206,6 +210,107 @@ function getStats() {
 
 function saveStats(s) {
   try { localStorage.setItem('kxp-stats', JSON.stringify(s)); } catch (e) {}
+}
+
+// The arcade ladder, client-side and persisted locally. The floors are the
+// roster -- whatever GET /characters returned -- shuffled once per run, with the
+// player's own character always last as the mirror match. Progression is the
+// client's own state, so nothing here is authoritative: the server judges every
+// round and is told which fighter to send out.
+const ARCADE_KEY = 'kxp-arcade';
+
+// readArcade returns the saved run, repaired against the current roster. A run
+// with no saved order is a first run, and draws one -- deliberately not at
+// startup, because the draw depends on which fighter the player has picked, and
+// they pick it after the lobby is on screen.
+function readArcade() {
+  // Whatever is in storage is untrusted: it is writable by hand and outlives the
+  // code that wrote it. "null" and a bare number parse, so the shape is checked
+  // rather than assumed -- anything that is not an object is a first run.
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(ARCADE_KEY) || '{}'); } catch (e) { s = null; }
+  if (!s || typeof s !== 'object' || Array.isArray(s)) s = {};
+  // A run whose fighters have all left the roster has no order left to keep.
+  // Repairing it anyway would hand back the roster in server order -- the one
+  // thing the draw exists to avoid, since every first run would then be identical
+  // and start with the same fighter. That is a first run, not a repaired one.
+  const repaired = Array.isArray(s.order) ? repairOrder(s.order) : null;
+  const fresh = !repaired || !repaired.length;
+  const order = fresh ? drawOrder() : repaired;
+  // A fresh ladder starts at the bottom: the stored floor is a position in an
+  // order that is gone, so keeping it would drop the player onto the top floor of
+  // a ladder they have not climbed. The high-water mark survives, because it is a
+  // count of floors cleared and means the same thing across any two orders.
+  const floor = fresh ? 0
+    : Math.min(Math.max(Number(s.floor) || 0, 0), order.length - 1);
+  return { order, floor, best: Math.max(Number(s.best) || 0, 0) };
+}
+
+function saveArcade(a) {
+  try { localStorage.setItem(ARCADE_KEY, JSON.stringify(a)); } catch (e) {}
+}
+
+// drawOrder is a fresh run: the roster, shuffled, with the mirror last. The
+// player's own character is excluded from the shuffle and appended, so it is the
+// final floor exactly once whatever the draw did with the rest.
+function drawOrder() {
+  const me = loadCharacter();
+  const rest = shuffle(CHARACTERS.map((c) => c.id).filter((id) => id !== me));
+  return CHARACTERS.some((c) => c.id === me) ? rest.concat([me]) : rest;
+}
+
+// repairOrder makes a saved order a valid ladder again after the roster changed,
+// without reshuffling what the player has already climbed: stored fighters still
+// on the roster keep their positions, roster fighters the run never mentioned are
+// appended ahead of the mirror, and the mirror goes last. Discarding the order
+// instead would silently drop a run in progress to the bottom, and trusting it
+// would point a floor at a fighter that no longer exists.
+function onRoster(id) {
+  return CHARACTERS.some((c) => c.id === id);
+}
+
+function repairOrder(stored) {
+  const me = loadCharacter();
+  if (!stored.some(onRoster)) return null;
+  const kept = stored.filter((id) => onRoster(id) && id !== me);
+  const missing = CHARACTERS.map((c) => c.id).filter((id) => id !== me && kept.indexOf(id) === -1);
+  return CHARACTERS.some((c) => c.id === me) ? kept.concat(missing, [me]) : kept.concat(missing);
+}
+
+// Fisher-Yates. Math.random is fine here: the order is the client's own, and a
+// test asserts the properties of the draw (every fighter once, the mirror last)
+// rather than a particular sequence.
+function shuffle(ids) {
+  const a = ids.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+// ladderOpponent is the fighter on the floor the player is standing on, or null
+// when there is no ladder to climb -- no roster yet, or a saved run pointing past
+// the end of a roster that has since shrunk.
+function ladderOpponent(order, floor) {
+  if (!order.length || floor >= order.length) return null;
+  return order[floor];
+}
+
+// The lobby's ladder line: which floor the player would resume on, who is
+// standing on it, and how far the run has ever got. Read-only -- resuming is a
+// stored order, not a flag, so this never draws.
+function setLadderInfo() {
+  const el = $('#ladder-info');
+  if (!el) return;
+  const btn = $('#btn-ladder');
+  if (btn) btn.disabled = !CHARACTERS.length;
+  if (!CHARACTERS.length) { el.textContent = ''; return; }
+  const a = readArcade();
+  const opp = ladderOpponent(a.order, a.floor);
+  const c = opp ? characterByID(opp) : null;
+  const at = `Floor ${a.floor + 1} of ${a.order.length}${c ? ` \u00b7 ${c.name}` : ''}`;
+  el.textContent = a.best > 0 ? `Arcade Ladder \u00b7 ${at} \u00b7 Best ${a.best}` : `Arcade Ladder \u00b7 ${at}`;
 }
 
 function setStats() {
@@ -420,6 +525,26 @@ function pipHTML(wins, target) {
   return out;
 }
 
+// postCPU starts a CPU match. A ladder floor names the fighter it is climbed
+// against; a plain CPU match does not, and lets the server pick. The ladder's
+// order is saved *before* the request, so a reload mid-climb resumes the same
+// ladder rather than drawing a new one under the player.
+function postCPU(mode) {
+  if (mode !== 'ladder') {
+    ladderFloor = -1;
+    return post('/cpu', { roundsTarget: cpuTarget });
+  }
+  const a = readArcade();
+  const opponent = ladderOpponent(a.order, a.floor);
+  if (!opponent) {
+    setNotice('No ladder to climb yet.');
+    return null;
+  }
+  ladderFloor = a.floor;
+  saveArcade(a);
+  return post('/cpu', { roundsTarget: cpuTarget, opponentCharacter: opponent });
+}
+
 async function post(path, body = {}) {
   if (!id) return null;
   try {
@@ -478,6 +603,8 @@ const enter = {
     stopReadyLoop();
     clearTimeout(stallTimer);
     resetGame();
+    ladderFloor = -1;
+    setLadderInfo();
     // The match is over -- finished, cancelled or abandoned -- so the series it
     // belonged to is too, and the next one starts from empty pips.
     seriesTally = null;
@@ -511,7 +638,10 @@ const enter = {
     renderPips(0, 0, d.roundsTarget);
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
-    setCount('MATCH FOUND');
+    // Which floor this is, said once at the match rather than in a permanent
+    // label: the opponent slot already carries the fighter, and the countdown
+    // takes this element for its own beats.
+    setCount(ladderFloor >= 0 ? `FLOOR ${ladderFloor + 1}` : 'MATCH FOUND');
     armReadyLoop();
   },
 
@@ -698,6 +828,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadRoster();
   connect();
   setStats();
+  setLadderInfo();
   renderFighters();
 
   $('#fighters').addEventListener('click', (e) => {
@@ -711,6 +842,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   $('#btn-online').addEventListener('click', () => openChoose('online'));
   $('#btn-cpu').addEventListener('click', () => openChoose('cpu'));
+  $('#btn-ladder').addEventListener('click', () => openChoose('ladder'));
   $('#btn-start').addEventListener('click', () => {
     // Re-entry guard, mirroring #btn-again. Without it a double-tap fires two
     // /cpu posts in one tick; the server now rejects the second with 409, but
@@ -724,7 +856,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     pendingMode = '';
     btn.disabled = true;
     if (mode === 'online') transition('queue');
-    const p = mode === 'online' ? post('/queue') : post('/cpu', { roundsTarget: cpuTarget });
+    const p = mode === 'online' ? post('/queue') : postCPU(mode);
     Promise.resolve(p).then((res) => {
       if (res && res.ok) return;
       btn.disabled = false;

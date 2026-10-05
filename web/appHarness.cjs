@@ -65,6 +65,14 @@ function loadApp(opts = {}) {
   const transitions = [];
   const posts = [];
   const elements = new Map();
+  // A real key/value store, shared across the app's reads and writes. The old
+  // stub answered every read with null, which made anything that persists
+  // untestable: localStorage is load-bearing for the arcade ladder, and a stub
+  // that forgets every write cannot tell a feature that remembers from one that
+  // redraws on each load. opts.store preloads keys, for a test that resumes a
+  // saved run; it is the storage the app reads, and is named for that rather than
+  // `seed`, which is already the seeding of stubbed elements.
+  const store = new Map();
   const docHandlers = {};
   const frames = [];
   let clock = 1700000000000;
@@ -79,24 +87,36 @@ function loadApp(opts = {}) {
   const images = [];
   const cssProps = [];
 
+  // Preloaded values are stored the way localStorage would hold them: a string
+  // verbatim -- so a test can seed unreadable JSON -- and anything else as JSON.
+  // String(v) alone would store an object as "[object Object]", which reads back
+  // as unparseable and quietly turns every seeded run into a first run.
+  for (const [k, v] of Object.entries(opts.store || {})) {
+    store.set(k, typeof v === 'string' ? v : JSON.stringify(v));
+  }
+
   const ctx = createContext({
     console,
     // Posts are recorded rather than resolved blindly, so a test can assert what
     // the client told the server -- notably whether it acknowledged readiness on
     // its own or waited to be asked.
-    fetch: (url, opts) => {
-      posts.push({ url, body: opts && opts.body });
+    fetch: (url, init) => {
+      posts.push({ url, body: init && init.body });
       // /characters returns the roster as a JSON array; everything else returns an
       // object. Handing the roster an object breaks loadRoster's consumers with
       // "CHARACTERS.find is not a function", which looks nothing like a stub bug.
       const isRoster = /\/characters\/?$/.test(String(url));
       return Promise.resolve({
         ok: true, status: 200,
-        json: () => Promise.resolve(isRoster ? [] : {}),
+        json: () => Promise.resolve(isRoster ? (opts.roster || []) : {}),
       });
     },
     navigator: { sendBeacon: () => true },
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+    },
     location: { search: '' },
     Date: { now: () => clock },
     setTimeout: (fn, ms) => {
@@ -181,6 +201,13 @@ function loadApp(opts = {}) {
     posted: () => posts.map((p) => String(p.url).replace(/^https?:\/\/[^/]+/, '')),
     // The stub itself, for assertions on a property other than text.
     el: (sel) => elements.get(sel),
+    // What the client persisted, as parsed JSON. Reading the store directly is
+    // what lets a test assert the *shape* saved rather than what was redrawn.
+    saved: (k) => (store.has(k) ? JSON.parse(store.get(k)) : null),
+    // Change what the client will read on its next read, for a test that wants to
+    // resume a run part-way through writing it. opts.store seeds the same thing
+    // before boot; this one can land between two reads.
+    setStored: (k, v) => store.set(k, typeof v === 'string' ? v : JSON.stringify(v)),
     // Seed the elements a selector is to resolve to, for controls the harness
     // cannot model from markup it does not read. `.selected` selectors need the
     // same stub under both spellings, since classList changes are per-object:

@@ -171,6 +171,45 @@ the clock, and the CPU/PvP tests play real rounds end to end. The integration
 tests assert the wire tally as a running sum across a whole series, and that a
 CPU match does not stop after one round.
 
+## The arcade ladder
+
+The ladder is a client-side progression over ordinary CPU matches: the floors are
+the roster from `GET /characters`, shuffled once per run, with the player's own
+character always last as the mirror match, and every floor is the stock bot. The
+server holds no ladder — it is told which fighter to send out via
+`POST /cpu`'s `opponentCharacter` and judges every round as it does any other
+match, which is what keeps the rules server-side while the *route through* the
+ladder is the player's own business.
+
+Because the order is random, progress is a position *in that order*, so the order
+is persisted alongside the floor (`kxp-arcade` in `localStorage`). Three decisions
+follow from that, and each has an alternative that was rejected:
+
+- **A loss does not redraw.** Climbing the same ladder again is the arcade
+  original's behaviour, and redrawing would make "which floor was that"
+  unanswerable. The high-water mark is stored as a *count* of floors cleared
+  rather than an index, because a count is the only figure that means the same
+  thing across two different orders.
+- **A saved order is repaired against the current roster, not trusted and not
+  discarded.** Stored fighters still on the roster keep their positions, roster
+  fighters the run never mentioned are appended ahead of the mirror, removed ones
+  take their floors with them, and the mirror is put last. Discarding the order
+  would silently drop a run in progress to the bottom; trusting it would point a
+  floor at a fighter that no longer exists.
+- **A run whose fighters have all left the roster is a first run, not a repaired
+  one.** Repairing it would return the roster in server order — the one thing the
+  draw exists to avoid, since every first run would be identical and start with
+  the same fighter.
+
+What is in `localStorage` is untrusted input: it is writable by hand and outlives
+the code that wrote it, so a saved run is parsed defensively and anything that is
+not a usable order draws a fresh ladder.
+
+Server-side persistence is deferred to
+[player identity](../issues/player-identity.md); a per-tab localStorage ladder
+means two browsers each climb their own, which is the visible consequence of that
+debt and the reason it is recorded rather than forgotten.
+
 ## Matchmaking
 
 A single global FIFO queue pairs players under the hub mutex. Anonymous
