@@ -85,6 +85,20 @@
     </div>
   </section>
 
+  <!-- The tower between ladder floors. One row per floor of the run, in the order
+       the floors are fought, with the player standing on the one the run is on —
+       app.js fills it from the stored order, and the fight below it is what sends
+       the player up, so the climb is a screen passed through rather than a flash
+       over a result still being read. -->
+  <section id="ladder" class="view hidden">
+    <h2 id="ladder-title">Ladder</h2>
+    <div id="ladder-tower" class="tower" role="list" aria-label="Arcade ladder floors"></div>
+    <div class="ladder-actions">
+      <button id="ladder-fight" class="primary">Fight</button>
+      <button id="ladder-leave">Change mode</button>
+    </div>
+  </section>
+
 </main>
 <script src="/characters.js"></script>
 <script src="/machine.js"></script>

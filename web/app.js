@@ -370,6 +370,50 @@ function setLadderInfo() {
   el.textContent = a.best > 0 ? `Arcade Ladder \u00b7 ${at} \u00b7 Best ${a.best}` : `Arcade Ladder \u00b7 ${at}`;
 }
 
+// The tower: the run drawn as the ladder it is. One row per floor, in the order
+// the floors are fought, with the player standing on the floor the run is on --
+// right beside the fighter they are about to meet, or the one they just beat.
+//
+// Two things are decided here rather than left to the CSS. Where the player
+// stands: a cleared run stands at the top, because its floor was reset to zero so
+// the lobby would not offer a beaten ladder as a run in progress, and the tower is
+// the one place that is not true. And which way the climb went, from the floor
+// just fought to the floor the run moved to -- `ladderFloor` is the only record of
+// where the player came from, since the run stores where they are.
+//
+// The rows are the whole order rather than a window onto it, and the markup is in
+// match order with CSS laying it out bottom-up: a ladder that showed only the next
+// few floors would be a list, and seeing how far is left is the point of climbing.
+function showTower() {
+  const a = readArcade();
+  const me = characterByID(loadCharacter());
+  const pos = a.cleared ? a.order.length - 1 : a.floor;
+  const hop = ladderFloor >= 0 && ladderFloor !== pos
+    ? (pos > ladderFloor ? ' climb' : ' climb-down') : '';
+  $('#ladder-tower').innerHTML = a.order.map((id, i) => {
+    const c = characterByID(id);
+    // Below the player is what has been beaten; above it is what has not. A
+    // fighter that has left the roster still draws its row: the ladder was drawn
+    // from the roster as it was, and dropping the row would renumber the floors
+    // under a run in progress.
+    const foe = c ? `${c.emoji} ${c.name}` : '\u2014';
+    const meRow = i === pos
+      ? `<span class="climber${hop}"><span class="climber-emoji">${me ? me.emoji : ''}</span>you</span>`
+      : '';
+    return `<div role="listitem" class="floor${i < pos ? ' cleared' : ''}${i === pos ? ' here' : ''}" data-floor="${i}"><span class="floor-no">${i + 1}</span><span class="floor-foe">${foe}</span>${meRow}</div>`;
+  }).join('');
+  $('#ladder-title').textContent = a.cleared
+    ? 'Ladder complete'
+    : `Floor ${pos + 1} of ${a.order.length}`;
+  const btn = $('#ladder-fight');
+  btn.textContent = a.cleared ? 'New Ladder' : `Fight Floor ${pos + 1}`;
+  // Armed on every render: the button disarms itself while its request is in
+  // flight, and the next floor arrives by showing the tower again, so nothing
+  // else would put it back.
+  btn.disabled = false;
+  show('ladder');
+}
+
 function setStats() {
   const s = getStats();
   const text = `Wins: ${s.wins} \u00b7 Streak: ${s.streak} \u00b7 Last: ${s.last} \u00b7 Best: ${s.best}`;
@@ -811,6 +855,19 @@ const enter = {
     else if (wasFloor >= 0) ladderNext = null;
     renderResult(d);
   },
+
+  // The tower, between ladder floors. Reached from the result screen when the
+  // player asks for what comes next, so the climb happens on a screen they are
+  // looking at rather than over a result they are still reading.
+  ladder() {
+    stopReadyLoop();
+    clearTimeout(stallTimer);
+    // A roster that emptied between the match and this frame -- a deploy, a
+    // roster written down to nothing -- leaves no floors to draw and no fighter
+    // to send out. The lobby is where the mode lives either way.
+    if (!readArcade().order.length) { transition('mode'); return; }
+    showTower();
+  },
 };
 
 function connect() {
@@ -885,7 +942,11 @@ function connect() {
       // After a finished match the result screen is terminal until the player
       // acts (Play Again / Change mode), so the server's trailing `state idle`
       // teardown frame is expected, not an anomaly — never a bad-transition.
-      if (state === 'result') return;
+      // The tower is the same case one step later: it is only reachable from a
+      // decided ladder match, so the frame that arrives after it has been routed
+      // to is the *previous* match's teardown. Routing it to the lobby would walk
+      // the player off the ladder they were about to climb.
+      if (state === 'result' || state === 'ladder') return;
       // A cancelled handshake arrives here too, carrying the server's reason.
       // `requeued` means the server put us back on the online queue, so going
       // to the lobby would be a lie: the player would sit in a lobby that looks
@@ -968,11 +1029,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       // matches, and a plain rematch must never be able to stand in for the next
       // floor -- that would ask for floor one again and read as a ladder that had
       // reset itself.
-      $('#btn-again').disabled = true;
-      const p = postCPU('ladder', { roundsTarget: lastTarget || cpuTarget });
-      Promise.resolve(p).then((res) => {
-        if (!res || !res.ok) $('#btn-again').disabled = false;
-      });
+      //
+      // It goes to the tower rather than straight into the fight, because the next
+      // floor is a different fighter and the tower is where that gets said and
+      // animated. Disarmed for the same double-tap reason as the branches below,
+      // and re-armed if the route is refused -- and it is the result screen's
+      // button, not the tower's, which showTower arms.
+      const btn = $('#btn-again');
+      btn.disabled = true;
+      if (!transition('climb')) btn.disabled = false;
       return;
     }
     if (lastMode === 'cpu') {
@@ -992,6 +1057,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-mode').addEventListener('click', () => {
     transition('mode');
   });
+
+  // The tower's own fight button: the same request the result screen's would have
+  // made -- the floor the run is on, at the length just fought -- from the screen
+  // the player is looking at now. The re-arm on failure is the guard the other two
+  // entry points carry, because a rejected tap must not be a dead button.
+  $('#ladder-fight').addEventListener('click', () => {
+    const btn = $('#ladder-fight');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const p = postCPU('ladder', { roundsTarget: lastTarget || cpuTarget });
+    Promise.resolve(p).then((res) => {
+      if (!res || !res.ok) btn.disabled = false;
+    });
+  });
+  // Leaving mid-ladder. The tower is only reachable from a decided floor, so
+  // without this the one place the whole run is drawn would be the one screen a
+  // player could not back out of.
+  $('#ladder-leave').addEventListener('click', () => transition('mode'));
 
   document.querySelectorAll('.move').forEach((b) => {
     b.addEventListener('click', () => {

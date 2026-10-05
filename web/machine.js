@@ -4,7 +4,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const STATES = ['lobby', 'waiting', 'matched', 'countdown', 'shoot', 'locked', 'result'];
+  const STATES = ['lobby', 'waiting', 'matched', 'countdown', 'shoot', 'locked', 'result', 'ladder'];
 
   const EVENTS = [
     'queue', 'cancel',
@@ -14,6 +14,7 @@
     'stateIdle',
     'snapshot:idle', 'snapshot:waiting', 'snapshot:matched', 'snapshot:countdown', 'snapshot:shoot',
     'rematch:online', 'mode',
+    'climb',
   ];
 
   const transitions = {
@@ -27,7 +28,16 @@
     // followed by the next round's countdown frames. Without it the frame is
     // dropped, the round never starts, and the match hangs on a result screen --
     // so this edge is what makes "first to N" playable at all.
-    result: { matched: 'matched', countdown: 'countdown', 'rematch:online': 'waiting', mode: 'lobby' },
+    result: { matched: 'matched', countdown: 'countdown', 'rematch:online': 'waiting', mode: 'lobby', climb: 'ladder' },
+    // The tower between ladder floors. `climb` is how the result screen hands over
+    // to it -- only for a ladder match, since it is the run that has a tower. The
+    // fight button on it posts the request whose `matched` frame brings the client
+    // back, so that edge is not optional: without it the match would start and the
+    // client would drop the frame and sit on the tower. No `stateIdle`, for the
+    // reason `result` has none -- the match is already decided by the time this is
+    // reachable, so the server's trailing teardown frame is expected rather than a
+    // teardown, and routing it to the lobby would walk the player off the tower.
+    ladder: { matched: 'matched', mode: 'lobby' },
   };
 
   STATES.forEach((s) => {

@@ -367,7 +367,8 @@ that are purely client-generated are marked with `*`.
 | `countdown` | `countdown`→`countdown`, `matched`→`countdown`, `shoot`→`shoot`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
 | `shoot` | `move*`→`locked`, `lock*`→`locked`, `reject*`→`locked`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
 | `locked` | `move*`→`locked`, `reject*`→`locked`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
-| `result` | `matched`→`matched`, `countdown`→`countdown`, `rematch:online*`→`waiting`, `mode*`→`lobby` |
+| `result` | `matched`→`matched`, `countdown`→`countdown`, `climb*`→`ladder`, `rematch:online*`→`waiting`, `mode*`→`lobby` |
+| `ladder` | `matched`→`matched`, `mode*`→`lobby` |
 
 Snapshot events are total: from any state, `snapshot:idle`→`lobby`,
 `snapshot:waiting`→`waiting`, `snapshot:matched`→`matched`,
@@ -402,6 +403,18 @@ Notes:
   with each round would read as the score having been thrown away.
   A reconnect mid-series does not restore the tally — `snapshot:countdown` is a
   schedule, and the score returns with that round's `result`.
+- `ladder` is the [arcade ladder](../tasks/closed/arcade-ladder.md)'s tower, the
+  screen between two floors: the result screen's "next floor" hands over to it, it
+  draws the stored order, and its fight button posts the next `POST /cpu`. Nothing
+  about it is on the wire — no event, no field, no server-side state — because the
+  tower draws the client's own run and the fight it starts is an ordinary CPU
+  match. The `matched` edge out of `ladder` is the load-bearing one: the request
+  that leaves the tower is a normal match request, so without the edge the client
+  would decline the frame answering it and sit on the tower through a match it had
+  already been admitted to. There is no `stateIdle` here for the reason there is
+  none in `result`: the match is decided before this state is reachable, so the
+  trailing teardown frame belongs to the match the player just finished, and
+  routing it to the lobby would walk them off their own ladder.
 
 ## Clock handling
 

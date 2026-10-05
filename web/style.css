@@ -1,8 +1,8 @@
 /* ==========================================================================
    KACHIPUN TOURNAMENT — stylesheet
    Sections: 1) Tokens  2) Base & reset  3) Backdrop  4) Shell layout
-   5) Typography  6) Buttons  7) Loading  8) Lobby  9) Game  10) Result
-   11) Motion  12) Responsive  13) Utilities
+   5) Typography  6) Buttons  7) Loading  8) Lobby  9) Game  10) Ladder tower
+   11) Result  12) Motion  13) Responsive  14) Utilities
    ========================================================================== */
 
 /* 1) Tokens -------------------------------------------------------------- */
@@ -416,7 +416,88 @@ button.primary:hover {
 
 .move.picked { border-color: var(--accent); background: var(--panel-3); }
 
-/* 10) Result ------------------------------------------------------------- */
+/* 10) Ladder tower -------------------------------------------------------- */
+#ladder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* One row per floor, stacked with no gap, so a row's height IS the pitch between
+   floors. The climb animation is expressed in that same length, which is why it
+   cannot drift out of step with the layout when the tower gets taller or the rows
+   get shorter. column-reverse puts the markup's floor one at the bottom: the
+   markup is in match order, and the order the player fights is the only order
+   worth keeping.
+
+   The row height is sized against the viewport rather than fixed, so a whole
+   ladder stays on one screen at the roster's present size — the climb has to be
+   visible, and a scrolling tower puts its scroll origin at the bottom, which is
+   where the player has just come from. The overflow is the fallback for a roster
+   that outgrows the height available. */
+.tower {
+  --floor-h: clamp(1.5rem, 3.2vh, 2.6rem);
+  display: flex;
+  flex-direction: column-reverse;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--s2);
+  background: var(--bg);
+}
+
+.floor {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  height: var(--floor-h);
+  padding: 0 var(--s2);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  text-align: left;
+}
+
+.floor:last-child { border-bottom: 0; }
+.floor.cleared { opacity: 0.45; }
+.floor.here { background: var(--panel-3); border-bottom-color: var(--accent); }
+
+.floor-no {
+  min-width: 1.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.floor-foe {
+  flex: 1;
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The player, on the floor the run is on, beside the fighter that floor holds. */
+.climber {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.climber-emoji { font-size: 1.1rem; line-height: 1; }
+
+.ladder-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* 11) Result ------------------------------------------------------------- */
 .banner { margin: var(--s2) 0 var(--s1); }
 
 .banner p { margin: 0 0 var(--s1); }
@@ -447,13 +528,43 @@ button.primary:hover {
 
 #game-stats { margin: 0 0 var(--s2); }
 
-/* 11) Motion ------------------------------------------------------------- */
+/* 12) Motion ------------------------------------------------------------- */
 @keyframes pulse {
   0% { transform: scale(1.3); opacity: 0.4; }
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* 12) Responsive ---------------------------------------------------------
+/* The climb: the player arrives on the floor the run moved them to, coming from
+   the row below — one row of travel per floor climbed, which is what climbing a
+   ladder looks like. A loss gets the same hop from above, because a drop is the
+   same movement pointed the other way and the player should be able to see the
+   run went the other way.
+
+   The distance is `--floor-h` and nothing else: the markup places the player on
+   the final floor and the animation carries them in, so the client computes no
+   pixel offsets and cannot compute one that disagrees with the layout. */
+.climber.climb { animation: climb 550ms ease-out; }
+.climber.climb-down { animation: climb-down 550ms ease-in; }
+
+@keyframes climb {
+  0% { transform: translateY(var(--floor-h)); opacity: 0.25; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes climb-down {
+  0% { transform: translateY(calc(var(--floor-h) * -1)); opacity: 0.25; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* The climb is the one thing on this screen that moves on its own, and it is
+   decorative: the player is already on the right floor when the hop starts. A
+   reader who has asked for less motion gets the tower without the travel. */
+@media (prefers-reduced-motion: reduce) {
+  .climber.climb,
+  .climber.climb-down { animation: none; }
+}
+
+/* 13) Responsive ---------------------------------------------------------
    Short screens (most phones in portrait default to heights < 800px): compact
    the game screen so it fits one viewport and avoids nested scroll. */
 @media (max-height: 800px) and (max-width: 768px) {
@@ -478,9 +589,12 @@ button.primary:hover {
     padding-bottom: var(--s2);
   }
   .count { font-size: 2.5rem; }
+  /* A phone in landscape has the least height to give, and the tower's rows are
+     already at the clamp's floor by then. */
+  .tower { --floor-h: 1.5rem; max-height: 66vh; }
 }
 
-/* 13) Utilities ---------------------------------------------------------- */
+/* 14) Utilities ---------------------------------------------------------- */
 .hidden { display: none !important; }
 
 img { max-width: 100%; }

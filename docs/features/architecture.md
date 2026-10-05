@@ -231,6 +231,47 @@ Server-side persistence is deferred to
 means two browsers each climb their own, which is the visible consequence of that
 debt and the reason it is recorded rather than forgotten.
 
+### The tower is a screen between floors, not a decoration on the result
+
+A won floor does not drop straight into the next match. The result screen hands
+over to the tower — the whole order, floor one at the bottom, the player standing
+on the floor the run moved to, beside the fighter that floor holds — and the fight
+is started from there. Three decisions are in that:
+
+- **The climb waits for the player.** Auto-advancing after the animation was
+  considered and rejected: it puts a match on screen underneath the one moment the
+  ladder has to say something, and it takes the timing of the transition away from
+  whoever has the slowest connection. A tap costs one press and puts the animation
+  somewhere the player is actually looking, which a flash over a result they are
+  still reading is not.
+- **The markup is in match order and CSS lays it out bottom-up.** The rows are the
+  order the floors are fought, so "up" is the floor's own number rather than a row
+  index the renderer has to reason about in reverse — and the hop distance is the
+  row height, so the animation cannot drift out of step with the layout. The client
+  places the player on the final floor and the keyframe carries them in: no pixel
+  offsets are computed anywhere in `app.js`.
+- **The whole order is drawn, not a window onto it.** A ladder showing only the
+  next few floors is a list. How far is left is the thing a climb is for.
+
+A cleared run stands at the **top** of the tower. Its floor is reset to zero so the
+lobby would not offer a beaten ladder as a run in progress, and the tower is the one
+place that reset is not what happened — drawing it as "back at the bottom" would end
+the run the player just won by dumping them at its first floor. The new order is
+still drawn by the request, not by the view: redrawing on the way in would show an
+order that had never been saved, and a reload mid-tower would then fight a different
+ladder from the one on screen.
+
+The tower is reached only from a decided floor, which makes it the one screen that
+lives entirely *after* a match. That is why the server's trailing `state idle` is
+ignored there rather than routed to the lobby like everywhere else, and why the
+machine gives `ladder` no `stateIdle` edge to take — the frame that arrives is the
+previous match's teardown, and honouring it would put a player standing on their own
+ladder back in the menu with the climb half played. Both are pinned in
+`app.arcade.test.cjs`, along with the screen itself: the rows in ladder order, the
+climb up after a win, the drop back down after a loss, the completed run at the top,
+a second visit finding its button armed, and the leave that returns to a lobby
+resuming the same floor.
+
 ## Matchmaking
 
 A single global FIFO queue pairs players under the hub mutex. Anonymous

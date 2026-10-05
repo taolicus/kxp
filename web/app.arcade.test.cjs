@@ -61,11 +61,34 @@ function lengthToggle(app, selected = 3) {
   app.seed('#cpu-length .seg-btn.selected', btns.find((b) => b.dataset.rounds === String(selected)));
 }
 
+// The screens `show()` toggles, which the harness cannot model from markup it does
+// not read. Seeded for every test so a screen can be asserted on directly: that
+// the tower is *on screen* is the whole claim of this feature, and inferring it
+// from the markup that only exists when it is shown would test the render rather
+// than the screen.
+function views(app) {
+  const lobby = stubElement();
+  lobby.id = 'lobby';
+  const ladder = stubElement();
+  ladder.id = 'ladder';
+  app.seed('.view', [lobby, ladder]);
+  return { lobby, ladder };
+}
+
+const showing = (el) => el.classList.contains('hidden') === false;
+
+// How many matches have been asked for. Counted rather than tested for presence
+// because the lobby's own request is one of them: "the tower did not ask for a
+// match" is a claim about what changed, not about what exists.
+const cpuRequests = (app) => app.posted().filter((p) => p === '/cpu').length;
+
 async function started(app) {
   lengthToggle(app);
+  const v = views(app);
   await app.boot();
   runInContext('connect()', app.ctx);
   app.fire('connected', { id: 'test-client', now: 1700000000000, online: 0 });
+  return v;
 }
 
 // Pick a fighter, start a match, and leave the request recorded.
@@ -279,17 +302,33 @@ const series = (over, outcome, wins = 1, losses = 0) => ({
 
 // Climb to `floor` by winning every floor below it, then leave the match that
 // would advance past it unplayed. Each floor is a full request -> matched ->
-// final result, because that is the sequence a player's floor actually is, and a
-// test that only set the store would not notice progress being applied twice.
+// final result -> tower -> fight, because that is the sequence a player's floor
+// actually is, and a test that only set the store would not notice progress being
+// applied twice. The tower is in the loop rather than skipped because it is how the
+// next floor is requested: leaving it out leaves the client's record of which floor
+// is in play one floor behind the run, and every later assertion would be reading
+// that stale record.
 async function climbTo(app, floor) {
   for (let f = 0; f < floor; f++) {
     await fight(app);
     app.fire('matched', { ...MATCHED, opponentCharacter: saved(app).order[f] });
     app.fire('result', series(true, 'win'));
+    await nextFloor(app);
   }
 }
 
 const ladderLabel = (app) => text(app, '#btn-again');
+
+// Take the result screen's "next floor" and then the tower's fight button: the two
+// taps a player climbing a ladder performs between two floors. Split out because
+// every progression test below crosses that gap, and a test that retyped it would
+// be testing its own copy of the flow rather than the client's.
+async function nextFloor(app) {
+  await app.tap('#btn-again');
+  await app.settle();
+  await app.tap('#ladder-fight');
+  await app.settle();
+}
 
 test('winning a floor advances to the next one', async () => {
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
@@ -306,8 +345,7 @@ test('winning a floor advances to the next one', async () => {
   assert.strictEqual(ladderLabel(app), 'Next Floor');
 
   // The button must ask for the floor it says, not repeat the one just fought.
-  await app.tap('#btn-again');
-  await app.settle();
+  await nextFloor(app);
   assert.strictEqual(askedFor(app).opponentCharacter, saved(app).order[1],
     'the next floor is a different fighter');
 });
@@ -356,8 +394,7 @@ test('losing a floor puts the player back on the first, without redrawing', asyn
   assert.strictEqual(saved(app).best, 2, 'and the high-water mark is not forgotten');
   assert.strictEqual(ladderLabel(app), 'Back to Floor 1');
 
-  await app.tap('#btn-again');
-  await app.settle();
+  await nextFloor(app);
   assert.strictEqual(askedFor(app).opponentCharacter, order[0], 'which is where it says it goes');
 });
 
@@ -392,8 +429,7 @@ test('clearing the mirror completes the ladder, and the next request draws a new
   // A cleared run must still be startable -- the player has just beaten the whole
   // ladder and the button cannot dead-end them.
   const doneOrder = saved(app).order;
-  await app.tap('#btn-again');
-  await app.settle();
+  await nextFloor(app);
   const fresh = saved(app);
   assert.strictEqual(fresh.cleared, false, 'and starts un-cleared');
   assert.strictEqual(fresh.floor, 0, 'from the bottom');
@@ -439,6 +475,8 @@ test('a plain CPU match is still offered as the same match again', async () => {
   await app.settle();
   assert.strictEqual(askedFor(app).opponentCharacter, undefined,
     'and still names no opponent, so it is the same open-ended match again');
+  assert.ok(!app.html('#ladder-tower'),
+    'and it opens no tower -- there is no run to draw one of');
 });
 
 test('the next floor repeats the length just fought', async () => {
@@ -454,7 +492,212 @@ test('the next floor repeats the length just fought', async () => {
 
   // The lobby's selection moves to three while the result is on screen.
   lengthToggle(app, 3);
+  await nextFloor(app);
+  assert.strictEqual(askedFor(app).roundsTarget, 1, 'the next floor is the match that just finished');
+});
+
+// The tower: the screen between ladder floors.
+
+const fighter = (id) => {
+  const c = ROSTER.find((r) => r.id === id);
+  assert.ok(c, `${id} must be on the roster to be a floor`);
+  return `${c.emoji} ${c.name}`;
+};
+
+// The tower's rows, read back off the markup: the floor each row is, the fighter it
+// holds, and whether the player is the one standing there. The climb is read as a
+// class rather than a position, because the movement is CSS -- the client places
+// the player on the final floor and the animation carries them in -- so there is no
+// client-side geometry to assert and none that could disagree with the layout.
+const ROW = /<div([^>]*)data-floor="(\d+)"([^>]*)>([\s\S]*?)<\/div>/g;
+
+function towerRows(app) {
+  return [...String(app.html('#ladder-tower')).matchAll(ROW)].map(([, pre, n, post, body]) => {
+    const attrs = pre + post;
+    return {
+      floor: Number(n),
+      foe: (/floor-foe">([^<]*)</.exec(body) || [])[1] || '',
+      here: attrs.includes(' here'),
+      cleared: attrs.includes(' cleared'),
+      hop: (/class="climber ?(climb(?:-down)?)?"/.exec(body) || [])[1] || '',
+    };
+  });
+}
+
+// Play out the floor the run is on -- won, or lost, for the direction that moves --
+// then open the tower the way a player does. Returns the floor it was fought on,
+// which is what the tower has to have climbed away from.
+async function wonFloor(app, outcome = 'win') {
+  const floor = saved(app).floor;
+  app.fire('matched', { ...MATCHED, opponentCharacter: saved(app).order[floor] });
+  app.fire('result', series(true, outcome));
   await app.tap('#btn-again');
   await app.settle();
-  assert.strictEqual(askedFor(app).roundsTarget, 1, 'the next floor is the match that just finished');
+  return floor;
+}
+
+test('a won floor goes through the tower, and the tower asks for nothing by itself', async () => {
+  // The flow itself: the result hands over to the tower, and the fight waits for
+  // the player. Auto-advancing would put a match on screen underneath an animation
+  // that is the whole point of arriving -- the climb has to be somewhere they are
+  // looking, not a flash over a result they are still reading.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  const view = await started(app);
+  await fight(app);
+  const before = cpuRequests(app);
+
+  await wonFloor(app);
+
+  assert.strictEqual(showing(view.ladder), true, 'the tower is the screen between the floors');
+  assert.strictEqual(showing(view.lobby), false, 'and the lobby is not');
+  assert.strictEqual(cpuRequests(app), before, 'no match is asked for until the player sends for one');
+  assert.strictEqual(text(app, '#ladder-title'), 'Floor 2 of 4', 'it says where the player stands');
+  assert.strictEqual(text(app, '#ladder-fight'), 'Fight Floor 2', 'and what the button will do');
+
+  await app.tap('#ladder-fight');
+  await app.settle();
+  assert.strictEqual(askedFor(app).opponentCharacter, saved(app).order[1],
+    'the tower fights the floor it names');
+});
+
+test('the tower draws every floor, in the order the ladder is fought', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await fight(app);
+  const order = saved(app).order;
+  await wonFloor(app);
+
+  const rows = towerRows(app);
+  assert.deepStrictEqual(rows.map((r) => r.floor), order.map((_, i) => i),
+    'the rows are the floors, first floor first');
+  assert.deepStrictEqual(rows.map((r) => r.foe), order.map(fighter),
+    'each row holds the fighter that floor is fought against, in ladder order');
+  // One player on one floor: a tower that drew two would make "where am I" a
+  // question, and one that drew none would be a tower nobody is on.
+  assert.deepStrictEqual(rows.filter((r) => r.here).map((r) => r.floor), [1]);
+  assert.deepStrictEqual(rows.filter((r) => r.cleared).map((r) => r.floor), [0],
+    'and the floors below are the ones already beaten');
+});
+
+test('winning a floor climbs the player up the tower', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, 2);
+  const order = saved(app).order;
+  const from = await wonFloor(app);
+
+  const rows = towerRows(app);
+  const stood = rows.find((r) => r.here);
+  assert.strictEqual(stood.floor, from + 1, 'the player is on the floor the run moved to');
+  assert.strictEqual(stood.hop, 'climb', 'arriving from the row below -- one floor of travel');
+  assert.strictEqual(stood.foe, fighter(order[from + 1]), 'beside the fighter that floor holds');
+  assert.deepStrictEqual(rows.filter((r) => r.cleared).map((r) => r.floor), [0, 1, 2],
+    'and everything behind them is a floor that was beaten');
+});
+
+test('losing drops the player to the bottom, and the tower shows the drop', async () => {
+  // The other direction, which the same code path could get wrong silently: a
+  // restart that animated as a climb would tell the player they went up.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, 3);
+  await wonFloor(app, 'loss');
+
+  const rows = towerRows(app);
+  const stood = rows.find((r) => r.here);
+  assert.strictEqual(stood.floor, 0, 'back on the first floor');
+  assert.strictEqual(stood.hop, 'climb-down', 'arriving from above');
+  assert.deepStrictEqual(rows.filter((r) => r.cleared), [],
+    'a lost floor is not a cleared one, so nothing above the player is behind them');
+});
+
+test('a completed ladder stands at the top, and its fight draws the next one', async () => {
+  // The floor of a cleared run is reset to zero so the lobby would not offer a
+  // beaten ladder as a run in progress. The tower is the one place that reset is
+  // not the truth, and reading it as "back at the bottom" would finish a run the
+  // player just won by dumping them at its first floor.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, ROSTER.length - 1);
+  const doneOrder = saved(app).order;
+  await wonFloor(app);
+
+  assert.strictEqual(text(app, '#ladder-title'), 'Ladder complete');
+  assert.strictEqual(text(app, '#ladder-fight'), 'New Ladder');
+  const stood = towerRows(app).find((r) => r.here);
+  assert.strictEqual(stood.floor, ROSTER.length - 1, 'the player is left on the mirror they beat');
+  assert.strictEqual(stood.hop, '', 'with nowhere further to climb');
+
+  await app.tap('#ladder-fight');
+  await app.settle();
+  const fresh = saved(app);
+  assert.strictEqual(fresh.cleared, false, 'and the fight starts a fresh run');
+  assert.strictEqual(fresh.floor, 0);
+  assert.notDeepStrictEqual(fresh.order, doneOrder, 'with a newly drawn order');
+  assert.strictEqual(askedFor(app).opponentCharacter, fresh.order[0]);
+});
+
+test('the tower can be climbed again, and its fight is not left disarmed', async () => {
+  // The fight button disarms itself while its request is in flight, so every visit
+  // after the first is a chance for it to arrive still disabled -- and a screen with
+  // no way up it is a dead end in the middle of a run.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  const view = await started(app);
+  await fight(app);
+
+  await wonFloor(app);
+  assert.strictEqual(app.el('#ladder-fight').disabled, false, 'armed when the tower is shown');
+  await app.tap('#ladder-fight');
+  await app.settle();
+
+  const order = saved(app).order;
+  app.fire('matched', { ...MATCHED, opponentCharacter: order[1] });
+  app.fire('result', series(true, 'win'));
+  await app.tap('#btn-again');
+  await app.settle();
+  assert.strictEqual(showing(view.ladder), true, 'the second floor is climbed through a tower too');
+  assert.strictEqual(app.el('#ladder-fight').disabled, false, 'and its button is armed again');
+
+  await app.tap('#ladder-fight');
+  await app.settle();
+  assert.strictEqual(askedFor(app).opponentCharacter, order[2], 'so the third floor can be fought');
+});
+
+test("the finished match's trailing idle frame does not walk the player off the tower", async () => {
+  // The tower is reached from a decided match, so the server's teardown frame is
+  // already on its way. Routing it to the lobby -- which is what every other state
+  // does with it -- would drop a player standing on their own ladder into the menu
+  // with the climb half played and their buttons gone.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  const view = await started(app);
+  await fight(app);
+  await wonFloor(app);
+
+  app.fire('state', { state: 'idle' });
+  await app.settle();
+
+  assert.strictEqual(showing(view.ladder), true, 'the player is still on the tower');
+  assert.strictEqual(showing(view.lobby), false, 'not thrown back to the lobby');
+  assert.ok(!app.posted().includes('/report'),
+    `and the dropped frame is not a client-side anomaly: ${app.posted().join(', ')}`);
+  assert.strictEqual(towerRows(app).find((r) => r.here).floor, 1, 'the tower is intact');
+});
+
+test('a player can leave the tower without fighting the floor they were on', async () => {
+  // The tower is the one screen in a run that is reached on the way somewhere else,
+  // so it has to have a way back: the run is persisted, and the lobby resumes it
+  // exactly where the tower left it.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  const view = await started(app);
+  await fight(app);
+  await wonFloor(app);
+  const before = cpuRequests(app);
+
+  await app.tap('#ladder-leave');
+  await app.settle();
+
+  assert.strictEqual(showing(view.lobby), true, 'back in the lobby');
+  assert.strictEqual(showing(view.ladder), false);
+  assert.strictEqual(cpuRequests(app), before, 'and no match was started on the way out');
+  assert.match(text(app, '#ladder-info'), /Floor 2 of 4/, 'which resumes the floor the tower showed');
 });
