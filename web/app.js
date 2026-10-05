@@ -356,7 +356,14 @@ function setLadderInfo() {
     // there is nothing to fight.
     btn.textContent = a.cleared ? 'New Ladder' : 'Arcade Ladder';
   }
-  if (!CHARACTERS.length) { el.textContent = ''; return; }
+  // Hidden rather than empty: an empty paragraph still carries its margin, which
+  // would be a gap above the buttons for the moment before the roster arrives.
+  if (!CHARACTERS.length) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.classList.remove('hidden');
   const c = a.cleared ? null : characterByID(a.order[a.floor]);
   const at = a.cleared ? 'Ladder complete'
     : `Floor ${a.floor + 1} of ${a.order.length}${c ? ` \u00b7 ${c.name}` : ''}`;

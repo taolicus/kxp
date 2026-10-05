@@ -203,6 +203,8 @@ test('the ladder is not offered before the roster arrives', async () => {
   const app = newApp({ roster: [] });
   await started(app);
   assert.strictEqual(text(app, '#ladder-info'), '', 'there is nothing to say without a roster');
+  assert.strictEqual(app.el('#ladder-info').classList.contains('hidden'), true,
+    'and takes no space while it has nothing to say');
   assert.strictEqual(app.el('#btn-ladder').disabled, true, 'the button waits for a roster');
 });
 
