@@ -386,8 +386,14 @@ function renderResult(d) {
 // takes them. Driven by the server's roundsTarget rather than a count written
 // here, so the row is exactly as long as the series is and the client holds no
 // copy of the rules.
+//
+// Only for a series that takes more than one round. A match one round long has
+// no running tally to show -- it is over before the pips could fill more than
+// once -- and a single pip would say nothing the result banner does not already
+// say. So the cutoff is at two, not at one: a scoreboard is for something that
+// goes on.
 function renderPips(you, opp, target) {
-  seriesTally = target > 0 ? { you, opp, target } : null;
+  seriesTally = target > 1 ? { you, opp, target } : null;
   paintPips();
 }
 

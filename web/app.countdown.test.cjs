@@ -292,6 +292,31 @@ test('a match with no series draws no pips, before a round or after one', async 
   assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'and nothing after its only round');
 });
 
+test('a one-round match draws no pips, at the match or after its only round', async () => {
+  // The quick mode is one round and nothing else: there is no running tally to
+  // show, and one pip would say nothing the result banner does not. A row that
+  // appeared only on the final result -- and could only ever fill once -- was a
+  // scoreboard for a series that does not exist, which is the same mistake as
+  // drawing it for PvP.
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  app.fire('matched', { opponentName: 'CPU', background: BGS[0], roundsTarget: 1 });
+  assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'nothing to show at the match');
+
+  app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
+  app.fire('shoot', { windowMs: 2000, shootAt: 1700000003000 });
+  app.runUntil(1700000005500);
+  app.fire('result', {
+    outcome: 'win', mode: 'cpu', opponentName: 'CPU', round: 1,
+    youRoundWins: 1, oppRoundWins: 0, roundsTarget: 1, seriesOver: true,
+  });
+  assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'and nothing after the win');
+  assert.deepEqual(pips(app, 'opp'), { total: 0, filled: 0, hidden: true }, 'on either side');
+  // The rematch is the point of that mode, and it is unaffected.
+  assert.ok(!app.el('#btn-again').classList.contains('hidden'), 'the rematch is still offered');
+});
+
 test('a series fills a pip per round won, and withholds the rematch until the last round', async () => {
   // A CPU match is a series, so the score is the thing being played for and has
   // to be on screen for every round -- including through the next countdown,

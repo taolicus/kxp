@@ -19,6 +19,14 @@ rules that `seriesTarget` in `round.go` exists to avoid — so
 `web/app.countdown.test.cjs` drives a `roundsTarget: 5` result and asserts five
 pips.
 
+## Not for a one-round match
+
+Added later, with the length choice: the rows are drawn from
+`roundsTarget > 1`, so one round gets none. A match that is over before the pips
+could fill more than once has no running tally to show, and one pip would say
+nothing the result banner does not. The cutoff is two rather than one because a
+scoreboard is for something that goes on.
+
 ## Where it lives
 
 `web/app.js` (`renderPips`, `paintPipRow`, `pipHTML`) and the pips themselves:

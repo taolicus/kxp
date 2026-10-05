@@ -392,9 +392,12 @@ Notes:
 - The series score is drawn as a **pip per round win still needed**, one row
   under each fighter, filled from the left as the wins come in. The rows go up
   empty on `matched` and are `roundsTarget` pips wide because that is what the
-  server says, so the client holds no copy of the series rules — and a `matched`
-  or a result with no `roundsTarget` (PvP, or a pre-series server) draws no pips
-  at all rather than guessing a width. The pips are module state beside the
+  server says, so the client holds no copy of the series rules. There is no
+  scoreboard below `roundsTarget: 2`: a match one round long has no running
+  tally, and a single pip says nothing the result banner does not. So a
+  `roundsTarget` of 1 draws nothing, exactly as a `matched` or a result with no
+  `roundsTarget` at all does (PvP, or a pre-series server) — the client never
+  guesses a width. The pips are module state beside the
   round panel for the same reason the opponent slot is kept: a tally that reset
   with each round would read as the score having been thrown away.
   A reconnect mid-series does not restore the tally — `snapshot:countdown` is a
