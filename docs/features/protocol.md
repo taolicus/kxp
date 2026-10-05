@@ -348,7 +348,7 @@ that are purely client-generated are marked with `*`.
 | `countdown` | `countdown`→`countdown`, `matched`→`countdown`, `shoot`→`shoot`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
 | `shoot` | `move*`→`locked`, `lock*`→`locked`, `reject*`→`locked`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
 | `locked` | `move*`→`locked`, `reject*`→`locked`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
-| `result` | `matched`→`matched`, `rematch:online*`→`waiting`, `mode*`→`lobby` |
+| `result` | `matched`→`matched`, `countdown`→`countdown`, `rematch:online*`→`waiting`, `mode*`→`lobby` |
 
 Snapshot events are total: from any state, `snapshot:idle`→`lobby`,
 `snapshot:waiting`→`waiting`, `snapshot:matched`→`matched`,
@@ -360,6 +360,14 @@ Notes:
   shortened catch-up window (see the README) instead of being dropped.
 - The `result` event is the only terminal signal; a `mode`/`rematch:online`
   choice after it returns to the lobby or queue.
+- `result` + `countdown` is how a series plays its next round: a result with
+  `seriesOver: false` is followed by the next round's countdown frames. The
+  countdown frame carries only the schedule (`n`, `shootAt`, `windowMs`), so
+  `enter.countdown` treats a `result` origin as *the same match continuing* — it
+  clears the finished round's panel and rematch buttons but keeps the background
+  and the opponent slot. Rebuilding the screen from the frame instead would
+  re-roll the stage and revert the opponent to a generic name, which is invisible
+  in round one and wrong in every round after it.
 
 ## Clock handling
 

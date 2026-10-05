@@ -446,6 +446,16 @@ const enter = {
     if (from === 'matched') {
       stopReadyLoop();
       showGame();
+    } else if (from === 'result') {
+      // Round two of a series. The match screen, background and opponent slot
+      // were established by round one and a countdown frame carries neither, so
+      // the rejoin branch below would wipe the opponent back to a generic
+      // "Opponent" -- losing the CPU's name and the character both players chose
+      // for a reason neither could see. resetGame still runs: it is what clears
+      // the previous round's result panel and hides its rematch buttons, which
+      // would otherwise sit on screen through the next round.
+      showGame();
+      resetGame();
     } else if (!GAME_STATES.includes(from)) {
       setBg(d);
       showGame();

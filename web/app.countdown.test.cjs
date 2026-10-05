@@ -16,7 +16,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { runInContext } = require('node:vm');
 
-const { loadApp } = require('./appHarness.cjs');
+const { loadApp, BGS } = require('./appHarness.cjs');
 const SM = require('./machine.js');
 
 // The three beat labels, in the order the server sends them.
@@ -178,6 +178,41 @@ test('app.js loses exactly one countdown beat per second of first-frame delay', 
       .filter((p, i, all) => p !== all[i - 1]);
     assert.deepEqual(beats, want, `first frame +${lag}ms late`);
   }
+});
+
+test('a second round arrives on a countdown frame that carries none of the match', async () => {
+  // A non-final result is followed by the next round's countdown. That frame
+  // carries the schedule and nothing else -- no background, no character -- so a
+  // client that rebuilds the match screen from it replaces the opponent with a
+  // generic "Opponent" and re-rolls the stage. Invisible in round one, where the
+  // screen was built by `matched`, which does carry them: the damage first shows
+  // up in round two, after the player has already chosen a character.
+  const shootAt = 1700000003000;
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  app.fire('matched', { opponentName: 'CPU', background: BGS[0] });
+  app.loadImages();
+  await app.settle();
+  app.fire('countdown', { n: 'READY', shootAt, windowMs: 2000 });
+  app.fire('shoot', { windowMs: 2000, shootAt });
+  app.runUntil(shootAt + 2500);
+  app.fire('result', {
+    outcome: 'win', mode: 'cpu', opponentName: 'CPU', seriesOver: false,
+  });
+  assert.equal(runInContext('state', app.ctx), 'result');
+
+  const opponent = app.html('#opp-slot');
+  assert.match(opponent, /cpu/i, 'sanity: the first round named the opponent');
+
+  app.fire('countdown', { n: 'READY', shootAt: shootAt + 20000, windowMs: 2000 });
+  assert.equal(runInContext('state', app.ctx), 'countdown', 'the round starts');
+  assert.equal(app.html('#opp-slot'), opponent, 'and the opponent is still who it was');
+  assert.equal(app.bgName(), BGS[0], 'on the background the match started with');
+  // The previous round's panel must not sit on top of the new round: resetGame
+  // is what hides the timing panel and the rematch buttons.
+  assert.ok(app.el('#btn-again').classList.contains('hidden'), 'no stale rematch button');
+  assert.ok(app.el('#timing').classList.contains('hidden'), 'no stale timing panel');
 });
 
 test('a client that misses the whole countdown is still told to shoot', () => {

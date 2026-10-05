@@ -23,7 +23,11 @@
     countdown: { countdown: 'countdown', matched: 'countdown', shoot: 'shoot', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     shoot: { move: 'locked', lock: 'locked', reject: 'locked', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
     locked: { move: 'locked', reject: 'locked', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
-    result: { matched: 'matched', 'rematch:online': 'waiting', mode: 'lobby' },
+    // `countdown` is how a series re-enters a round: a non-final result is
+    // followed by the next round's countdown frames. Without it the frame is
+    // dropped, the round never starts, and the match hangs on a result screen --
+    // so this edge is what makes "first to N" playable at all.
+    result: { matched: 'matched', countdown: 'countdown', 'rematch:online': 'waiting', mode: 'lobby' },
   };
 
   STATES.forEach((s) => {

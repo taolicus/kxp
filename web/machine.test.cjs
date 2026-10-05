@@ -51,6 +51,21 @@ test('a cancelled handshake can put a matched client back in the queue', () => {
   assert.strictEqual(next('matched', 'waiting'), 'waiting');
 });
 
+test('a series re-enters the countdown from the result state', () => {
+  // First to N sends a non-final result and then the next round's countdown
+  // frames. Without this edge the frame is dropped as out-of-order: the client
+  // sits on the result screen, the round never starts, and the match hangs with
+  // the server waiting for a pick that can never be made. Checked here and
+  // against the real app.js in app.countdown.test.cjs, because the routing
+  // decision and the painting behind it fail differently.
+  assert.strictEqual(next('result', 'countdown'), 'countdown');
+  // The round still resolves to a result; the new edge must not have displaced
+  // that, and a countdown still walks forward to shoot rather than back.
+  assert.strictEqual(next('result', 'result'), null);
+  assert.strictEqual(next('countdown', 'result'), 'result');
+  assert.strictEqual(next('countdown', 'shoot'), 'shoot');
+});
+
 test('rematch routing after a result', () => {
   assert.strictEqual(next('result', 'matched'), 'matched');
   assert.strictEqual(next('result', 'rematch:online'), 'waiting');
