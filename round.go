@@ -242,7 +242,13 @@ type match struct {
 }
 
 func newMatch(id string) *match {
-	return &match{id: id, readyCh: make(chan struct{}), now: time.Now}
+	return &match{
+		id:           id,
+		readyCh:      make(chan struct{}),
+		now:          time.Now,
+		roundsTarget: 3,
+		round:        1,
+	}
 }
 
 // setShootAt fixes the announced PUN deadline. The caller must pass a value
