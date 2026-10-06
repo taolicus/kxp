@@ -470,7 +470,11 @@ test('clearing the mirror completes the ladder, and the next request draws a new
 
   // A cleared run must still be startable -- the player has just beaten the whole
   // ladder and the button cannot dead-end them.
-  const doneOrder = saved(app).order;
+  // The order is redrawn for the new run -- that claim is pinned, statistically,
+  // in the completed-ladder test above (they share the same cleared-run request);
+  // a single comparison here would be the same one-time-in-six coincidence that
+  // test's twelve draws exist to rule out. What belongs to this test is the
+  // entry: an un-cleared run, from the bottom, keeping the high-water mark.
   await nextFloor(app);
   const fresh = saved(app);
   assert.strictEqual(fresh.cleared, false, 'and starts un-cleared');
@@ -478,7 +482,6 @@ test('clearing the mirror completes the ladder, and the next request draws a new
   assert.strictEqual(fresh.best, ROSTER.length, 'keeping the high-water mark');
   assert.strictEqual(askedFor(app).opponentCharacter, fresh.order[0],
     'the new ladder is fought at its first floor');
-  assert.notDeepStrictEqual(fresh.order, doneOrder, 'and the order was redrawn');
 });
 
 test('a cleared arcade says so in the lobby, and the entry shows it before its restart', async () => {
@@ -670,7 +673,6 @@ test('a completed ladder stands at the top, and its fight draws the next one', a
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
   await started(app);
   await climbTo(app, ROSTER.length - 1);
-  const doneOrder = saved(app).order;
   await wonFloor(app);
 
   assert.strictEqual(text(app, '#ladder-title'), 'Arcade complete');
@@ -679,13 +681,29 @@ test('a completed ladder stands at the top, and its fight draws the next one', a
   assert.strictEqual(stood.floor, ROSTER.length - 1, 'the player is left on the mirror they beat');
   assert.strictEqual(stood.hop, '', 'with nowhere further to climb');
 
-  await app.tap('#ladder-fight');
-  await app.settle();
-  const fresh = saved(app);
-  assert.strictEqual(fresh.cleared, false, 'and the fight starts a fresh run');
-  assert.strictEqual(fresh.floor, 0);
-  assert.notDeepStrictEqual(fresh.order, doneOrder, 'with a newly drawn order');
-  assert.strictEqual(askedFor(app).opponentCharacter, fresh.order[0]);
+  // Every completion offers a fresh run, drawn rather than a replay of the one
+  // just beaten. That claim is about randomness, so like the draw test above it
+  // is asserted statistically rather than by seeding a shuffle: a fourth-roster
+  // draw picks among six possible orders, so once the run is re-completed and
+  // re-drawn twelve times the orders vary with overwhelming probability, while a
+  // redraw that reused the beaten ladder would be identical on every visit.
+  // Nothing here can be a single comparison, because two honest draws coincide
+  // one time in six.
+  const redraws = new Set();
+  for (let rep = 0; rep < 12; rep++) {
+    await app.tap('#ladder-fight');
+    await app.settle();
+    const fresh = saved(app);
+    assert.strictEqual(fresh.cleared, false, 'each new fight starts a fresh run');
+    assert.strictEqual(fresh.floor, 0);
+    assert.strictEqual(askedFor(app).opponentCharacter, fresh.order[0]);
+    redraws.add(fresh.order.join(','));
+    if (rep < 11) {
+      await climbTo(app, ROSTER.length - 1);
+      await wonFloor(app);
+    }
+  }
+  assert.ok(redraws.size > 1, 'a fresh run is drawn rather than the beaten ladder replayed');
 });
 
 test('the tower can be climbed again, and its fight is not left disarmed', async () => {
