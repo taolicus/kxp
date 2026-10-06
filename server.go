@@ -857,6 +857,7 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		ID                string
 		RoundsTarget      int
 		OpponentCharacter string
+		DrawEnds          *bool
 	}
 	if err := h.decode(w, r, &req); err != nil {
 		return
@@ -871,6 +872,16 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	if !validCPUSeriesTarget(target) {
 		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
 		return
+	}
+	// Whether a drawn round ends the match. Absent means the inference one round
+	// always had -- a match of one round is whatever that round came to -- so an
+	// older client is unaffected. The ladder is the only caller that says
+	// otherwise: it always asks for replays, because a drawn round must not
+	// decide a floor. Pointer rather than plain bool because absent and explicit
+	// false are different requests here.
+	drawEnds := target <= 1
+	if req.DrawEnds != nil {
+		drawEnds = *req.DrawEnds
 	}
 	// Which fighter the bot plays, for a ladder floor. Absent means the random
 	// pick this handler always made, so an older client and every probe are
@@ -919,6 +930,10 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		c.queueing = false
 	}
 	m := h.makeMatch(newID(4), target, side{client: c}, side{bot: true, character: opponent})
+	// The engine's default is the 1-off inference; the wire has spoken, so the
+	// floor's rule is the request's. Set before startMatchLocked, so it lands
+	// before the match's own goroutine reads it.
+	m.drawEnds = drawEnds
 	h.startMatchLocked(m)
 	h.mu.Unlock()
 	w.Write([]byte("{}"))

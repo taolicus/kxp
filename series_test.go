@@ -194,6 +194,26 @@ func TestADrawStillReplaysInALongerSeries(t *testing.T) {
 	}
 }
 
+// The ladder's request says its drawers replay -- a drawn round must not decide
+// a floor -- and it is that message, not the length, that ends a match on a
+// draw. This is the exception's other neighbour: the same target as
+// TestADrawEndsAOneRoundMatch, but at drawEnds false the draw is not the end of
+// the floor.
+func TestADrawReplaysInAOneRoundLadderFloor(t *testing.T) {
+	m, a := oneRoundMatchForTest(t)
+	m.drawEnds = false
+
+	if !judgeRoundAs(t, m, a, [2]Result{ResultDraw, ResultDraw}) {
+		t.Fatal("judge ended a one-round match asked to replay draws")
+	}
+	if m.seriesOver {
+		t.Error("seriesOver set on a drawn round of a ladder floor")
+	}
+	if m.round != 2 {
+		t.Errorf("round = %d, want 2 -- the draw is replayed", m.round)
+	}
+}
+
 // A void round is connectivity-safe scoring's no-contest: it is a round win for
 // the opponent and costs the side that dropped nothing. It must be tallied the
 // same way an ordinary win is, or a player who drops every round can never end

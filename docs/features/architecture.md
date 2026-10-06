@@ -108,15 +108,18 @@ series continues. PvP matches are still one round, which is the other half of
 oversight: re-opening the ready handshake between rounds is a wire-visible
 decision that belongs with the series loop, not beside it.
 
-**A match one round long is over whatever that round was.** A draw is worth
-nothing to either side and replays — but replaying it means playing a second
-round, which is the series a player declined by choosing one round. So at a
-target of one, `judge()` ends the match on the draw as well, and the result
+**A match the client asked to end on a draw is over whatever that round was.** A
+draw is worth nothing to either side and replays — but replaying it means playing
+a second round, which is the series a player declined by choosing one round. So
+`judge()` ends the match on the draw when `drawEnds` is true, and the result
 frame carries `seriesOver: true` like any other final result, which is what makes
-the client offer "Play Again". This is also the behaviour one round had before
-there was a series at all: a single round, whose result is final whatever it
-came to. Scoped to the length rather than the mode, because it is a statement
-about the number of rounds there are, not about who is playing.
+the client offer "Play Again". The field defaults at construction to
+`roundsTarget <= 1`, which is the rule one round always had: a single round,
+whose result is final whatever it came to. Scoped to the field rather than the
+mode, because the default is a statement about the number of rounds there are,
+not about who is playing — and the arcade ladder is the one caller with a
+different answer, posting `drawEnds: false` on every floor so a drawn round
+replays rather than deciding one.
 
 **The target is a constructor argument, not a constant.** `newMatch(id,
 roundsTarget)` takes the length, because the lobby offers a one-round CPU match
@@ -127,14 +130,18 @@ of 1 and 3); the engine takes what it is handed and never validates a request it
 does not parse.
 
 **A target goes on the wire only where a series exists.** `seriesFields()` adds
-`roundsTarget` to `matched` and to every `result`, and only when
-`seriesMatch()` is true. On `matched` it is what lets the client draw the
-scoreboard before round one rather than after it — the width of the pip row has
-to come from the server, or the client ends up holding a copy of the rules. On a
-PvP match the field is absent, and absent is the meaning: the client draws no
-scoreboard, which is the only honest rendering of a match that cannot go past
-round one. Sending `3` there instead would put a three-pip row over a one-round
-game and promise rounds that never arrive.
+`roundsTarget`, and `drawEnds` beside it, to `matched` and to every `result`,
+and only when `seriesMatch()` is true. On `matched` the target is what lets the
+client draw the scoreboard before round one rather than after it — the width of
+the pip row has to come from the server, or the client ends up holding a copy of
+the rules. `drawEnds` rides along because the two together are the mode: a
+first-to-1 floor and a 1-off match both have a target of 1, and only the field
+tells them apart — so a rule that ships in the engine belongs on the wire, where
+the client will read it when it offers the mode, rather than in the client's
+head. On a PvP match both are absent, and absent is the meaning: the client
+draws no scoreboard, which is the only honest rendering of a match that cannot
+go past round one. Sending `3` there instead would put a three-pip row over a
+one-round game and promise rounds that never arrive.
 
 **The series bookkeeping lives in `judge()`, and the result is announced after
 it.** The tally is updated, `seriesOver` is decided, and only then does
@@ -207,10 +214,13 @@ not a usable order draws a fresh ladder.
 
 Progress moves on the match's **final** result only — `seriesOver` — never on a
 mid-series round, which is the whole reason the series fields exist. A win climbs
-one floor; a loss or a draw puts the player back on the first, as in the arcade
-original, without redrawing. `best` is only raised by a win: a lost floor is not a
-cleared floor, and a mark that rose as the player lost would be the opposite of a
-high-water mark.
+one floor; a loss puts the player back on the first, as in the arcade original,
+without redrawing. A drawn floor is neither: every floor's request says its
+drawers replay (`drawEnds: false`), so a draw replays instead of reaching a
+result — and were one to arrive anyway, the run would stay where it was rather
+than misreading a round that decided nothing as one it lost. `best` is only
+raised by a win: a lost floor is not a cleared floor, and a mark that rose as the
+player lost would be the opposite of a high-water mark.
 
 Clearing the mirror is a **state**, not a position. The run records `cleared`
 rather than leaving the floor wrapping to zero, because a run sitting on floor one

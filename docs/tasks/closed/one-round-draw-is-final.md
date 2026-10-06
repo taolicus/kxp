@@ -18,13 +18,22 @@ match ended with its only round whatever that round produced, and the result
 screen offered "Play Again" from a draw as readily as from a win. Choosing one
 round should not have been a way to lose that.
 
-## Scoped to the length, not the mode
+## Scoped so the ladder can opt out
 
-The rule is `m.roundsTarget <= 1 && res[0] == ResultDraw`, with no mode test. It
-is a statement about how many rounds the match has, not about who is playing, and
-a PvP match is already ended by `!m.seriesMatch()` on the line above. Gating it
-on the CPU would have been a second thing to get wrong when the PvP half of
+The rule landed as `m.roundsTarget <= 1 && res[0] == ResultDraw`, with no mode
+test: it is a statement about how many rounds the match has, not about who is
+playing, and a PvP match is already ended by `!m.seriesMatch()` on the line
+above. Gating the original on the CPU would have been a second thing to get wrong
+when the PvP half of
 [game-mode-architecture](../open/game-mode-architecture.md) lands.
+
+It became a field when the arcade ladder needed the opposite reading at the same
+length. `judge()` now ends the match on a draw when `m.drawEnds` is true;
+`newMatch` defaults that field to `roundsTarget <= 1`, so a match built without a
+thought for it keeps the rule above; and the ladder — the one caller with a
+different answer — posts `drawEnds: false` on every floor, because a drawn round
+must not decide a floor. "Scoped to the length" is still true of the default; the
+field exists so a caller can pick the other reading, and the ladder is that caller.
 
 A `void` needed no change: it is a round win for the opponent, so a one-round
 match already ended on one through the ordinary tally. The draw was the only
@@ -32,11 +41,19 @@ outcome that reached the tally with nobody on the score.
 
 ## What the client needed
 
-Nothing. `renderResult` gates the rematch on `d.seriesOver !== false`, so a
-final result of any outcome offers it — the server saying the match is over is
-the whole condition. The change is engine-only because the decision was already
-authoritative in the right place; the bug was the server reporting a match as
-still running.
+Nothing for the rule itself. `renderResult` gates the rematch on
+`d.seriesOver !== false`, so a final result of any outcome offers it — the server
+saying the match is over is the whole condition. The original change was
+engine-only because the decision was already authoritative in the right place;
+the bug it fixed was the server not ending a one-round match on its draw.
+
+The ladder is the exception, and it speaks for itself on the wire: `postCPU`
+sends `drawEnds: false` on every floor, and `advanceLadder` treats a drawn floor
+as deciding nothing — the run stays where it was and the result button says
+"Retry This Floor" rather than "Back to Floor 1". Against an honouring server the
+draw is replayed and never reaches a result, so the branch is the client-side
+half of the same invariant, pinned by the "a drawn floor leaves the run where it
+was" test in `web/app.arcade.test.cjs`.
 
 ## Verified
 
@@ -50,6 +67,11 @@ fail against the pre-change `judge`.
 length, so the exception cannot widen: a drawn round at first-to-three still
 replays (`round` advances, `seriesOver` unset). `TestSeriesTallyCountsWinsAndIgnoresDraws`
 already pinned that; this states it next to the exception.
+
+The ladder's opt-out is pinned by `TestADrawReplaysInAOneRoundLadderFloor`, the
+exception's other neighbour: the same one-round length with `drawEnds: false`
+replays the draw (`seriesOver` unset, `round` advances), and it fails to build
+against the pre-field `judge`.
 
 Driven through `judge` rather than end to end on purpose — the CPU picks at
 random, so an end-to-end draw would be a coin flip. The teardown path is pinned

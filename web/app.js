@@ -300,17 +300,21 @@ function shuffle(ids) {
 }
 
 // advanceLadder moves the run on after a ladder match has been decided and says
-// which floor is next. A win climbs one floor; a loss, or a draw on a one-round
-// ladder, puts the player back on the first, as in the arcade original. It reads
-// and writes the run with the same repair on the way in, so a ladder that crossed a
-// deploy which changed the roster progresses on the repaired order rather than on
-// one that is no longer valid.
+// which floor is next. A win climbs one floor; a loss puts the player back on
+// the first, as in the arcade original. A drawn floor is neither: the floor's
+// request always says its drawers replay (drawEnds: false), so a draw against an
+// honouring server replays and never reaches a result here -- the branch exists
+// as the client-side half of the same rule, that an outcome which cannot decide a
+// floor must not be able to reset one. It reads and writes the run with the same
+// repair on the way in, so a ladder that crossed a deploy which changed the
+// roster progresses on the repaired order rather than on one that is no longer
+// valid.
 //
-// Returns what the result screen should offer, since the honest label differs: the
-// next floor after a win, the first again after a loss, and a new ladder once the
-// mirror is down. 'done' is not a stage of the run -- the cleared run stays where
-// it is, so the high-water mark and the next request are both still readable --
-// but it is what the button says.
+// Returns what the result screen should offer, since the honest label differs:
+// the next floor after a win, the first again after a loss, the same floor again
+// after a draw, and a new ladder once the mirror is down. 'done' is not a stage
+// of the run -- the cleared run stays where it is, so the high-water mark and
+// the next request are both still readable -- but it is what the button says.
 function advanceLadder(outcome) {
   const a = readArcade();
   // Counted from the run's own floor, not from the floor the request was made on:
@@ -332,8 +336,12 @@ function advanceLadder(outcome) {
       return 'done';
     }
     a.floor += 1;
-  } else {
+  } else if (outcome === 'loss') {
     a.floor = 0;
+  } else {
+    a.cleared = false;
+    saveArcade(a);
+    return 'retry-floor';
   }
   a.cleared = false;
   saveArcade(a);
@@ -588,7 +596,8 @@ function renderResult(d) {
     // saying otherwise would be the one piece of the ladder a player never sees.
     if (ladderNext) {
       $('#btn-again').textContent = ladderNext === 'done' ? 'New Arcade Mode'
-        : ladderNext === 'retry' ? 'Back to Floor 1' : 'Next Floor';
+        : ladderNext === 'retry' ? 'Back to Floor 1'
+        : ladderNext === 'retry-floor' ? 'Retry This Floor' : 'Next Floor';
     }
     $('#btn-mode').classList.remove('hidden');
   }
@@ -656,7 +665,10 @@ function postCPU(mode, { roundsTarget = cpuTarget } = {}) {
   }
   ladderFloor = a.floor;
   saveArcade(a);
-  return post('/cpu', { roundsTarget, opponentCharacter: a.order[a.floor] });
+  // A floor is never 1-off: drawn rounds replay, so a draw can never decide a
+  // floor. The server defaults a one-round request to "end on a draw", which is
+  // exactly what a 1-off CPU match wants, so the ladder has to say otherwise.
+  return post('/cpu', { roundsTarget, opponentCharacter: a.order[a.floor], drawEnds: false });
 }
 
 async function post(path, body = {}) {

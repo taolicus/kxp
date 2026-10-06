@@ -210,9 +210,15 @@ type match struct {
 	// Written and read on run's own goroutine, so plain ints: see the abandon
 	// field for why these are not atomics.
 	roundsTarget int
-	round        int
-	win          [2]int
-	seriesOver   bool
+	// drawEnds is whether a drawn round ends the match. Defaulted at
+	// construction to roundsTarget <= 1 -- the rule a one-round match always
+	// had -- and the ladder overrides it, because a "floor" that replayed draws
+	// must survive a drawn round rather than ending on one. Same-goroutine
+	// access, like the fields beside it.
+	drawEnds   bool
+	round      int
+	win        [2]int
+	seriesOver bool
 
 	// shootAt is the announced PUN deadline, fixed at countdown start. It is
 	// held as a time.Time rather than epoch-ns so it carries a monotonic
@@ -275,13 +281,17 @@ type match struct {
 // rounds. It is a parameter rather than the default alone because the lobby lets
 // a player choose a one-round CPU match, and a target fixed at construction
 // would have to be overwritten afterwards -- on a field documented as belonging
-// to run's goroutine.
+// to run's goroutine. Whether a draw ends it defaults from the length: a
+// one-round match is whatever that round came to (see the ladder's override in
+// the handler), so a match built without a thought for the field behaves exactly
+// as one round always did.
 func newMatch(id string, roundsTarget int) *match {
 	return &match{
 		id:           id,
 		readyCh:      make(chan struct{}),
 		now:          time.Now,
 		roundsTarget: roundsTarget,
+		drawEnds:     roundsTarget <= 1,
 		round:        1,
 	}
 }
@@ -522,15 +532,22 @@ func (m *match) run() {
 // that changes.
 func (m *match) seriesMatch() bool { return m.sides[1].bot }
 
-// seriesFields adds the scoreboard's one shape-changing field to a frame, and
-// only to a match that has a series to score. A PvP match is a single round, so
-// a target on its frames would promise rounds that never come -- and the client
+// seriesFields adds the scoreboard's shape-changing fields to a frame, and only
+// to a match that has a series to score. A PvP match is a single round, so a
+// target on its frames would promise rounds that never come -- and the client
 // reads the target as the width of the pip row it draws, so a "3" there puts a
 // three-pip scoreboard over a match that has no score. Absent means "no series",
 // which is the reading every client already has for a pre-series server.
+//
+// drawEnds rides beside the target because the two together are the mode: a
+// first-to-1 floor and a 1-off match both have a target of 1, and only the field
+// tells them apart. The client does not read it yet -- the mode the tower offers
+// comes later -- but a rule that ships in the engine belongs on the wire, not in
+// the client's head.
 func (m *match) seriesFields(data map[string]any) {
 	if m.seriesMatch() {
 		data["roundsTarget"] = m.roundsTarget
+		data["drawEnds"] = m.drawEnds
 	}
 }
 
@@ -707,12 +724,14 @@ func (m *match) judge() bool {
 	// expression covers "first to N" and "one round" without a branch.
 	m.seriesOver = !m.seriesMatch() ||
 		m.win[0] >= m.roundsTarget || m.win[1] >= m.roundsTarget
-	// ...and a match one round long is over whatever that round produced, a draw
-	// included. A drawn round is worth nothing to either side and replays, but
-	// replaying it means playing a second round -- the series the player declined
-	// when they chose one round. What they asked for was one round and whatever
-	// it came to, which is how this mode worked before there was a series at all.
-	if m.roundsTarget <= 1 && res[0] == ResultDraw {
+	// ...and a match the client asked to end on a draw is over whatever that
+	// round produced. A drawn round is worth nothing to either side and replays,
+	// but replaying it means playing a second round -- the series the player
+	// declined when they chose one round. What they asked for was one round and
+	// whatever it came to, which is how this mode worked before there was a
+	// series at all. The ladder asks for the opposite on its floors: a drawn
+	// round there is a replay, never the end of the floor.
+	if m.drawEnds && res[0] == ResultDraw {
 		m.seriesOver = true
 	}
 	m.announce(res, ps)

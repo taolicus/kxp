@@ -432,18 +432,26 @@ test('losing a floor puts the player back on the first, without redrawing', asyn
   assert.strictEqual(askedFor(app).opponentCharacter, order[0], 'which is where it says it goes');
 });
 
-test('a draw counts as not clearing the floor', async () => {
-  // A one-round ladder floor can end in a draw -- that was made final deliberately
-  // -- so the draw has to land somewhere. Restarting is the honest reading: no
-  // floor was cleared.
+test('a drawn floor leaves the run where it was', async () => {
+  // A floor is never 1-off: its request says drawn rounds replay (drawEnds:
+  // false), so an honouring server replays a draw and this result never arrives.
+  // It is driven directly because the engine's replay is the engine's -- the
+  // client-side half of the rule is that an outcome which cannot decide a floor
+  // must not be able to reset one, and that is what lives here.
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
   await started(app);
   await climbTo(app, 1);
   app.fire('matched', { ...MATCHED, opponentCharacter: saved(app).order[1] });
   app.fire('result', { outcome: 'draw', mode: 'cpu', roundsTarget: 1, seriesOver: true });
 
-  assert.strictEqual(saved(app).floor, 0, 'the floor is not cleared by a draw');
+  assert.strictEqual(saved(app).floor, 1, 'the floor is neither cleared nor lost');
   assert.strictEqual(saved(app).best, 1, 'and the earlier floor still counts');
+  assert.strictEqual(ladderLabel(app), 'Retry This Floor', 'and offers the same floor again');
+
+  // The wire half, on the request that started this floor: the server would not
+  // have honoured the draw without it.
+  const fought = app.posts.filter((p) => String(p.url).endsWith('/cpu')).pop();
+  assert.strictEqual(JSON.parse(fought.body).drawEnds, false, 'a ladder floor is never 1-off');
 });
 
 test('clearing the mirror completes the ladder, and the next request draws a new one', async () => {
