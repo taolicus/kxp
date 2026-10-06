@@ -218,15 +218,14 @@ button.primary:hover {
   font-size: 0.9rem;
 }
 
-/* The CPU series-length choice in the lobby: a segmented pair. It reads as part
-   of the lobby rather than as a dialog, because it only qualifies the button
-   above it. */
+/* The match-mode choice in the lobby: a segmented control above the buttons it
+   qualifies. It reads as part of the lobby rather than as a dialog. */
 .seg {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  margin-top: var(--s2);
+  margin: var(--s2) 0;
   font-size: 0.9rem;
   color: var(--muted);
 }

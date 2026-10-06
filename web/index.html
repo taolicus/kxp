@@ -28,19 +28,14 @@
     <!-- Where the ladder stands: the floor it would resume on, the fighter
          standing on it, and the run's high-water mark. -->
     <p id="ladder-info" class="stats"></p>
-    <div class="buttons">
-      <button id="btn-online" class="primary" disabled>Play Online</button>
-      <button id="btn-cpu">Play vs CPU</button>
-      <button id="btn-ladder">Arcade Mode</button>
-    </div>
-    <!-- The length and draw rule a match runs as. The numbers live in the markup
-         because they are a choice the player reads here; app.js posts whatever
-         is selected and the server decides whether it is one it offers. The rule
-         rides with the length because a 1-off and a first-to-1 share one. Online
-         takes the same choice (the queue pairs entries that agree on both); the
-         "Vs CPU:" caption that no longer describes it is the UI pass's. -->
-    <div id="cpu-length" class="seg" role="group" aria-label="CPU match length">
-      <span class="seg-label">Vs CPU:</span>
+    <!-- The length and draw rule a match runs as, chosen before the button it
+         qualifies. The numbers live in the markup because they are a choice the
+         player reads here; app.js posts whatever is selected and the server
+         decides whether it is one it offers. The rule rides with the length
+         because a 1-off and a first-to-1 share one, and online takes the same
+         choice (the queue pairs entries that agree on both). -->
+    <div id="cpu-length" class="seg" role="group" aria-label="Match mode">
+      <span class="seg-label">Mode:</span>
       <!-- No option is marked selected: the client decides, once the lobby
            is framed, so a saved choice is shown from the first paint instead of
            the default flashing and then being swapped out. Each button names its
@@ -49,6 +44,11 @@
       <button class="seg-btn" data-rounds="1" data-draw-ends="true">1 round</button>
       <button class="seg-btn" data-rounds="1" data-draw-ends="false">First to 1</button>
       <button class="seg-btn" data-rounds="3" data-draw-ends="false">First to 3</button>
+    </div>
+    <div class="buttons">
+      <button id="btn-online" class="primary" disabled>Play Online</button>
+      <button id="btn-cpu">Play vs CPU</button>
+      <button id="btn-ladder">Arcade Mode</button>
     </div>
   </section>
 
