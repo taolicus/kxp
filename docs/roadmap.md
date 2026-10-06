@@ -93,9 +93,12 @@ Features that depend on identity, persistence, or ranking.
 - [Random fight backgrounds](tasks/closed/random-fight-backgrounds.md)
 
 One item has landed. The rest of this phase is unstarted, and it is
-deliberately the last phase: every item in it needs an identity primitive
-that has not been chosen yet ([player-identity](issues/player-identity.md)),
-so scheduling any of them now would mean scheduling work whose first step
-is still an open question. They are specified, so they are tasks rather
-than issues, and they are unscheduled rather than low-priority — five
+deliberately the last phase: three of the six specified tasks wait on an
+identity primitive that has not been chosen yet
+([player-identity](issues/player-identity.md)), so scheduling those now would
+mean scheduling work whose first step is still an open question. The other
+three do not wait on it — a solo campaign and a match history persist to
+`localStorage` like the arcade ladder, and a challenge link identifies a match
+rather than a player. They are specified, so they are tasks rather than
+issues, and they are unscheduled rather than low-priority — six
 files in [tasks/open/](tasks/open/) carrying `phase: 4`.

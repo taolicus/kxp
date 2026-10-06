@@ -10,7 +10,7 @@ ID, an account, or a token.
 already committed to one of them in a way that has not been followed through.
 
 - A persistent anonymous ID is the natural fit for this game: no accounts, no
-  credential handling, and it is enough for a leaderboard and a challenge link.
+  credential handling, and it is enough for a leaderboard.
 - An account implies a registration and credential path the repo has never had,
   and the server is public and unauthenticated.
 - A token sits between the two, and needs a rotation and expiry story.
@@ -32,16 +32,17 @@ radius rather than as separate items:
   client-submitted timestamps for ranking, cap CPU streaks). A `void`
   connectivity timeout scores like a draw, never a loss.
 - **Lobby / rooms** — private room creation, joining, discovery, access control.
-- **Send challenge** — a shareable `/play?challenge=...` link that any guest can
-  open to join one specific match, bypassing the global queue, with a waiting +
-  cancel state on the host side until the challenger joins.
 - **Tournament** — bracket/round structure for multi-match competition.
 
-Deciding this first is what keeps those four from each inventing its own notion
+Deciding this first is what keeps those three from each inventing its own notion
 of a player.
 
-**Prospective fix (not scheduled)** — this gates five tasks rather than being one
-of them: the four above, plus [player-names](../tasks/open/player-names.md).
-[Solo campaign](../tasks/open/solo-campaign.md) is the one Phase 4 task it does
-*not* gate, because it persists to `localStorage` like the arcade ladder and will
-be retrofitted onto whatever is chosen here.
+**Prospective fix (not scheduled)** — this gates four tasks rather than being one
+of them: the three above, plus [player-names](../tasks/open/player-names.md).
+The rest of Phase 4 does not wait on it, and each says why in its own file:
+[solo-campaign](../tasks/open/solo-campaign.md) persists to `localStorage` like
+the arcade ladder and will be retrofitted onto whatever is chosen here,
+[send-challenge](../tasks/open/send-challenge.md) needs no identity because a
+link identifies a match rather than a player, and
+[match-history](../tasks/open/match-history.md) is a local record that carries no
+rank.
