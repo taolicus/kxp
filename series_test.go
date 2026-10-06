@@ -20,9 +20,9 @@ func noSeriesBreak(t *testing.T) {
 	t.Cleanup(func() { seriesBreak = old })
 }
 
-// seriesMatchForTest is a match with a CPU opponent -- the only shape that is a
-// series today -- parked in the phase judge expects to walk back, with both sides
-// having picked so the judge has something to score.
+// seriesMatchForTest is a match with a CPU opponent, parked in the phase judge
+// expects to walk back, with both sides having picked so the judge has
+// something to score.
 func seriesMatchForTest(t *testing.T) (*match, *Client) {
 	t.Helper()
 	noSeriesBreak(t)
@@ -230,15 +230,20 @@ func TestSeriesVoidIsARoundWinForTheOpponent(t *testing.T) {
 }
 
 func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
-	// The CPU-first half of the task: a PvP match is not a series yet, because
-	// re-opening the ready handshake per round is the half that has not landed.
-	// Playing one here would leave two players in a match neither can leave.
+	// The negative direction of the series rule: a one-round online match — the
+	// length the lobby posts for it — is not a series, whatever else the queue
+	// can now be asked for. It ends on its first round whatever that round was,
+	// announces no target, and never opens a second countdown; the draw that
+	// would replay in a first-to-three ends it here, because `drawEnds` defaults
+	// to true at this target and a match one round long is whatever its round
+	// came to. First-to-three PvP is the other neighbour:
+	// TestAPVPMatchCanBeAFirstToThree.
 	noSeriesBreak(t)
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("pvps", defaultSeriesTarget, side{client: a}, side{client: b})
+	m := h.makeMatch("pvps", 1, side{client: a}, side{client: b})
 	if m.seriesMatch() {
-		t.Fatal("a PvP match reports itself as a series")
+		t.Fatal("a one-round PvP match reports itself as a series")
 	}
 
 	m.start()
@@ -284,6 +289,46 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 	}
 }
 
+// A queued match with no bot and a length to play is a series: the half of
+// game-mode-architecture that the between-rounds ready gate unblocked. The rule
+// is derived, not flagged -- `seriesMatch` reads the sides and `drawEnds` --
+// and this pins the bot-less side of it: judge keeps the loop running across a
+// draw and a partial tally until someone reaches the target, exactly as a CPU
+// match always did. Driven through judge directly because the gate between
+// rounds is run's business; that gate is pinned end to end by the
+// TestOnlineSeries* tests in ready_test.go.
+func TestAPVPMatchCanBeAFirstToThree(t *testing.T) {
+	noSeriesBreak(t)
+	h := NewHub()
+	a, b := newClient(), newClient()
+	t.Cleanup(a.cancel)
+	t.Cleanup(b.cancel)
+	m := h.makeMatch("pvp3", defaultSeriesTarget, side{client: a}, side{client: b})
+	if !m.seriesMatch() {
+		t.Fatal("a first-to-three match without a bot does not report itself as a series")
+	}
+
+	// A drawn round replays rather than deciding anything...
+	if !judgeRoundAs(t, m, a, [2]Result{ResultDraw, ResultDraw}) {
+		t.Fatal("judge ended the series on a draw")
+	}
+	// ...and three decisive wins end it.
+	for won := 1; won < defaultSeriesTarget; won++ {
+		if !judgeRoundAs(t, m, a, [2]Result{ResultWin, ResultLoss}) {
+			t.Fatalf("judge ended the series after %d of %d wins", won, defaultSeriesTarget)
+		}
+	}
+	if judgeRoundAs(t, m, a, [2]Result{ResultWin, ResultLoss}) {
+		t.Fatal("judge kept playing after the target was reached")
+	}
+	if m.win != [2]int{defaultSeriesTarget, 0} {
+		t.Errorf("tally = %v, want %d-0", m.win, defaultSeriesTarget)
+	}
+	if !m.seriesOver {
+		t.Error("seriesOver = false, want true on the round that reached the target")
+	}
+}
+
 // A series one round long ends on that round. The lobby offers it as the quick
 // option, so this is the difference between a mode and a decoration: judge has to
 // stop the loop, or the player asked for one round and got five.
@@ -322,8 +367,10 @@ func TestASeriesOfOneRoundEndsImmediately(t *testing.T) {
 
 // Only a match with a series announces a target. The client draws a pip per
 // round win still needed and needs the target to know how many, so it has to
-// arrive before round one's result -- but a PvP match is one round, and a
-// target on its frames is a promise the match cannot keep.
+// arrive before round one's result -- and the one-round length, whatever the
+// lobby posts, cannot promise one. The queue now honors a length, so the other
+// half of the rule bites too: a first-to-three online match is a series and
+// its `matched` frames carry the target like a CPU one's.
 func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	noSeriesBreak(t)
 	h := NewHub()
@@ -339,7 +386,7 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	cpu.cancel()
 
 	pvpA, pvpB := newClient(), newClient()
-	pm := h.makeMatch("pvps", defaultSeriesTarget, side{client: pvpA}, side{client: pvpB})
+	pm := h.makeMatch("pvps", 1, side{client: pvpA}, side{client: pvpB})
 	pm.start()
 	for name, c := range map[string]*Client{"a": pvpA, "b": pvpB} {
 		frame := waitForEvent(t, c, "matched")
@@ -350,6 +397,22 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	}
 	pvpA.cancel()
 	pvpB.cancel()
+
+	// The rule in the other direction: length carries, so the target arrives
+	// before round one here as well. This half fails against the old single-
+	// round PvP rule.
+	longA, longB := newClient(), newClient()
+	lm := h.makeMatch("pvp3", defaultSeriesTarget, side{client: longA}, side{client: longB})
+	lm.start()
+	for name, c := range map[string]*Client{"a": longA, "b": longB} {
+		frame := waitForEvent(t, c, "matched")
+		if frame["roundsTarget"] != float64(defaultSeriesTarget) {
+			t.Errorf("%s matched roundsTarget = %v, want %d -- a first-to-three online match has a scoreboard to draw",
+				name, frame["roundsTarget"], defaultSeriesTarget)
+		}
+	}
+	longA.cancel()
+	longB.cancel()
 }
 
 // TestCPUSeriesPlaysTheNextRound plays two real rounds. The human side sends

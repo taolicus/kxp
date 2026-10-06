@@ -16,7 +16,9 @@ would have quietly broken that.
 
 ## Why the offer is closed
 
-`cpuSeriesOffer` is `{1, 3}` — the two lengths the lobby shows — and anything else
+`seriesOffer` (renamed from `cpuSeriesOffer` when the online queue began
+validating lengths too) is `{1, 3}` — the two lengths the lobby shows — and
+anything else
 is `400 unsupported roundsTarget`. A range would accept `2`, which no UI
 describes: the client would owe the player a two-pip row for a mode that does not
 exist, and the server would carry series behaviour for a request no player can

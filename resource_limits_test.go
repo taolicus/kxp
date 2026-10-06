@@ -70,7 +70,7 @@ func TestQueueRejectsPastCap(t *testing.T) {
 	registerTestClient(h, "b")
 	h.mu.Lock()
 	for i := 0; i < maxQueue; i++ {
-		h.queue = append(h.queue, newClient())
+		h.queue = append(h.queue, queueEntry{client: newClient()})
 	}
 	h.mu.Unlock()
 

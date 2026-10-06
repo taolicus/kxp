@@ -173,10 +173,20 @@ func newID(n int) string {
 	return hex.EncodeToString(b)
 }
 
+// queueEntry is one waiting player and the mode it is waiting for. The mode
+// rides the entry rather than the client because it is a request, not a
+// property: the same player may re-post with a different length while still
+// waiting, and what pairs is the last thing they asked for.
+type queueEntry struct {
+	client       *Client
+	roundsTarget int
+	drawEnds     bool
+}
+
 type Hub struct {
 	mu      sync.Mutex
 	clients map[string]*Client
-	queue   []*Client
+	queue   []queueEntry
 	active  atomic.Int32
 	down    context.Context
 	stop    context.CancelFunc
@@ -502,12 +512,21 @@ func (h *Hub) removeClient(c *Client) {
 	}
 }
 
-func (h *Hub) dequeueLocked(c *Client) {
-	for i, q := range h.queue {
-		if q == c {
-			h.queue = append(h.queue[:i], h.queue[i+1:]...)
-			return
+// indexOfQueuedLocked finds the entry for c, or -1. Shared by dequeue and by
+// handleQueue, where a re-post while waiting has to update the entry that is
+// already there rather than queueing the same player twice.
+func (h *Hub) indexOfQueuedLocked(c *Client) int {
+	for i, e := range h.queue {
+		if e.client == c {
+			return i
 		}
+	}
+	return -1
+}
+
+func (h *Hub) dequeueLocked(c *Client) {
+	if i := h.indexOfQueuedLocked(c); i >= 0 {
+		h.queue = append(h.queue[:i], h.queue[i+1:]...)
 	}
 }
 
@@ -538,9 +557,12 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 		}
 		// pending means "this client is mid-handshake and must re-admit and
 		// re-ack", which is only true while the gate is still open and not yet
-		// satisfied. That is phasePreparing and nothing else -- once the countdown
-		// phase opens, the gate is closed by definition.
-		if out["phase"] == "preparing" && !m.allHumanReady() {
+		// satisfied. That is phasePreparing, and the between-rounds pause and
+		// gate of an online series (where the phase reads done or countdown and
+		// betweenRounds is what says a handshake is outstanding) -- once the
+		// countdown of a round is actually running, the gate is closed by
+		// definition.
+		if (out["phase"] == "preparing" || m.betweenRounds.Load()) && !m.allHumanReady() {
 			out["pending"] = true
 		}
 	} else if c.queueing {
@@ -588,22 +610,49 @@ func (c *Client) drainMoves() {
 	}
 }
 
+// tryMatch pairs waiting players who are waiting for the same match: equal
+// roundsTarget and equal drawEnds, because those two fields are the mode and a
+// pair that disagrees on either would be playing a match only one of them
+// asked for. Scanned FIFO -- the first pair in queue order that agrees wins --
+// so a player whose length nobody else wants keeps their seat and their place
+// rather than being bounced to the back of the queue. Callers must hold h.mu;
+// the pass is idempotent, so a re-run that finds nothing to pair does nothing.
 func (h *Hub) tryMatch() {
 	h.mu.Lock()
-	for len(h.queue) >= 2 {
-		a := h.queue[0]
-		b := h.queue[1]
-		h.queue = h.queue[2:]
-		a.queueing, b.queueing = false, false
-		// A PvP match is one round, so this number is never read: seriesMatch()
-		// gates the series everywhere, from the scoreboard on the wire to the
-		// tally in judge. It is passed anyway rather than zeroed, so that the day
-		// the PvP half of game-mode-architecture lands the default is a series
-		// rather than a match that ends before its first round is judged.
-		m := h.makeMatch(newID(4), defaultSeriesTarget, side{client: a}, side{client: b})
+	for {
+		i, j := h.firstEqualPairLocked()
+		if i < 0 {
+			break
+		}
+		// Captured before either removal: j > i, so taking j out first leaves
+		// i pointing at the same entry it did before.
+		a, b := h.queue[i], h.queue[j]
+		h.queue = append(h.queue[:j], h.queue[j+1:]...)
+		h.queue = append(h.queue[:i], h.queue[i+1:]...)
+		a.client.queueing, b.client.queueing = false, false
+		m := h.makeMatch(newID(4), a.roundsTarget, side{client: a.client}, side{client: b.client})
+		// The pairing carried the mode; the match must carry it too. makeMatch
+		// defaults drawEnds from the target, which agrees for every length the
+		// lobby offers today, but an entry may name either field independently
+		// (handleQueue decodes drawEnds the way /cpu does), so the entry wins.
+		m.drawEnds = a.drawEnds
 		h.startMatchLocked(m)
 	}
 	h.mu.Unlock()
+}
+
+// firstEqualPairLocked returns the queue indices of the first pair of entries
+// waiting for the same mode, or (-1, -1) when there is none.
+func (h *Hub) firstEqualPairLocked() (int, int) {
+	for i := 0; i < len(h.queue); i++ {
+		for j := i + 1; j < len(h.queue); j++ {
+			if h.queue[i].roundsTarget == h.queue[j].roundsTarget &&
+				h.queue[i].drawEnds == h.queue[j].drawEnds {
+				return i, j
+			}
+		}
+	}
+	return -1, -1
 }
 
 // makeMatch builds an engine match from concrete sides and wires the engine's
@@ -642,7 +691,11 @@ func (h *Hub) makeMatch(id string, roundsTarget int, a, b side) *match {
 		h.mu.Lock()
 		if s.client.alive.Err() == nil && !s.client.queueing {
 			s.client.queueing = true
-			h.queue = append(h.queue, s.client)
+			h.queue = append(h.queue, queueEntry{
+				client:       s.client,
+				roundsTarget: m.roundsTarget,
+				drawEnds:     m.drawEnds,
+			})
 		}
 		queued := s.client.queueing
 		h.mu.Unlock()
@@ -722,7 +775,11 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 }
 
 func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
-	var req struct{ ID string }
+	var req struct {
+		ID           string
+		RoundsTarget int
+		DrawEnds     *bool
+	}
 	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
@@ -730,6 +787,26 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 	if c == nil {
 		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
+	}
+	// The length is validated against the same closed set /cpu offers, because
+	// the queue is what has to pair it: a target nobody else can name would sit
+	// in the queue forever, and one outside the offer would be a series the
+	// lobby never described. Absent means one round -- what the lobby's plain
+	// button has always asked the queue for -- rather than /cpu's series
+	// default; drawEnds follows the target unless the request names it, again
+	// the same way. So what a client can ask the queue for is what it can ask
+	// a CPU match for, default aside.
+	target := req.RoundsTarget
+	if target == 0 {
+		target = 1
+	}
+	if !validSeriesTarget(target) {
+		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
+		return
+	}
+	drawEnds := target <= 1
+	if req.DrawEnds != nil {
+		drawEnds = *req.DrawEnds
 	}
 	h.mu.Lock()
 	// Same invariant as handleCPU: one client, at most one live match. Without
@@ -745,9 +822,16 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusServiceUnavailable, "queue full")
 		return
 	}
-	if !c.queueing {
+	// Waiting is one seat, not one seat per request: re-posting updates the
+	// mode the seat is waiting for, so a player who changes their length in the
+	// lobby changes what they will be paired with instead of acquiring a
+	// second place in the queue.
+	if i := h.indexOfQueuedLocked(c); i >= 0 {
+		h.queue[i].roundsTarget = target
+		h.queue[i].drawEnds = drawEnds
+	} else {
 		c.queueing = true
-		h.queue = append(h.queue, c)
+		h.queue = append(h.queue, queueEntry{client: c, roundsTarget: target, drawEnds: drawEnds})
 	}
 	h.mu.Unlock()
 	c.sendEv(evt("waiting", map[string]any{"ts": time.Now().UnixMilli()}))
@@ -797,10 +881,14 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "no active match")
 		return
 	}
-	// The readiness gate is only open while the match is still in the countdown
-	// phase, which is where start() puts it and where waitReady() blocks. Once
-	// the gate has closed — readyTimeout fired, or a side left — the match has
-	// advanced to done and no countdown will ever follow.
+	// The gate is open while the match is still in a phase waitReady may be
+	// held in -- preparing, where start() puts it, and countdown, where the
+	// between-rounds gate stands after judge's pause -- plus the pause itself:
+	// betweenRounds is what says a client may re-ack while the phase reads
+	// done, because the result frame it just received announced a next round
+	// whose gate is already open. Once the gate has closed (a timeout, a
+	// departure, the match ending) the flag is cleared and the match has
+	// advanced to done, and no countdown will ever follow.
 	//
 	// Acking such a match must not answer 200. The client acks from the end of
 	// its `matched` handler and then waits for the countdown, so a 200 is read
@@ -814,7 +902,7 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 	// what *closes* the preparing phase, so rejecting anything but phaseCountdown
 	// would reject every ack that matters. It closes at the end of phaseCountdown,
 	// where a timeout or a departure has already moved the match to done.
-	if p := m.phase.Load(); p != phasePreparing && p != phaseCountdown {
+	if p := m.phase.Load(); p != phasePreparing && p != phaseCountdown && !m.betweenRounds.Load() {
 		h.handlerError(w, http.StatusConflict, "ready gate closed")
 		return
 	}
@@ -836,15 +924,16 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("{}"))
 }
 
-// cpuSeriesOffer is the series lengths a CPU match may be asked for, as decisive
-// round wins that end it. A closed set rather than a range: the lobby offers
-// these and no others, so a target on the wire is always something the player
-// was shown. Accepting any number would let a hand-written request invent a
-// series the game has never described.
-var cpuSeriesOffer = []int{1, defaultSeriesTarget}
+// seriesOffer is the series lengths a match may be asked for, as decisive round
+// wins that end it -- CPU or online, since the queue has to pair a length and
+// only what it can pair may be named. A closed set rather than a range: the
+// lobby offers these and no others, so a target on the wire is always something
+// the player was shown. Accepting any number would let a hand-written request
+// invent a series the game has never described.
+var seriesOffer = []int{1, defaultSeriesTarget}
 
-func validCPUSeriesTarget(n int) bool {
-	for _, t := range cpuSeriesOffer {
+func validSeriesTarget(n int) bool {
+	for _, t := range seriesOffer {
 		if n == t {
 			return true
 		}
@@ -869,7 +958,7 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	if target == 0 {
 		target = defaultSeriesTarget
 	}
-	if !validCPUSeriesTarget(target) {
+	if !validSeriesTarget(target) {
 		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
 		return
 	}

@@ -198,10 +198,11 @@ type match struct {
 	phase      atomic.Int32
 
 	// Series state: a match that plays more than one round. A CPU match is a
-	// series; a PvP match still ends on its first round, which is the CPU-first
-	// half of docs/tasks/open/game-mode-architecture.md -- the PvP half re-opens
-	// the ready handshake per round, and until it does, honouring a series there
-	// would park two players in a match neither can leave.
+	// series, and so is an online match whose length gives it something to play
+	// towards -- see seriesMatch. Both shapes re-open the ready handshake
+	// between rounds, and that gate is the series' only exit: a handshake that
+	// fails there forfeits rather than requeues, because the survivors have a
+	// tally to show and their opponent's absence is the loss.
 	//
 	// roundsTarget is the number of decisive round wins that ends the series, win
 	// the tally so far (a round lost on a `void` timeout is not decisive for the
@@ -219,6 +220,18 @@ type match struct {
 	round      int
 	win        [2]int
 	seriesOver bool
+
+	// betweenRounds is true from the moment judge decides the series goes on
+	// until run has re-opened the ready gate for the next round. It is what
+	// tells that gate apart from the match's opening handshake, and it is the
+	// only thing the failure of each may be judged on: during the pause the
+	// phase is done, during the gate it is countdown, so phase alone cannot say
+	// whether the players have played anything yet -- and a gate failed after
+	// round one must forfeit, never requeue. Set inside judge (run's goroutine,
+	// before the result frame goes out so a client reacting to it sees an open
+	// gate), cleared by run after waitReady returns and in run's defer; read by
+	// handleReady and snapshot on other goroutines, hence atomic.
+	betweenRounds atomic.Bool
 
 	// shootAt is the announced PUN deadline, fixed at countdown start. It is
 	// held as a time.Time rather than epoch-ns so it carries a monotonic
@@ -385,16 +398,35 @@ func (m *match) clock() time.Time {
 
 // allHumanFreshLocked is allHumanReady with readyMu already held.
 func (m *match) allHumanFreshLocked(now time.Time) bool {
-	cutoff := now.Add(-readyLease)
 	for i := range m.sides {
 		if m.sides[i].bot {
 			continue
 		}
-		if m.readyAt[i].IsZero() || m.readyAt[i].Before(cutoff) {
+		if !m.sideFreshLocked(i, now) {
 			return false
 		}
 	}
 	return true
+}
+
+// sideFresh reports whether side i's ack is inside the lease. It is the
+// single-side question the between-rounds forfeit asks: who answered this
+// gate, as opposed to who answered the one at the start of the match.
+func (m *match) sideFresh(i int) bool {
+	m.readyMu.Lock()
+	defer m.readyMu.Unlock()
+	return m.sideFreshLocked(i, m.clock())
+}
+
+// sideFreshLocked is sideFresh with readyMu already held. A bot side is always
+// fresh: it has no client that could grow stale, which is the same reading
+// allHumanFreshLocked gives it.
+func (m *match) sideFreshLocked(i int, now time.Time) bool {
+	if m.sides[i].bot {
+		return true
+	}
+	cutoff := now.Add(-readyLease)
+	return !m.readyAt[i].IsZero() && !m.readyAt[i].Before(cutoff)
 }
 
 // waitReady blocks until the countdown may begin. Every match gates on it, CPU
@@ -411,6 +443,13 @@ func (m *match) allHumanFreshLocked(now time.Time) bool {
 // Returns false when the pending match should be abandoned (timeout /
 // disconnect).
 func (m *match) waitReady() bool {
+	// Which gate this is decides what its failure means, and the two are told
+	// apart by betweenRounds rather than by phase: the opening handshake runs
+	// while nothing has been played (nobody owes anybody a result, so failure
+	// cancels and requeues), the between-rounds one while a tally already
+	// stands (failure forfeits the series to whoever came back). The flag is
+	// read once here because run clears it only after this returns.
+	betweenRounds := m.betweenRounds.Load()
 	deadline := time.NewTimer(readyTimeout)
 	defer deadline.Stop()
 	recheck := time.NewTicker(readyRecheck)
@@ -428,20 +467,33 @@ func (m *match) waitReady() bool {
 			ch = nil
 		case <-recheck.C:
 		case <-deadline.C:
-			m.readyTimeout()
+			if betweenRounds {
+				m.forfeitOnTimeout()
+			} else {
+				m.readyTimeout()
+			}
 			return false
 		case <-m.leftCh(0):
-			m.readyAbandon(0)
+			if betweenRounds {
+				m.forfeitOnLeave(0)
+			} else {
+				m.readyAbandon(0)
+			}
 			return false
 		case <-m.leftCh(1):
-			m.readyAbandon(1)
+			if betweenRounds {
+				m.forfeitOnLeave(1)
+			} else {
+				m.readyAbandon(1)
+			}
 			return false
 		}
 	}
 }
 
-// readyTimeout cancels a match whose human sides never acked and re-queues
-// them; in a CPU match only the human is re-queued.
+// readyTimeout cancels a match whose opening handshake never completed and
+// re-queues its sides; in a CPU match only the human is re-queued. The
+// between-rounds clock runs to forfeitOnTimeout instead.
 func (m *match) readyTimeout() {
 	m.abandon = abandonTimeout
 	m.advance(phasePreparing, phaseDone)
@@ -450,12 +502,89 @@ func (m *match) readyTimeout() {
 }
 
 // readyAbandon cancels a pending match when side i left before the countdown;
-// the survivor is re-queued rather than awarded any result.
+// the survivor is re-queued rather than awarded any result. A departure at the
+// between-rounds gate goes to forfeitOnLeave instead.
 func (m *match) readyAbandon(i int) {
 	m.abandon = abandonOpponentLeft
 	m.abandonSide = i
 	m.advance(phasePreparing, phaseDone)
 	m.requeueSide(1 - i)
+}
+
+// forfeitOnTimeout settles a between-rounds gate whose clock ran out. A side
+// that answered inside the lease is awarded the series -- it came back for the
+// next round and its opponent did not -- and the teardown still says
+// handshake-timeout, because that is what happened. When neither side
+// answered, nothing about the next round was played and nobody is owed a
+// result: the match is cancelled and both sides go back to the queue at the
+// length they were playing, exactly as an opening-gate timeout leaves things.
+func (m *match) forfeitOnTimeout() {
+	m.abandon = abandonTimeout
+	m.advance(phaseCountdown, phaseDone)
+	switch {
+	case m.sideFresh(0) && !m.sideFresh(1):
+		m.forfeitWin(0)
+	case m.sideFresh(1) && !m.sideFresh(0):
+		m.forfeitWin(1)
+	default:
+		m.requeueSide(0)
+		m.requeueSide(1)
+	}
+}
+
+// forfeitOnLeave awards side 1-i the series when side i left while the
+// between-rounds gate was open. Unlike the opening gate's abandonment there is
+// no requeue: the survivor has a tally to show for the round it did play, and
+// putting it back in the queue would strand it as half of a pair nobody asked
+// for. The reason stays opponent-left -- the same label a departure has always
+// carried -- so a client needs no new edge to explain the bounce.
+func (m *match) forfeitOnLeave(i int) {
+	m.abandon = abandonOpponentLeft
+	m.abandonSide = i
+	m.advance(phaseCountdown, phaseDone)
+	m.forfeitWin(1 - i)
+}
+
+// forfeitWin ends the series in favour of side w without playing it out. The
+// tally is reported as it stands rather than bumped: a forfeit decides who
+// takes the series, it is not a round anybody won.
+func (m *match) forfeitWin(w int) {
+	m.seriesOver = true
+	m.announceForfeit(w)
+}
+
+// announceForfeit sends the terminal frame of a forfeited series: the existing
+// opponent-left event with the series state added, to each side still
+// connected. Opponent-left rather than a new event type because a tab open
+// across the deploy must survive: it already has an edge for this event and an
+// outcome to show from it, and a client that predates the added fields reads
+// exactly what it reads for any departure. The side that left gets nothing --
+// there is no connection left to tell -- and no `round` rides along, because
+// this decides the series as a whole rather than a round of it.
+func (m *match) announceForfeit(w int) {
+	for i := range m.sides {
+		side := m.sides[i]
+		if side.emit == nil {
+			continue
+		}
+		if side.left != nil && isClosed(side.left) {
+			continue
+		}
+		outcome := ResultWin
+		if i != w {
+			outcome = ResultLoss
+		}
+		data := map[string]any{
+			"outcome":      string(outcome),
+			"mode":         "online",
+			"seriesOver":   true,
+			"youRoundWins": m.win[i],
+			"oppRoundWins": m.win[1-i],
+			"ts":           tsNow(),
+		}
+		m.seriesFields(data)
+		m.send(i, evt("opponent-left", data))
+	}
 }
 
 // requeueSide offers side i back to the hub's queue and records whether it
@@ -481,6 +610,10 @@ func (m *match) start() {
 
 func (m *match) run() {
 	defer func() {
+		// Whatever ends the loop, the gate must read as closed afterwards: a
+		// stray /ready against a pointer that finish has not cleared yet must
+		// not be answered 200 for a countdown that is no longer coming.
+		m.betweenRounds.Store(false)
 		if m.finish != nil {
 			m.finish()
 		}
@@ -518,26 +651,46 @@ func (m *match) run() {
 	// the single-round case: judge decides that from seriesMatch, so the mode
 	// rule lives in one place instead of once per caller.
 	//
-	// The ready handshake is deliberately *not* repeated per round. Neither side
-	// left the match screen to be ready for the next one, so re-opening the gate
-	// would add a stall no client can act on -- a client that tried would be
-	// acking a screen it is already showing.
+	// An online series re-opens the ready gate between rounds, on the round
+	// judge just decided to play next. Nothing else does: a bot's rounds follow
+	// each other without a handshake -- its client is the human's own screen,
+	// already up -- and a one-round match ends inside judge before this body
+	// ever runs. The gate is where a player who walked away between rounds is
+	// found, and it is the series' only exit; a gate failed here forfeits (see
+	// waitReady), which is why the flag has to be cleared before either return.
 	for m.playRound() {
+		if !m.betweenRounds.Load() {
+			continue
+		}
+		// shootAt is cleared so a client reconnecting during the pause or the
+		// gate is not served the previous round's deadline against a phase that
+		// will not open for it. beginRound would clear it again anyway, but that
+		// is one round ahead of where this gate stands.
+		m.shootAt.Store(nil)
+		ready := m.waitReady()
+		m.betweenRounds.Store(false)
+		if !ready {
+			return
+		}
 	}
 }
 
-// seriesMatch reports whether this match plays more than one round. It is derived
-// from the sides rather than carried as a flag: a CPU opponent is the whole of
-// the current rule, so when the PvP half of the task lands this is the one line
-// that changes.
-func (m *match) seriesMatch() bool { return m.sides[1].bot }
+// seriesMatch reports whether this match plays more than one round. It is
+// derived from the sides and the length rather than carried as a flag: a CPU
+// opponent is always a series (its rounds follow each other without a
+// handshake), and an online match is one whenever it has something to play
+// towards -- a target above one round, or a one-round match whose drawEnds was
+// switched off to make draws replay until somebody wins. Left with nothing to
+// play towards, it is one round and whatever that round came to.
+func (m *match) seriesMatch() bool { return m.sides[1].bot || !m.drawEnds }
 
 // seriesFields adds the scoreboard's shape-changing fields to a frame, and only
-// to a match that has a series to score. A PvP match is a single round, so a
-// target on its frames would promise rounds that never come -- and the client
-// reads the target as the width of the pip row it draws, so a "3" there puts a
-// three-pip scoreboard over a match that has no score. Absent means "no series",
-// which is the reading every client already has for a pre-series server.
+// to a match that has a series to score. A one-round match has no series to
+// score, so a target on its frames would promise rounds that never come -- and
+// the client reads the target as the width of the pip row it draws, so a "3"
+// there puts a three-pip scoreboard over a match that has no score. Absent
+// means "no series", which is the reading every client already has for a
+// pre-series server.
 //
 // drawEnds rides beside the target because the two together are the mode: a
 // first-to-1 floor and a 1-off match both have a target of 1, and only the field
@@ -651,7 +804,15 @@ loop:
 	// The round is over, so the phase says so before the picks are judged. A late
 	// move arriving after this point is refused by the hub's move handler rather
 	// than being judged into a round that has already been reported.
-	m.advance(phaseShoot, phaseDone)
+	//
+	// A failed transition means abort() took the phase while this round was
+	// still in flight -- the match is being torn down and nobody is watching it.
+	// Judging anyway would announce a result for that match and, for a series,
+	// open the between-rounds gate on it; the stale-transition case playRound
+	// documents is exactly this one, so the round stops here instead.
+	if !m.advance(phaseShoot, phaseDone) {
+		return false
+	}
 	return m.closeRound()
 }
 
@@ -734,6 +895,15 @@ func (m *match) judge() bool {
 	if m.drawEnds && res[0] == ResultDraw {
 		m.seriesOver = true
 	}
+	// The next round's gate is opened the moment the result is out, for an
+	// online series that is going to have one. It is set before announce so a
+	// client reacting to the result frame -- the frame that tells it the series
+	// continues -- finds handleReady already willing to take its ack during the
+	// pause, before the phase is countdown again. Never set for a bot's series:
+	// those rounds follow each other without a handshake.
+	if !m.seriesOver && !m.sides[1].bot {
+		m.betweenRounds.Store(true)
+	}
 	m.announce(res, ps)
 	if m.seriesOver {
 		return false
@@ -742,7 +912,12 @@ func (m *match) judge() bool {
 	// The client is mid-round-break: it has just been told the outcome and still
 	// has the result panel up. This is client pacing, not a safety margin, so it
 	// is a var for tests to shrink rather than a rule to tune.
-	if m.wait(seriesBreak) {
+	//
+	// A departure during the pause is not the end of the series either: the
+	// pause is pacing, and run's gate is where a side that never came back is
+	// found and the present side is awarded. Only a match with no gate to open
+	// -- a bot's rounds -- still ends here, as it always did.
+	if m.wait(seriesBreak) && !m.betweenRounds.Load() {
 		return false
 	}
 	return m.advance(phaseDone, phaseCountdown)

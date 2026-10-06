@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"testing"
 	"time"
 )
@@ -253,4 +254,220 @@ func TestReadyTimeoutRequeuesBoth(t *testing.T) {
 	}
 	a.cancel()
 	b.cancel()
+}
+
+// An online series re-opens the ready handshake between rounds: the gate is
+// the series' only exit, so `ready` has to be answerable again the moment the
+// result lands -- during the pause, when the phase is already done -- and the
+// countdown must not resume until both sides have answered this round. The
+// pause is deliberately not shortened: the window this pins is the real one,
+// and a client whose lease expired during it must be able to re-arm.
+func TestOnlineSeriesReacksBetweenRounds(t *testing.T) {
+	h := NewHub()
+	// Registered, unlike most engine tests here: the acks go through
+	// handleReady, which looks the id up the way a client's POST does.
+	a := registerMoveTestClient(h, "reack-a")
+	b := registerMoveTestClient(h, "reack-b")
+	t.Cleanup(a.cancel)
+	t.Cleanup(b.cancel)
+	m := h.makeMatch("reack", defaultSeriesTarget, side{client: a}, side{client: b})
+	m.start()
+
+	waitForEvent(t, a, "matched")
+	waitForEvent(t, b, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
+	waitEventWithin(t, a, "shoot", 20*time.Second)
+
+	// Both sides silent: the round draws, the draw replays, and the series
+	// carries on -- nothing about this round ends it.
+	r1 := waitEventWithin(t, a, "result", 20*time.Second)
+	if r1["seriesOver"] != false {
+		t.Fatalf("round 1 seriesOver = %v, want false: the series has just begun", r1["seriesOver"])
+	}
+	if r1["outcome"] != "draw" {
+		t.Fatalf("round 1 outcome = %v, want draw for a silent round", r1["outcome"])
+	}
+
+	// One side answers while the pause lasts -- phase is done here, and only
+	// the between-rounds rule keeps the gate open -- and one answer is not
+	// enough to move the match.
+	if code := postReady(h, a.id).Code; code != http.StatusOK {
+		t.Fatalf("ready during the round pause: status %d, want 200 while the between-rounds gate is open", code)
+	}
+	select {
+	case raw, ok := <-a.send:
+		if ok {
+			if et, _ := parseChunk(t, raw); et == "countdown" {
+				t.Fatal("the countdown resumed on one readiness ack")
+			}
+		}
+	case <-time.After(6 * time.Second):
+	}
+
+	// Both sides answer now -- including the first side again, because a lease
+	// older than the pause is not an answer the countdown may start from -- and
+	// only then does the next round begin.
+	if code := postReady(h, a.id).Code; code != http.StatusOK {
+		t.Fatalf("re-ack between rounds: status %d, want 200", code)
+	}
+	if code := postReady(h, b.id).Code; code != http.StatusOK {
+		t.Fatalf("opponent ack between rounds: status %d, want 200", code)
+	}
+	waitEventWithin(t, a, "countdown", 5*time.Second)
+}
+
+// A disconnect between rounds is a forfeit, not a bounce: the present side is
+// awarded the series where the gate stands, with the tally it had, rather than
+// being put back into a queue whose other half just left the game. The frame
+// is the existing opponent-left with the series state added to it, so a tab
+// open across the change reads a terminal frame rather than a new event type.
+func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
+	noSeriesBreak(t)
+	h := NewHub()
+	a, b := newClient(), newClient()
+	t.Cleanup(a.cancel)
+	m := h.makeMatch("forfeit", defaultSeriesTarget, side{client: a}, side{client: b})
+	m.start()
+
+	waitForEvent(t, a, "matched")
+	waitForEvent(t, b, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
+	waitEventWithin(t, a, "shoot", 20*time.Second)
+	r1 := waitEventWithin(t, a, "result", 20*time.Second)
+	if r1["seriesOver"] != false {
+		t.Fatalf("round 1 seriesOver = %v, want false", r1["seriesOver"])
+	}
+
+	b.cancel()
+
+	w := waitEventWithin(t, a, "opponent-left", 5*time.Second)
+	if w["outcome"] != "win" {
+		t.Errorf("opponent-left outcome = %v, want win for the present side", w["outcome"])
+	}
+	if w["seriesOver"] != true {
+		t.Errorf("seriesOver = %v, want true: the departure ended the series", w["seriesOver"])
+	}
+	if w["roundsTarget"] != float64(defaultSeriesTarget) {
+		t.Errorf("roundsTarget = %v, want %d on the deciding frame", w["roundsTarget"], defaultSeriesTarget)
+	}
+	if w["youRoundWins"] != float64(0) || w["oppRoundWins"] != float64(0) {
+		t.Errorf("tally = %v/%v, want 0/0 after a drawn round one", w["youRoundWins"], w["oppRoundWins"])
+	}
+	if _, ok := w["round"]; ok {
+		t.Errorf("forfeit frame carries round = %v: it decides a series, not a round", w["round"])
+	}
+
+	d := waitForEvent(t, a, "state")
+	if d["state"] != "idle" {
+		t.Errorf("state = %v, want idle", d["state"])
+	}
+	if d["reason"] != "opponent-left" {
+		t.Errorf("reason = %v, want opponent-left", d["reason"])
+	}
+	if _, ok := d["requeued"]; ok {
+		t.Errorf("teardown carries requeued = %v: the forfeit ends the match, it does not requeue it", d["requeued"])
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if a.queueing || len(h.queue) != 0 {
+		t.Errorf("a.queueing = %v, queue len = %d: the awarded side was put back in the queue",
+			a.queueing, len(h.queue))
+	}
+}
+
+// One side answers the between-rounds gate, the other never does: the gate's
+// clock runs out and the side that answered is awarded the series. The
+// timeout's judgement is taken where the gate stands, not only at the start of
+// a match, and a failed gate after round one forfeits rather than requeues --
+// requeuing two players out of a series they are half-way through would strand
+// them as a pair nobody asked for. The short timeout is installed after round
+// one's own gate was satisfied: waitReady reads it on entry, so this changes
+// the between-rounds gate alone.
+func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
+	noSeriesBreak(t)
+	// Short for both gates: waitReady reads it on entry, and the between-rounds
+	// entry happens the instant judge's pause is over -- before this test has
+	// read the result frame, so it cannot be installed after round one. The
+	// opening gate still has 1.5s to collect two acks from a same-process
+	// client, which is room a client on a phone would never need.
+	old := readyTimeout
+	readyTimeout = 1500 * time.Millisecond
+	defer func() { readyTimeout = old }()
+
+	h := NewHub()
+	// Registered for handleReady's id lookup, as in the reack test.
+	a := registerMoveTestClient(h, "to-between-a")
+	b := registerMoveTestClient(h, "to-between-b")
+	t.Cleanup(a.cancel)
+	t.Cleanup(b.cancel)
+	m := h.makeMatch("to-between", defaultSeriesTarget, side{client: a}, side{client: b})
+	m.start()
+
+	waitForEvent(t, a, "matched")
+	waitForEvent(t, b, "matched")
+	m.ackReady(0)
+	m.ackReady(1)
+	waitEventWithin(t, a, "shoot", 20*time.Second)
+	r1 := waitEventWithin(t, a, "result", 20*time.Second)
+	if r1["seriesOver"] != false {
+		t.Fatalf("round 1 seriesOver = %v, want false", r1["seriesOver"])
+	}
+
+	// Only one side answers; the other's round-one ack is past its lease by
+	// now, so it cannot stand in for this round's handshake.
+	if code := postReady(h, a.id).Code; code != http.StatusOK {
+		t.Fatalf("ready between rounds: status %d, want 200 while the gate is open", code)
+	}
+
+	w := waitEventWithin(t, a, "opponent-left", 5*time.Second)
+	if w["outcome"] != "win" {
+		t.Errorf("opponent-left outcome = %v, want win for the side that answered", w["outcome"])
+	}
+	if w["seriesOver"] != true {
+		t.Errorf("seriesOver = %v, want true: the timeout ended the series", w["seriesOver"])
+	}
+	wb := waitEventWithin(t, b, "opponent-left", 5*time.Second)
+	if wb["outcome"] != "loss" {
+		t.Errorf("opponent-left outcome = %v, want loss for the side that never answered", wb["outcome"])
+	}
+
+	d := waitForEvent(t, a, "state")
+	if d["reason"] != "handshake-timeout" {
+		t.Errorf("reason = %v, want handshake-timeout", d["reason"])
+	}
+	if _, ok := d["requeued"]; ok {
+		t.Errorf("teardown carries requeued = %v: a gate failed mid-series forfeits, it does not requeue", d["requeued"])
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if a.queueing || b.queueing || len(h.queue) != 0 {
+		t.Errorf("queueing = %v/%v, queue len = %d: the forfeit put players back in the queue",
+			a.queueing, b.queueing, len(h.queue))
+	}
+}
+
+// The judge's between-rounds pause is not where a match ends. A departure
+// during the pause must fall through to run's gate -- where the present side
+// is awarded -- instead of judge returning control as though the series were
+// over. Pinned structurally rather than by waiting out a real pause: judge
+// returns with the series live and the next round's countdown opened, which is
+// precisely the state run's gate takes over from. The award itself is pinned
+// end to end by TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide.
+func TestADepartureDuringTheRoundPauseReachesTheGate(t *testing.T) {
+	noSeriesBreak(t)
+	h := NewHub()
+	a, b := newClient(), newClient()
+	t.Cleanup(a.cancel)
+	t.Cleanup(b.cancel)
+	m := h.makeMatch("pause-leave", defaultSeriesTarget, side{client: a}, side{client: b})
+
+	b.cancel() // leaves while judge is scoring the round and taking its pause
+	if cont := judgeRoundAs(t, m, a, [2]Result{ResultDraw, ResultDraw}); !cont {
+		t.Fatal("judge ended the series when a side left during the round pause -- the departure has to reach run's gate, where the present side is awarded")
+	}
+	if m.seriesOver {
+		t.Error("seriesOver = true with the tally still 0-0")
+	}
 }

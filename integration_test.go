@@ -353,6 +353,47 @@ func TestCPURejectsASeriesLengthItDoesNotOffer(t *testing.T) {
 	st.readEventTyp(t, "matched", 5*time.Second)
 }
 
+// The queue validates the same lengths the lobby offers, so a length /cpu
+// refuses never enters the queue to be paired later. Against the old handler
+// the unknown field is decoded, dropped, and the entry takes the default --
+// so the rejection this pins has nothing to trigger on before the change.
+func TestQueueRejectsALengthItDoesNotOffer(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+
+	st, id := connectSSE(t, srv, "")
+	defer st.close()
+	c := h.client(id)
+
+	for _, target := range []int{2, 4, -1} {
+		code, _ := postJSON(t, srv.URL+"/queue", map[string]any{"id": id, "roundsTarget": target})
+		if code != http.StatusBadRequest {
+			t.Errorf("/queue roundsTarget %d: status %d, want 400", target, code)
+		}
+		h.mu.Lock()
+		queued := c.queueing
+		h.mu.Unlock()
+		if queued {
+			t.Fatalf("/queue roundsTarget %d: rejected, but the client entered the queue", target)
+		}
+	}
+
+	// Bare enters at the default length, and so does an offered length, on the
+	// same client: the rejections cost it nothing but the requests.
+	if code, _ := postJSON(t, srv.URL+"/queue", map[string]any{"id": id}); code != 200 {
+		t.Fatalf("/queue bare: status %d, want 200", code)
+	}
+	if code, _ := postJSON(t, srv.URL+"/queue", map[string]any{"id": id, "roundsTarget": 3}); code != 200 {
+		t.Fatalf("/queue roundsTarget 3: status %d, want 200", code)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !c.queueing {
+		t.Fatal("an offered length was accepted but the client is not queueing")
+	}
+}
+
 // startCPUWithTarget posts /cpu with the given roundsTarget (0 for "not
 // mentioned") and returns the client, its hub's URL and its matched frame.
 func startCPUWithTarget(t *testing.T, target int) struct {

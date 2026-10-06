@@ -96,17 +96,25 @@ prospective fix, with the causes still unconfirmed.
 
 ## A match is a series of rounds
 
-A CPU match is played as a series: first to `defaultSeriesTarget` (3) decisive
-round wins — or the length the lobby asked for, which today can also be a single
-round — a draw replayed as a fresh round, and a `void` round ([connectivity-safe
+A match is played as a series when it has something to play towards: first to
+`defaultSeriesTarget` (3) decisive round wins — or the length the lobby asked
+for, which can also be a single round — a draw replayed as a fresh round, and a
+`void` round ([connectivity-safe
 scoring](../tasks/open/connectivity-safe-scoring.md)) counted as a round win for
-the opponent — a dropped connection costs a round, not the match. `run()` acks
-the ready handshake once per *match*, then loops `playRound()`; `playRound()`
-begins the round, plays it, and hands it to `judge()`, which returns whether the
-series continues. PvP matches are still one round, which is the other half of
-[game-mode-architecture](../tasks/open/game-mode-architecture.md) and not an
-oversight: re-opening the ready handshake between rounds is a wire-visible
-decision that belongs with the series loop, not beside it.
+the opponent — a dropped connection costs a round, not the match.
+`seriesMatch()` derives the question from the sides and the length rather than
+a flag: a CPU opponent is always a series, and an online match is one whenever
+`drawEnds` is false — any length above one round, or a one-round match whose
+draws were switched to replay. `run()` opens the ready handshake once per
+match, then loops `playRound()`; `playRound()` begins the round, plays it, and
+hands it to `judge()`, which returns whether the series continues. For an
+online series, `judge()` also arms `betweenRounds` before the result frame goes
+out, and `run()` opens the same handshake again between rounds: that gate is
+where a player who walked away between rounds is found, and it is the series'
+only exit — a gate that fails there forfeits the series to whoever came back
+rather than requeueing anybody
+([protocol](protocol.md#cancelled-handshakes)). A bot's rounds never pass
+through it, because its client is the human's own screen, already up.
 
 **The lobby's default is one round, and its choice is remembered.** A player who
 never touches the toggle gets one round, and a player who picked first-to-three
@@ -137,9 +145,9 @@ replays rather than deciding one.
 roundsTarget)` takes the length, because the lobby offers a one-round CPU match
 alongside the default and a target fixed at construction would have to be
 overwritten afterwards — on a field documented as belonging to `run`'s own
-goroutine. The hub decides what it will accept (`cpuSeriesOffer`, a closed set
-of 1 and 3); the engine takes what it is handed and never validates a request it
-does not parse.
+goroutine. The hub decides what it will accept (`seriesOffer`, a closed set
+of 1 and 3, shared by `/cpu` and `/queue`); the engine takes what it is handed
+and never validates a request it does not parse.
 
 **A target goes on the wire only where a series exists.** `seriesFields()` adds
 `roundsTarget`, and `drawEnds` beside it, to `matched` and to every `result`,
@@ -150,7 +158,7 @@ the rules. `drawEnds` rides along because the two together are the mode: a
 first-to-1 floor and a 1-off match both have a target of 1, and only the field
 tells them apart — so a rule that ships in the engine belongs on the wire, where
 the client will read it when it offers the mode, rather than in the client's
-head. On a PvP match both are absent, and absent is the meaning: the client
+head. On a one-round match both are absent, and absent is the meaning: the client
 draws no scoreboard, which is the only honest rendering of a match that cannot
 go past round one. Sending `3` there instead would put a three-pip row over a
 one-round game and promise rounds that never arrive.
@@ -304,13 +312,23 @@ resuming the same floor.
 
 ## Matchmaking
 
-A single global FIFO queue pairs players under the hub mutex. Anonymous
-clients receive server-issued random IDs on first SSE connection. Every match
-runs a ready handshake between "matched" and the countdown: no countdown may
-start until every human side has `POST`ed `/ready` (re-sent every 2s while
-matched). The gate is a bitmask over the non-bot sides, so a CPU match waits on
-its one human and a PvP match waits on both. If a match never acks — timeout or
-disconnect — the pending match is cancelled and the survivor(s) re-queued.
+A single global FIFO queue pairs players under the hub mutex, and it pairs only
+players waiting for the *same* match: each queue entry carries its
+`roundsTarget` and `drawEnds`, and the scan finds the first pair in queue order
+that agrees on both. A waiter whose length nobody else wants keeps its seat and
+its place rather than being bounced to the back or paired into a match only one
+of them asked for, and a side handed back by a cancelled handshake re-enters
+with the length it was playing — it is halfway through a series and must not
+come back as a one-off. Anonymous clients receive server-issued random IDs on
+first SSE connection. Every match runs a ready handshake between "matched" and
+the countdown: no countdown may start until every human side has `POST`ed
+`/ready` (re-sent every 2s while matched). The gate is a bitmask over the
+non-bot sides, so a CPU match waits on its one human and a PvP match waits on
+both, and an online series waits on both again between every pair of rounds. If
+the *opening* handshake never acks — timeout or disconnect — the pending match
+is cancelled and the survivor(s) re-queued; a gate failed *between rounds*
+forfeits instead, because there is a tally to stand on
+([protocol](protocol.md#cancelled-handshakes)).
 
 **The handshake is verified buffer, not a fixed sleep.** A fixed 2s `Ready?` step
 ahead of KA was considered and rejected: the client does all of its setup in one

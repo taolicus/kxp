@@ -41,7 +41,7 @@ Builds on the Protocol rework Task A schedule, which shipped first.
 
 - **The queue honors the same length the control offers, and absent means one
   round.** `POST /queue` gains optional `roundsTarget`, validated against the
-  same closed set `/cpu` uses (`cpuSeriesOffer`, today `{1, 3}`), and optional
+  same closed set `/cpu` uses (`seriesOffer`, today `{1, 3}`), and optional
   `drawEnds`, decoded exactly as `handleCPU` decodes it (absent → `target <= 1`
   inference; present → honoured). Absent `roundsTarget` means 1 — an older tab
   posting a bare `{ID}`, and every probe, play the match they play today.
@@ -182,13 +182,14 @@ Builds on the Protocol rework Task A schedule, which shipped first.
    result re-arms the ack, a final one stops it); `web/machine.test.cjs` gains
    `opponentLeft` from `result` and keeps `countdown` from `result` as the
    negative direction.
-3. **Docs with the code** — architecture.md's series section (the "PvP
-   matches are still one round … not an oversight" paragraph becomes the
-   landed description, including the CPU/online gate split) and the
-   matchmaking section (queued modes, pairing, the per-round gate);
-   protocol.md's `/queue` row, the readiness section (the lease now also
-   covers between rounds), and the teardown table (forfeit rows, `requeued`
-   absent); README's online line; game-modes' "Online stays 1-off" bullet,
+3. **Docs with the code** — each paragraph lands with the slice of code that
+   makes it true, not grouped here as a lump: step 1's commit already carries
+   the rows and sections the server change turns true (the `/queue` and
+   `/ready` rows, the readiness and teardown sections, architecture.md's
+   series and matchmaking rewrites), because a doc committed after the claim
+   has already shipped is a doc nobody can review against its code. What is
+   left for the client slice is the client-owned prose: README's online line;
+   game-modes' "Online stays 1-off" bullet,
    which must stop being a present-tense claim the moment the queue honors a
    length. Then `git mv` this file to `tasks/closed/`.
 4. **Probes** — no probe posts a length, and absent fields preserve the

@@ -59,6 +59,20 @@ flag, which sends it back through `matched` and so re-arms its acks. If a match
 never acks — 8s timeout or a disconnect — the pending match is cancelled and the
 survivor(s) go back to the queue.
 
+An **online series re-opens the same gate between rounds.** The `result` frame
+that announces the series continues also opens it: `betweenRounds` is set before
+the frame goes out, `/ready` is accepted again for the whole span — including
+during the pause, while the phase still reads `done` — and the next countdown
+starts once both sides have re-acked. Clients keep their 2s re-ack loop running
+across the pause, which is what makes the lease work here: an ack from round one
+is stale by the time the gate opens, so each side must answer this round's gate
+rather than lean on its old ack. A reconnect during the pause or the gate is
+re-admitted by the same `pending` snapshot flag as at the start of a match.
+The gate is also the series' only exit, and its failure **forfeits** rather than
+requeues — see [Cancelled handshakes](#cancelled-handshakes) below. A bot's
+series never opens it: those rounds follow each other without a handshake, as
+they always have.
+
 ### Why readiness is a lease, not a latch
 
 The gate opens only while every human side
@@ -213,8 +227,8 @@ player is not left staring at a lobby that silently moved them.
 
 | `reason` | when | `requeued` | player ends up |
 | --- | --- | --- | --- |
-| `handshake-timeout` | no human acked within 8s | PvP: `true`. CPU: absent | PvP: back in the online queue. CPU: back in the lobby. |
-| `opponent-left` | the other side disconnected before the countdown | `true` (survivor only) | back in the online queue |
+| `handshake-timeout` | no human acked within 8s (opening gate) | PvP: `true`. CPU: absent | PvP: back in the online queue. CPU: back in the lobby. |
+| `opponent-left` | the other side disconnected before the countdown (opening gate) | `true` (survivor only) | back in the online queue |
 
 `requeued` is present and true **only when the server actually put that client
 back on the queue**, which is what the client needs in order to keep showing the
@@ -223,6 +237,26 @@ Searching view and its Cancel button. Without it the client reads a bare
 invisible, with no way to leave. A CPU match's human is deliberately **not**
 re-queued: they asked for a CPU round, so they return to the lobby instead of
 being dropped into the queue for a human opponent they never requested.
+
+**A gate that fails between rounds of an online series forfeits instead**, with
+the same two `reason`s and no `requeued`:
+
+| `reason` | when | `requeued` | player ends up |
+| --- | --- | --- | --- |
+| `opponent-left` | a side disconnected while the between-rounds gate was open | absent | the side still present is **awarded the series** |
+| `handshake-timeout` | the gate's 8s ran out and one side had re-acked | absent | the side that answered is **awarded the series** |
+| `handshake-timeout` | the gate's 8s ran out and neither side re-acked | `true` (both) | back in the online queue — nothing was decided about them |
+
+Each award is announced first, on the departing side's `opponent-left` frame
+(see the events table for its series payload), and only then torn down by the
+`state` frame above with the reason and no `requeued` flag. The distinction the
+client needs is the same one the opening gate draws — queue or lobby — with one
+addition: a player with a tally is never handed back to the queue, because the
+opponent who left has already lost the series to them and requeueing would
+strand the survivor as half of a pair nobody asked for. Only a timeout with
+*neither* side answering requeues, where the old rule (nothing was played,
+nobody is owed a result) still holds. A one-round online match never reaches
+this gate: it ends on its result, as it always did.
 
 The client shows the reason without blame: the server observes an ack that never
 arrived, which is equally consistent with a slow upload, a stalled connection, or
@@ -261,7 +295,7 @@ snapshot.
 
 | event | payload | meaning |
 | --- | --- | --- |
-| `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, background?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`preparing`/`countdown`/`shoot`/`done`), the opponent fields and `background?` (the same stage name `matched` carries, so a reconnecting client restores the arena instead of picking its own) only when `ingame`; `shootAt`+`windowMs` whenever `phase` is `countdown` or `shoot` (`server.go:509`) — carrying the plan during countdown is what lets a client reconnect *inside* the window rather than being left without a deadline, and `preparing` is excluded because no deadline exists yet to carry; `pending=true` only while a handshake is still open, i.e. `phase === "preparing"` and not every human ready. Used to reconcile on reconnect. |
+| `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, background?, windowMs?, shootAt?, pending?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`preparing`/`countdown`/`shoot`/`done`), the opponent fields and `background?` (the same stage name `matched` carries, so a reconnecting client restores the arena instead of picking its own) only when `ingame`; `shootAt`+`windowMs` whenever `phase` is `countdown` or `shoot` (`server.go:509`) — carrying the plan during countdown is what lets a client reconnect *inside* the window rather than being left without a deadline, and `preparing` is excluded because no deadline exists yet to carry; `pending=true` only while a handshake is still open, i.e. `phase === "preparing"` or the between-rounds pause/gate of an online series (`betweenRounds`), and not every human ready. Used to reconcile on reconnect. |
 | `online` | `{count}` | Number of other clients currently connected. |
 | `waiting` | `{}` | Entered the queue. |
 | `matched` | `{opponentName, opponentCharacter, background, ts, roundsTarget?}` | Opponent found, and the stage to play on: `background` is a name from the server's roster, chosen once per match so both sides are sent the same one. Only the name travels — the WebPs are client-side assets. `roundsTarget?` is present only for a match that is a series (see below), and is what lets the client draw the scoreboard before round one rather than after it. Every client should start `POST /ready`. |
@@ -269,7 +303,7 @@ snapshot.
 | `shoot` | `{windowMs, shootAt}` | **PUN!** Window opens. `windowMs` is authoritative (2000); `shootAt` is server clock epoch-ms. |
 | `lock` | (none — client timer) | Client closes its own input after `windowMs - elapsed` of the window remains reachable. |
 | `result` | see below | Round resolved. |
-| `opponent-left` | `{outcome: "win", mode}` | Other player left; counts as a win. |
+| `opponent-left` | `{outcome, mode, seriesOver?, youRoundWins?, oppRoundWins?, roundsTarget?, drawEnds?, ts?}` | Other player left; counts as a win. The plain form (`{outcome: "win", mode}`) is a departure before anything was scored. On a forfeited series the same event carries the series state — `outcome` is `win` or `loss` per side, `seriesOver: true`, the tally as it stands (a forfeit decides the series; it is not a round anybody won), and the same `roundsTarget`/`drawEnds` a scoreboard is drawn from — but deliberately no `round`, because it decides the series as a whole. |
 | `state` | `{state: "idle", reason?, requeued?}` | Match fully finished / queue left; client may return to the lobby. Both extra fields are **additive and server-generated** (never taken from request input) and appear **only** when a ready handshake was cancelled — see "Cancelled handshakes" below. A finished match's teardown stays a bare `{state: "idle"}`, so a client that predates them is unaffected. |
 
 `result` payload:
@@ -286,7 +320,7 @@ snapshot.
 | `mode` | `online` or `cpu`. |
 | `round` | Current round number (1-based). |
 | `youRoundWins`, `oppRoundWins` | Decisive round wins per side **including the round this result reports** — a scoreboard read, not a running total the client has to add up. A `void` round counts for the opponent. |
-| `roundsTarget?` | Target number of decisive wins to win the series (3 today). **Only on a match that has a series** — a PvP match is one round and omits it. A client reads a missing target as "no series", so it draws no scoreboard, which is the only honest reading for a match that cannot go past round one. |
+| `roundsTarget?` | Target number of decisive wins to win the series (3 today). **Only on a match that has a series** — a one-round match omits it. A client reads a missing target as "no series", so it draws no scoreboard, which is the only honest reading for a match that cannot go past round one. |
 | `drawEnds?` | Whether a drawn round ends the match (`true` for a one-round match, `false` for a ladder floor). **Only on a match that has a series**, beside `roundsTarget`. It is the field that tells a first-to-1 floor apart from a 1-off at the same target, and it lands on the wire rather than in the client's head; nothing renders it yet. |
 | `seriesOver` | `true` if the series ended with this result, else `false`. |
 
@@ -299,9 +333,9 @@ snapshot.
 
 | endpoint | body | responses |
 | --- | --- | --- |
-| `POST /queue` | `{id}` | `200 {}` — joins the online queue (idempotent). `409 already in a match` while the client holds a live match. |
+| `POST /queue` | `{id, roundsTarget?, drawEnds?}` | `200 {}` — joins the online queue for a match of that length (idempotent; re-posting while waiting updates the length rather than taking a second seat). `roundsTarget` is the same closed set `/cpu` offers (`1` or `3`); absent means `1`, what the lobby's plain button has always asked for, so a client predating the field still queues for the one-round match it expects. Any other value is `400 unsupported roundsTarget`. `drawEnds` is decoded exactly as `/cpu` decodes it (absent means the one-round inference). The queue pairs only entries that agree on both fields — see "Why the series length is a closed set". `409 already in a match` while the client holds a live match. |
 | `POST /cancel` | `{id}` | `200 {}` — leaves the queue (best effort). |
-| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has left the open-gate phases (`preparing`/`countdown`) and will send no countdown, and `409 not a side of this match` if the client's match pointer resolves to no side of it. Both 409s exist because a `200` is read by the client as "hold still, it is coming", so it must never be returned for an ack that did not register or for a match that will not run. Gates CPU and PvP alike. Idempotent while the match is live — every call renews the readiness lease — so a re-sent ack from a reconnecting client is still accepted, and a repeat ack from a client that is behaving correctly must not expire its own lease. |
+| `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has left every open-gate state (`preparing`, `countdown`, and the between-rounds pause/gate of an online series, which is open while `betweenRounds` is set) and will send no countdown, and `409 not a side of this match` if the client's match pointer resolves to no side of it. Both 409s exist because a `200` is read by the client as "hold still, it is coming", so it must never be returned for an ack that did not register or for a match that will not run. Gates CPU and PvP alike, and gates each round of a series. Idempotent while the match is live — every call renews the readiness lease — so a re-sent ack from a reconnecting client is still accepted, and a repeat ack from a client that is behaving correctly must not expire its own lease. |
 | `POST /cpu` | `{id, roundsTarget?, opponentCharacter?, drawEnds?}` | `200 {}` — starts a CPU match (also drains/leaves the queue), ending when one side has won `roundsTarget` decisive rounds. `roundsTarget` is the length the lobby offers (`1` or `3`); absent means `3`, so a client predating the field still starts a match. Any other value is `400 unsupported roundsTarget` — the set is closed rather than a range, so a hand-written request cannot invent a series the game has never described. `opponentCharacter` is which roster fighter the bot plays, for an [arcade ladder](../tasks/closed/arcade-ladder.md) floor; absent means the random pick, and a name off the roster is `400 invalid opponent character` — it reaches the opponent slot and the wire, so it is not passed through unfiltered. Naming the bot is not a hole: its reaction is fixed, its move is random, and every round is still judged here. `drawEnds` is whether a drawn round ends the match; absent means the one-round inference (a match of one round is whatever that round came to), and the arcade ladder always sends `false` so a drawn round replays rather than deciding a floor. `409 already in a match` while the client holds a live match. The match still waits for the client's `/ready` ack before its countdown. |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
@@ -312,22 +346,27 @@ snapshot.
 
 ### Why the series length is a closed set
 
-`roundsTarget` on `POST /cpu` is validated against the two lengths the lobby
-offers, not against a range. A range would accept `2`, which nothing in the UI
-describes: the client would be asked to draw a two-pip row for a mode that does
-not exist, and the server would be maintaining series behaviour for a request
-that no player can make. Absent is not an error either — it means the client
-predates the field, and it gets the default so a tab open across the deploy can
-still start a match.
+`roundsTarget` — on `POST /cpu` and on `POST /queue` alike — is validated
+against the two lengths the lobby offers, not against a range. A range would
+accept `2`, which nothing in the UI describes: the client would be asked to draw
+a two-pip row for a mode that does not exist, and the server would be
+maintaining series behaviour for a request that no player can make. Absent is
+not an error either, though the two endpoints read it differently: on `/cpu` it
+means the client predates the field and gets the series default, so a tab open
+across the deploy can still start a match; on `/queue` it means the one-round
+match the lobby's plain button has always asked for, so the same tab still gets
+the match it expects.
 
-The choice is CPU-only, and deliberately: a PvP match is one round until the
-ready-per-round half of
-[game-mode-architecture](../tasks/open/game-mode-architecture.md) lands, so
-honouring a series there would park two players in a match neither can leave.
-`/queue` therefore takes no length at all, and the online path passes
-`defaultSeriesTarget` to `makeMatch` unused — passing the default rather than
-zero, so that if the PvP half ever lands the default is a series rather than a
-match that ends before its first round is judged.
+The queue shares the set because it is the queue that has to *pair* a length: a
+waiting entry carries its `roundsTarget` and `drawEnds`, and only entries that
+agree on both are paired — a first-to-three player and a one-round player
+waiting together are two people who would otherwise be dropped into a match only
+one of them asked for, and the mismatched waiter keeps their seat and their
+place until an equal-length partner arrives. A side handed back to the queue by
+a cancelled handshake re-enters with the length it was playing, for the same
+reason: it is halfway through a series and must not come back as a one-off. The
+pairing and the re-entry are pinned by `TestQueuePairsOnlyEqualLengths` and
+`TestRequeuedSideReentersWithTheLengthItWasPlaying`.
 
 ### One live match per client
 
@@ -398,7 +437,7 @@ Notes:
   scoreboard below `roundsTarget: 2`: a match one round long has no running
   tally, and a single pip says nothing the result banner does not. So a
   `roundsTarget` of 1 draws nothing, exactly as a `matched` or a result with no
-  `roundsTarget` at all does (PvP, or a pre-series server) — the client never
+  `roundsTarget` at all does (a one-round match, or a pre-series server) — the client never
   guesses a width. The pips are module state beside the
   round panel for the same reason the opponent slot is kept: a tally that reset
   with each round would read as the score having been thrown away.
