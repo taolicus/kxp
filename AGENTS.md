@@ -145,7 +145,7 @@ and it does not depend on how the context window behaves.
 npm run links       # internal doc links and #fragments; sub-second, run it every time
 gofmt -l .          # must print nothing
 go vet ./...
-go test ./...       # ~60s on this host; batch Go edits, don't re-run per edit
+go test ./...       # the one gate this host cannot time: ALONE, generous timeout (below)
 npm run unit        # web/*.test.cjs + tools/lib/*.test.mjs
 npm run tall        # probes t1–t8 — requires an origin (see below), creates real matches
 ```
@@ -161,6 +161,20 @@ true, which needs a reader. What each gate does and does not cover, and why
 the integration path is a browser-free probe suite, is in
 [docs/development/verification.md](docs/development/verification.md) — read it
 when adding a test or deciding whether something is verifiable here.
+
+`go test ./...` is the gate this host cannot put a number on. It is a phone
+under variable load — thermal, other apps, FUSE shared storage, and a moving
+network ([environment.md](docs/development/environment.md)) — so its wall time
+drifts from a minute to many even warm, run to run; any figure added here would
+be measured one day and a lie the next. Run it as its own step with a generous
+tool timeout, never chained behind `&&` with another gate, and never piped
+through a pager: a buffered pipe turns a working-but-slow run into an apparent
+hang, and a killed run restarts the compile while the machine is already loaded.
+If it looks hung, wait out Go's own per-package `-timeout` (10 minutes by
+default) before believing it — on this host, slow is the explanation more often
+than a hang is, and a genuinely stuck test still gets killed by Go itself. Batch
+Go edits and run the full suite once at the end; `go test -run <Name> ./...`
+covers a slice in the meantime.
 
 **This host cannot verify** — state these limits in the commit body and in any
 report, rather than implying coverage that does not exist:

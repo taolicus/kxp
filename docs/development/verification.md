@@ -30,6 +30,26 @@ below. Both `README.md` and `docs/features/architecture.md` prescribed that
 shorter form until this commit, which is the shape of drift a link checker cannot
 see: a path in prose is not a path.
 
+## Run the gates the way a phone can finish them
+
+`go test ./...` carries no wall-clock estimate in `AGENTS.md` — deliberately.
+This host is a phone and it moves ([environment.md](environment.md)): thermal
+throttling, other apps, FUSE shared storage, and the network load it differently
+from run to run, so a number would be true on the day it was measured and a lie
+the next. Measured on the day this section landed, the same warm suite finished
+one run and exceeded a fifteen-minute tool timeout on the run after — the
+variance is the fact.
+
+The rule that survives the variance is how the gate is *run*, not how fast it
+is. Standalone step with an ample tool timeout; never chained behind another
+gate with `&&`; never piped through a pager. A paged run hides progress, so
+"slow" reads as "hung" and invites the one action that makes it worse — killing
+it restarts the whole compile while the machine is already loaded. A genuinely
+hung test is still bounded: each Go package invocation carries Go's own
+`-timeout` (10 minutes by default), so waiting until that fires is a decision,
+not a guess. Short slices keep the loop tight with `go test -run <Name> ./...`
+and run the full suite once, at the end.
+
 ## The gap probes cannot close
 
 Protocol probes assert on frames arriving over the wire. A bug in `app.js` that
