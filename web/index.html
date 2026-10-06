@@ -32,17 +32,19 @@
          qualifies. The numbers live in the markup because they are a choice the
          player reads here; app.js posts whatever is selected and the server
          decides whether it is one it offers. The rule rides with the length
-         because a 1-off and a first-to-1 share one, and online takes the same
-         choice (the queue pairs entries that agree on both). -->
+         because the length alone does not say what a drawn round does, and
+         online takes the same choice (the queue pairs entries that agree on
+         both). -->
     <div id="cpu-length" class="seg" role="group" aria-label="Match mode">
       <span class="seg-label">Mode:</span>
       <!-- No option is marked selected: the client decides, once the lobby
            is framed, so a saved choice is shown from the first paint instead of
-           the default flashing and then being swapped out. Each button names its
-           rule too: the first two share a length, and the draw rule is the only
-           thing that tells them apart. -->
+           the default flashing and then being swapped out. The rule goes with
+           the length: one round is a 1-off (a draw ends the match), and first
+           to three replays a draw. A drawn first-to-1 is not a lobby choice --
+           it is what a ladder floor asks for, posted from the arcade, not from
+           here. -->
       <button class="seg-btn" data-rounds="1" data-draw-ends="true">1 round</button>
-      <button class="seg-btn" data-rounds="1" data-draw-ends="false">First to 1</button>
       <button class="seg-btn" data-rounds="3" data-draw-ends="false">First to 3</button>
     </div>
     <div class="buttons">

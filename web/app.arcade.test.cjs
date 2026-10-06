@@ -58,7 +58,7 @@ const saved = (app) => app.saved('kxp-arcade');
 // the restore takes the length's old meaning on this host too.
 function lengthToggle(app, selected = 3) {
   const btns = [
-    [1, 'true'], [1, 'false'], [3, 'false'],
+    [1, 'true'], [3, 'false'],
   ].map(([rounds, drawEnds]) => {
     const b = stubElement();
     b.dataset.rounds = String(rounds);

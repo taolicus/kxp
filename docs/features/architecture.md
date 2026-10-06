@@ -118,21 +118,23 @@ through it, because its client is the human's own screen, already up.
 
 **The lobby's default is one round, and its choice is remembered.** A player who
 never touches the toggle gets one round, and a player who picked first-to-three
-and comes back after a reload finds it still picked. The choice is a *(length,
-rule)* pair, because two of the three modes share a length and the number alone
-cannot name the mode: `kxp-cpu-length` holds the number it always did, and
-`kxp-cpu-draw-ends` (`"true"`/`"false"`) the rule the button carried. Nothing is
-marked selected in the markup for that control: the selection is decided once
-the roster that frames the lobby has arrived, so a saved choice is the one lit
-from the first paint rather than arriving as a flash of the default that swaps
-out. The stored pair is read back as untrusted input the way `kxp-arcade` is:
-only a choice the control still offers is honoured, and anything else — a value
-edited by hand, or one left over from a control that offered other modes — falls
-back to the control's first option rather than posting a mode no button carries.
-A store without the rule key predates the split, so it restores on length alone
-(1 → "1 round", 3 → "First to 3"), the one reading that keeps an old length's
-meaning unchanged; where two buttons share a length, the first match wins,
-because the control lists each length's original mode first.
+and comes back after a reload finds it still picked. The control offers two
+modes — one round (a 1-off: a drawn round ends it) and first to three — and the
+choice is a *(length, rule)* pair: `kxp-cpu-length` holds the number it always
+did, and `kxp-cpu-draw-ends` (`"true"`/`"false"`) the rule the button carried.
+The pair outlives the third segment that made it necessary: a first-to-1 shares
+a length of one with a 1-off on the wire — the ladder's floor is exactly that —
+so the client keeps posting the rule rather than leaving the same number to be
+read two ways. Nothing is marked selected in the markup for that control: the
+selection is decided once the roster that frames the lobby has arrived, so a
+saved choice is the one lit from the first paint rather than arriving as a flash
+of the default that swaps out. The stored pair is read back as untrusted input
+the way `kxp-arcade` is: only a choice the control still offers is honoured, so
+a store left by the old three-segment control — which carried first-to-1 — has
+no button to light and falls back to the first option, as a hand-edited value
+would. A store without the rule key predates the split, so it restores on length
+alone (1 → "1 round", 3 → "First to 3"), the one reading that keeps an old
+length's meaning unchanged.
 
 **A match the client asked to end on a draw is over whatever that round was.** A
 draw is worth nothing to either side and replays — but replaying it means playing
@@ -145,10 +147,11 @@ whose result is final whatever it came to. Scoped to the field rather than the
 mode, because the default is a statement about the number of rounds there are,
 not about who is playing — and the arcade ladder is the one caller with a
 different answer, posting `drawEnds: false` on every floor so a drawn round
-replays rather than deciding one. The lobby asks per button too: at a length of
-one the request says which mode it is — "1 round" posts `true`, "First to 1"
-posts `false` — so the number alone no longer names the rule, and the field is
-what the player asked for rather than something inferred from the count.
+replays rather than deciding one. The lobby asks per button too: "1 round" posts
+`true` and "First to 3" posts `false`, so the field is what the player asked for
+rather than something inferred from the count. A first-to-1 is no longer a lobby
+segment, but the field remains what carries it — the arcade posts it on every
+floor, so a drawn round there replays whatever the control is showing.
 
 **The target is a constructor argument, not a constant.** `newMatch(id,
 roundsTarget)` takes the length, because the lobby offers a one-round CPU match
