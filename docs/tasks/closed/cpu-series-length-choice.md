@@ -39,7 +39,7 @@ leave. That half has since landed — the queue pairs equal lengths, re-opens th
 ready handshake between rounds, and forfeits a failed one — so the same control
 now sets the length for both paths, and an absent `/queue` target asks for the
 one round the button always asked for rather than a series. Splitting the
-control into per-mode segments is [game-modes](../open/game-modes.md)'s.
+control into per-mode segments is [game-modes](game-modes.md)'s.
 
 ## A rematch repeats the match, not the lobby
 

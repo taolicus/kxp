@@ -321,7 +321,7 @@ snapshot.
 | `round` | Current round number (1-based). |
 | `youRoundWins`, `oppRoundWins` | Decisive round wins per side **including the round this result reports** — a scoreboard read, not a running total the client has to add up. A `void` round counts for the opponent. |
 | `roundsTarget?` | Target number of decisive wins to win the series (3 today). **Only on a match that has a series** — a one-round match omits it. A client reads a missing target as "no series", so it draws no scoreboard, which is the only honest reading for a match that cannot go past round one. |
-| `drawEnds?` | Whether a drawn round ends the match (`true` for a one-round match, `false` for a ladder floor). **Only on a match that has a series**, beside `roundsTarget`. It is the field that tells a first-to-1 floor apart from a 1-off at the same target, and it lands on the wire rather than in the client's head; nothing renders it yet. |
+| `drawEnds?` | Whether a drawn round ends the match (`true` for a 1-off, `false` for a first-to-1 or longer series, and for a ladder floor). **Only on a match that has a series**, beside `roundsTarget`. It is the field that tells a first-to-1 apart from a 1-off at the same target, and it lands on the wire so the client draws the scoreboard from the mode rather than holding a copy of the rules — a target of one with `drawEnds: false` draws its single pip, while `drawEnds: true` draws no row. An absent field at a target of one is read as the 1-off it always meant, so a tab open across the deploy renders the same. |
 | `seriesOver` | `true` if the series ended with this result, else `false`. |
 
 ## HTTP endpoints
@@ -336,7 +336,7 @@ snapshot.
 | `POST /queue` | `{id, roundsTarget?, drawEnds?}` | `200 {}` — joins the online queue for a match of that length (idempotent; re-posting while waiting updates the length rather than taking a second seat). `roundsTarget` is the same closed set `/cpu` offers (`1` or `3`); absent means `1`, what the lobby's plain button has always asked for, so a client predating the field still queues for the one-round match it expects. Any other value is `400 unsupported roundsTarget`. `drawEnds` is decoded exactly as `/cpu` decodes it (absent means the one-round inference). The queue pairs only entries that agree on both fields — see "Why the series length is a closed set". `409 already in a match` while the client holds a live match. |
 | `POST /cancel` | `{id}` | `200 {}` — leaves the queue (best effort). |
 | `POST /ready` | `{id}` | `200 {}` — advertises readiness for the current match; `400 no active match` if none; `409 ready gate closed` if the match has left every open-gate state (`preparing`, `countdown`, and the between-rounds pause/gate of an online series, which is open while `betweenRounds` is set) and will send no countdown, and `409 not a side of this match` if the client's match pointer resolves to no side of it. Both 409s exist because a `200` is read by the client as "hold still, it is coming", so it must never be returned for an ack that did not register or for a match that will not run. Gates CPU and PvP alike, and gates each round of a series. Idempotent while the match is live — every call renews the readiness lease — so a re-sent ack from a reconnecting client is still accepted, and a repeat ack from a client that is behaving correctly must not expire its own lease. |
-| `POST /cpu` | `{id, roundsTarget?, opponentCharacter?, drawEnds?}` | `200 {}` — starts a CPU match (also drains/leaves the queue), ending when one side has won `roundsTarget` decisive rounds. `roundsTarget` is the length the lobby offers (`1` or `3`); absent means `3`, so a client predating the field still starts a match. Any other value is `400 unsupported roundsTarget` — the set is closed rather than a range, so a hand-written request cannot invent a series the game has never described. `opponentCharacter` is which roster fighter the bot plays, for an [arcade ladder](../tasks/closed/arcade-ladder.md) floor; absent means the random pick, and a name off the roster is `400 invalid opponent character` — it reaches the opponent slot and the wire, so it is not passed through unfiltered. Naming the bot is not a hole: its reaction is fixed, its move is random, and every round is still judged here. `drawEnds` is whether a drawn round ends the match; absent means the one-round inference (a match of one round is whatever that round came to), and the arcade ladder always sends `false` so a drawn round replays rather than deciding a floor. `409 already in a match` while the client holds a live match. The match still waits for the client's `/ready` ack before its countdown. |
+| `POST /cpu` | `{id, roundsTarget?, opponentCharacter?, drawEnds?}` | `200 {}` — starts a CPU match (also drains/leaves the queue), ending when one side has won `roundsTarget` decisive rounds. `roundsTarget` is the length the lobby offers (`1` or `3`); absent means `3`, so a client predating the field still starts a match. Any other value is `400 unsupported roundsTarget` — the set is closed rather than a range, so a hand-written request cannot invent a series the game has never described. `opponentCharacter` is which roster fighter the bot plays, for an [arcade ladder](../tasks/closed/arcade-ladder.md) floor; absent means the random pick, and a name off the roster is `400 invalid opponent character` — it reaches the opponent slot and the wire, so it is not passed through unfiltered. Naming the bot is not a hole: its reaction is fixed, its move is random, and every round is still judged here. `drawEnds` is whether a drawn round ends the match; absent means the one-round inference (a match of one round is whatever that round came to), and the arcade ladder always sends `false` so a drawn round replays rather than deciding a floor. The lobby's control sends each option's own rule — `true` for "1 round", `false` for "First to 1" and "First to 3" — so a mode is never left to be inferred from its length where the control named it. `409 already in a match` while the client holds a live match. The match still waits for the client's `/ready` ack before its countdown. |
 | `POST /move` | `{id, move, sawPunAt?, clickedAt?}` | `200 {}` on acceptance. `400 too early` during countdown, `400 too late` past the deadline, `400 match over` on a finished match, `400 invalid move`, `400 no active match`, `409 move already submitted`, `413 body too large`. `sawPunAt`/`clickedAt` are client epoch-ms used only for display. |
 | `POST /character` | `{id, character}` | `200 {}` — picks a fighter; `400 invalid character`. See `GET /characters` for the current roster. |
 | `GET /characters` | — | `200 [{id, name, emoji}]` — the full roster, the single source of truth for character data at runtime; what it currently holds is listed in [characters](characters.md). The client fetches it at startup and no longer bundles its own copy. |
@@ -357,15 +357,17 @@ across the deploy can still start a match; on `/queue` it means the one-round
 match the lobby's plain button has always asked for, so the same tab still gets
 the match it expects.
 
-The queue shares the set because it is the queue that has to *pair* a length: a
+The queue shares the set because it is the queue that has to *pair* a mode: a
 waiting entry carries its `roundsTarget` and `drawEnds`, and only entries that
 agree on both are paired — a first-to-three player and a one-round player
 waiting together are two people who would otherwise be dropped into a match only
-one of them asked for, and the mismatched waiter keeps their seat and their
-place until an equal-length partner arrives. A side handed back to the queue by
-a cancelled handshake re-enters with the length it was playing, for the same
-reason: it is halfway through a series and must not come back as a one-off. The
-pairing and the re-entry are pinned by `TestQueuePairsOnlyEqualLengths` and
+one of them asked for, and 1-off and first-to-1 are the same mismatch at a
+shared target, told apart only by the rule. The mismatched waiter keeps their
+seat and their place until an equal-mode partner arrives. A side handed back to
+the queue by a cancelled handshake re-enters with the length it was playing, for
+the same reason: it is halfway through a series and must not come back as a
+one-off. The pairing and the re-entry are pinned by
+`TestQueuePairsOnlyEqualLengths` and
 `TestRequeuedSideReentersWithTheLengthItWasPlaying`.
 
 ### One live match per client
@@ -430,15 +432,17 @@ Notes:
   the opponent slot and the series pips. Rebuilding the screen from the frame
   instead would re-roll the stage and revert the opponent to a generic name,
   which is invisible in round one and wrong in every round after it.
-- The series score is drawn as a **pip per round win still needed**, one row
+- - The series score is drawn as a **pip per round win still needed**, one row
   under each fighter, filled from the left as the wins come in. The rows go up
   empty on `matched` and are `roundsTarget` pips wide because that is what the
-  server says, so the client holds no copy of the series rules. There is no
-  scoreboard below `roundsTarget: 2`: a match one round long has no running
-  tally, and a single pip says nothing the result banner does not. So a
-  `roundsTarget` of 1 draws nothing, exactly as a `matched` or a result with no
-  `roundsTarget` at all does (a one-round match, or a pre-series server) — the client never
-  guesses a width. The pips are module state beside the
+  server says, so the client holds no copy of the series rules. Only a mode that
+  can span rounds draws a row: a target of one draws nothing when `drawEnds` is
+  true (a 1-off is over whatever that round came to), but a first-to-1 — the same
+  target with `drawEnds: false` — draws its one pip, and an empty row is exactly
+  what a drawn round leaves behind there. A match with no `roundsTarget` at all
+  (a pre-series server, or a PvP 1-off) draws nothing, and an absent rule at a
+  target of one is read as the 1-off it always meant, so a tab open across the
+  deploy renders the same. The pips are module state beside the
   round panel for the same reason the opponent slot is kept: a tally that reset
   with each round would read as the score having been thrown away.
   A reconnect mid-series does not restore the tally — `snapshot:countdown` is a

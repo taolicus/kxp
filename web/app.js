@@ -11,7 +11,9 @@ let lastMode = 'online'; // online | cpu — mode of the finished match
 // repeats what the player just played rather than what the lobby happens to show
 // now.
 let cpuTarget = 0;
+let cpuDrawEnds = false;
 let lastTarget = 0;
+let lastDrawEnds = null;
 // The floor of the ladder match in progress, and -1 when the match is not a
 // ladder match. The mode on the wire is `cpu` for both, so the distinction has to
 // live here; the server has no ladder to know about.
@@ -244,6 +246,14 @@ const ARCADE_KEY = 'kxp-arcade';
 // offers the stored length must fall back rather than post one nothing on screen
 // matches (see the wiring below).
 const CPU_LENGTH_KEY = 'kxp-cpu-length';
+
+// The rule that went with that length. At a target of one the length cannot name
+// the mode -- 1-off and first-to-1 are the same number -- so the choice is a
+// (length, rule) pair, stored under two keys: the number keeps its old form
+// (and its old readers), and this key holds the `'true'`/`'false'` string the
+// button carries. A store without it predates the split and restores on length
+// alone, which is the old meaning the stored length had.
+const CPU_DRAWENDS_KEY = 'kxp-cpu-draw-ends';
 
 // readArcade returns the saved run, repaired against the current roster. A run
 // with no saved order is a first run, and draws one -- deliberately not at
@@ -624,23 +634,25 @@ function renderResult(d) {
     }
     $('#btn-mode').classList.remove('hidden');
   }
-  renderPips(d.youRoundWins, d.oppRoundWins, d.roundsTarget);
+  renderPips(d.youRoundWins, d.oppRoundWins, d.roundsTarget, d.drawEnds);
   setYouSlot();
   setOppSlot(d.opponentCharacter, d.opponentName);
 }
 
 // The series scoreboard: one pip per round win a side still needs, filled as it
-// takes them. Driven by the server's roundsTarget rather than a count written
-// here, so the row is exactly as long as the series is and the client holds no
-// copy of the rules.
+// takes them. Driven by the server's roundsTarget and drawEnds rather than a
+// count written here, so the row is exactly as long as the series is and the
+// client holds no copy of the rules.
 //
-// Only for a series that takes more than one round. A match one round long has
-// no running tally to show -- it is over before the pips could fill more than
-// once -- and a single pip would say nothing the result banner does not already
-// say. So the cutoff is at two, not at one: a scoreboard is for something that
-// goes on.
-function renderPips(you, opp, target) {
-  seriesTally = target > 1 ? { you, opp, target } : null;
+// Only for a series that can span rounds. A match that cannot go past round one
+// -- a 1-off (drawEnds: true), or a server that reports no rule, which is read
+// as the 1-off an absent field has always meant -- has no running tally to
+// show. first-to-1 is the exception at a target of one: it can span rounds
+// precisely because a drawn round replays, so its single pip is the thing a
+// draw leaves behind, the empty row the old "cutoff at two" rule could not say.
+function renderPips(you, opp, target, drawEnds) {
+  const ends = drawEnds !== undefined ? drawEnds : (target || 0) <= 1;
+  seriesTally = target > 1 || (target && !ends) ? { you, opp, target } : null;
   paintPips();
 }
 
@@ -671,10 +683,10 @@ function pipHTML(wins, target) {
 // against; a plain CPU match does not, and lets the server pick. The ladder's
 // order is saved *before* the request, so a reload mid-climb resumes the same
 // ladder rather than drawing a new one under the player.
-function postCPU(mode, { roundsTarget = cpuTarget } = {}) {
+function postCPU(mode, { roundsTarget = cpuTarget, drawEnds = cpuDrawEnds } = {}) {
   if (mode !== 'ladder') {
     ladderFloor = -1;
-    return post('/cpu', { roundsTarget });
+    return post('/cpu', { roundsTarget, drawEnds });
   }
   // A cleared run -- or a stored position past the end of the order, which the
   // clamp cannot produce but a hand-edited store can -- starts a new ladder. This is
@@ -784,7 +796,7 @@ const enter = {
     // with it. A `matched` without a target -- PvP, or a server predating the
     // field -- draws nothing, which is the same "no series" reading as a result
     // without one.
-    renderPips(0, 0, d.roundsTarget);
+    renderPips(0, 0, d.roundsTarget, d.drawEnds);
     setYouSlot();
     setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
     // Which floor this is, said once at the match rather than in a permanent
@@ -878,6 +890,10 @@ const enter = {
     lockMoves();
     lastMode = d.mode || 'online';
     lastTarget = Number(d.roundsTarget) || 0;
+    // The rule rides in for the rematch the way the length does: at a target of
+    // one it is the whole difference between 1-off and first-to-1, so "the same
+    // match again" means repeating both halves.
+    lastDrawEnds = d.drawEnds;
     const s = KXP.applyResult(getStats(), d.outcome);
     saveStats(s);
     setStats();
@@ -1074,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // was shown rather than restated here. Absent would mean one round on the
     // wire, but the client sends its explicit choice so the match asked for is
     // the match the control is showing.
-    const p = mode === 'online' ? post('/queue', { roundsTarget: cpuTarget }) : postCPU(mode);
+    const p = mode === 'online' ? post('/queue', { roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }) : postCPU(mode);
     Promise.resolve(p).then((res) => {
       if (res && res.ok) return;
       btn.disabled = false;
@@ -1082,12 +1098,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (res && res.status === 409) setNotice('You are already in a match.');
     });
   });
-  // The length a CPU match runs for. The numbers are the control's own, so the
-  // client posts a choice it was shown rather than a copy of the rules; the
-  // server decides whether it is a length it offers. No option is marked
-  // selected in the markup: the choice is made here, once the roster that
-  // frames the lobby has arrived, because an option painted in markup would
-  // flash in the first paint and then swap to whatever the player saved.
+  // The length and draw rule a CPU match runs as. The numbers are the control's
+  // own, so the client posts a choice it was shown rather than a copy of the
+  // rules; the server decides whether it is a length it offers. The rule rides
+  // because at a target of one it is the whole difference between 1-off and
+  // first-to-1 -- two buttons sharing a number, told apart only by what a draw
+  // does. No option is marked selected in the markup: the choice is made here,
+  // once the roster that frames the lobby has arrived, because an option painted
+  // in markup would flash in the first paint and then swap to whatever the
+  // player saved.
   const lengthBtns = document.querySelectorAll('#cpu-length .seg-btn');
   lengthBtns.forEach((b) => {
     b.addEventListener('click', () => {
@@ -1095,7 +1114,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         o.classList.toggle('selected', o === b);
       });
       cpuTarget = Number(b.dataset.rounds) || 0;
-      try { localStorage.setItem(CPU_LENGTH_KEY, String(cpuTarget)); } catch (e) {}
+      // The rule is read off the attribute the button carries, so a mode added
+      // to the markup without one is a mode with a rule of its own, never an
+      // accidental borrow of another button's.
+      cpuDrawEnds = b.dataset.drawEnds === 'true';
+      try {
+        localStorage.setItem(CPU_LENGTH_KEY, String(cpuTarget));
+        localStorage.setItem(CPU_DRAWENDS_KEY, String(cpuDrawEnds));
+      } catch (e) {}
     });
   });
   // The default is the control's first option (today "1 round"), decided here
@@ -1107,18 +1133,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (firstLength) {
     firstLength.classList.add('selected');
     cpuTarget = Number(firstLength.dataset.rounds) || 0;
+    cpuDrawEnds = firstLength.dataset.drawEnds === 'true';
   }
+  // The saved (length, rule) pair. A store without the rule key predates the
+  // split and matches on length alone, keeping the old meaning a stored length
+  // has always had; one with it matches on both, so a saved length must not
+  // silently change mode. Two buttons can share a length, so the first match
+  // wins -- the control lists each length's original mode first, which is what a
+  // pre-rule store means. A pair no button offers falls back like any other
+  // stray value.
   const savedTarget = Number(localStorage.getItem(CPU_LENGTH_KEY));
+  const savedEnds = localStorage.getItem(CPU_DRAWENDS_KEY);
   if (savedTarget) {
     let restored = null;
     lengthBtns.forEach((b) => {
-      if (Number(b.dataset.rounds) === savedTarget) restored = b;
+      if (restored) return;
+      if (Number(b.dataset.rounds) !== savedTarget) return;
+      if (savedEnds === null || b.dataset.drawEnds === savedEnds) restored = b;
     });
     if (restored) {
       lengthBtns.forEach((o) => {
         o.classList.toggle('selected', o === restored);
       });
       cpuTarget = savedTarget;
+      cpuDrawEnds = restored.dataset.drawEnds === 'true';
     }
   }
 
@@ -1145,13 +1183,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!transition('climb')) btn.disabled = false;
       return;
     }
+    // The match that just ended, not the lobby's current selection: "Play
+    // Again" means the same match again. The rule comes back with the length
+    // because first-to-1 and 1-off share a target; if the result reported
+    // nothing it falls back to the selection, with the same "older server"
+    // reading as the length's fallback -- and at a target of one that reading
+    // is 1-off, the mode an absent rule has always meant.
+    const again = lastTarget || cpuTarget;
+    const againEnds = lastDrawEnds ?? (again <= 1);
     if (lastMode === 'cpu') {
       $('#btn-again').disabled = true;
-      // The match that just ended, not the lobby's current selection: "Play
-      // Again" means the same match again. Falls back to the selection for a
-      // server that reported no target, which is the same "older server" reading
-      // as a result without the field.
-      post('/cpu', { roundsTarget: lastTarget || cpuTarget }).then((res) => {
+      post('/cpu', { roundsTarget: again, drawEnds: againEnds }).then((res) => {
         if (!res || !res.ok) $('#btn-again').disabled = false;
       });
     } else {
@@ -1160,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // rule the CPU branch follows above, with the same fallback for a result
       // that reported no target (a one-round match omits it, as an older server
       // would).
-      post('/queue', { roundsTarget: lastTarget || cpuTarget });
+      post('/queue', { roundsTarget: again, drawEnds: againEnds });
     }
   });
   $('#btn-mode').addEventListener('click', () => {

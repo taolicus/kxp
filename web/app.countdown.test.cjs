@@ -292,16 +292,16 @@ test('a match with no series draws no pips, before a round or after one', async 
   assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'and nothing after its only round');
 });
 
-test('a one-round match draws no pips, at the match or after its only round', async () => {
-  // The quick mode is one round and nothing else: there is no running tally to
-  // show, and one pip would say nothing the result banner does not. A row that
-  // appeared only on the final result -- and could only ever fill once -- was a
-  // scoreboard for a series that does not exist, which is the same mistake as
-  // drawing it for PvP.
+test('a 1-off match draws no pips, at the match or after its only round', async () => {
+  // The quick mode is one round and nothing else: its request says a drawn round
+  // ends it (drawEnds: true), so there is no running tally to show, and one pip
+  // would say nothing the result banner does not. A row that appeared only on
+  // the final result -- and could only ever fill once -- was a scoreboard for a
+  // series that does not exist, which is the same mistake as drawing it for PvP.
   const app = loadApp({ next: SM.next });
   runInContext('connect()', app.ctx);
   app.fire('connected', { id: null, now: 1700000000000, online: 0 });
-  app.fire('matched', { opponentName: 'CPU', background: BGS[0], roundsTarget: 1 });
+  app.fire('matched', { opponentName: 'CPU', background: BGS[0], roundsTarget: 1, drawEnds: true });
   assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'nothing to show at the match');
 
   app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
@@ -309,12 +309,49 @@ test('a one-round match draws no pips, at the match or after its only round', as
   app.runUntil(1700000005500);
   app.fire('result', {
     outcome: 'win', mode: 'cpu', opponentName: 'CPU', round: 1,
-    youRoundWins: 1, oppRoundWins: 0, roundsTarget: 1, seriesOver: true,
+    youRoundWins: 1, oppRoundWins: 0, roundsTarget: 1, drawEnds: true, seriesOver: true,
   });
   assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'and nothing after the win');
   assert.deepEqual(pips(app, 'opp'), { total: 0, filled: 0, hidden: true }, 'on either side');
   // The rematch is the point of that mode, and it is unaffected.
   assert.ok(!app.el('#btn-again').classList.contains('hidden'), 'the rematch is still offered');
+});
+
+test('a server that predates the rule still draws no pips for its one round', async () => {
+  // The fields are additive, so a tab open across the deploy sees a match the
+  // old server reports with a length but no rule. Its one round already ended
+  // on a draw (that was 1-off before it had a name), and the client's inference
+  // is what must read it that way: absent drawEnds at a target of one means
+  // 1-off, not first-to-1.
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  app.fire('matched', { opponentName: 'CPU', background: BGS[0], roundsTarget: 1 });
+  assert.deepEqual(pips(app, 'you'), { total: 0, filled: 0, hidden: true }, 'no pips on the pre-rule one-round match');
+});
+
+test('a first-to-1 match shows its one pip, empty until it fills', async () => {
+  // First-to-1 can span rounds -- a drawn round replays -- so there is a running
+  // tally after all: one pip for the single decisive round being played for. The
+  // empty row is exactly what a drawn round leaves behind, which is the thing
+  // the old "no scoreboard below two" rule could not say.
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  app.fire('matched', { opponentName: 'CPU', background: BGS[0], roundsTarget: 1, drawEnds: false });
+  assert.deepEqual(pips(app, 'you'), { total: 1, filled: 0, hidden: false }, 'one empty pip at the match');
+  assert.deepEqual(pips(app, 'opp'), { total: 1, filled: 0, hidden: false }, 'one for the CPU');
+
+  app.fire('countdown', { n: 'READY', shootAt: 1700000003000, windowMs: 2000 });
+  assert.deepEqual(pips(app, 'you'), { total: 1, filled: 0, hidden: false }, 'still there while the round counts down');
+
+  app.fire('shoot', { windowMs: 2000, shootAt: 1700000003000 });
+  app.runUntil(1700000005500);
+  app.fire('result', {
+    outcome: 'win', mode: 'cpu', opponentName: 'CPU', round: 1,
+    youRoundWins: 1, oppRoundWins: 0, roundsTarget: 1, drawEnds: false, seriesOver: true,
+  });
+  assert.deepEqual(pips(app, 'you'), { total: 1, filled: 1, hidden: false }, 'the single pip fills on the win');
 });
 
 test('a series fills a pip per round won, and withholds the rematch until the last round', async () => {

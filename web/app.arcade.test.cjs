@@ -47,17 +47,22 @@ const askedFor = (app) => {
 const saved = (app) => app.saved('kxp-arcade');
 
 // The series-length toggle is a NodeList the harness does not read from markup,
-// and it is wired from that list. Which lengths exist is the lobby's business
-// (app.lobby.test.cjs pins that); all a ladder test needs is *a* length wired,
-// so the floor is fought for real rather than with an unwired 0. No button is
-// seeded selected -- the markup paints none, and the client decides -- so the
-// length is seeded through the very localStorage key the player's own choice
-// writes (`kxp-cpu-length`), which is the restore path the toggle's wiring
-// honours: nothing here re-types the decision the client owns twice.
+// and it is wired from that list. Which lengths (and rules) exist is the lobby's
+// business (app.lobby.test.cjs pins that); all a ladder test needs is *a*
+// length wired, so the floor is fought for real rather than with an unwired 0.
+// No button is seeded selected -- the markup paints none, and the client decides
+// -- so the length is seeded through the very localStorage key the player's own
+// choice writes (`kxp-cpu-length`), which is the restore path the toggle's wiring
+// honours: nothing here re-types the decision the client owns twice. The rule
+// key is deliberately left un-set, the way a store from before the split is, so
+// the restore takes the length's old meaning on this host too.
 function lengthToggle(app, selected = 3) {
-  const btns = [1, 3].map((rounds) => {
+  const btns = [
+    [1, 'true'], [1, 'false'], [3, 'false'],
+  ].map(([rounds, drawEnds]) => {
     const b = stubElement();
     b.dataset.rounds = String(rounds);
+    b.dataset.drawEnds = drawEnds;
     return b;
   });
   app.seed('#cpu-length .seg-btn', btns);
@@ -551,6 +556,11 @@ test('the next floor repeats the length just fought', async () => {
   lengthToggle(app, 3);
   await nextFloor(app);
   assert.strictEqual(askedFor(app).roundsTarget, 1, 'the next floor is the match that just finished');
+  // The floor's own rule rides the request too, and it is the ladder's, not the
+  // lobby's: "1 round" on the lobby is 1-off, but a floor is never 1-off -- a
+  // drawn round must not decide it, whatever the toggle is showing.
+  const fought = app.posts.filter((p) => String(p.url).endsWith('/cpu')).pop();
+  assert.strictEqual(JSON.parse(fought.body).drawEnds, false, 'one round on the lobby is still never 1-off on the floor');
 });
 
 // The tower: the screen between ladder floors.

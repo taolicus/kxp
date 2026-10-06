@@ -48,7 +48,7 @@ Builds on the Protocol rework Task A schedule, which shipped first.
   Rejected: a new endpoint or event for queueing with a length (the wire is
   additive or it is wrong); `roundsTarget: 0` as "one round" (collides with
   absent-means-default, already rejected in
-  [game-modes](../open/game-modes.md)).
+  [game-modes](game-modes.md)).
 
 - **Pairing is equal-mode only: `tryMatch` scans the FIFO for the first entry
   whose (target, `drawEnds`) matches, so no player's selection is ever

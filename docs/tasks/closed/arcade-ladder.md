@@ -101,7 +101,7 @@ progress waits for the final result of a floor.
 [game-mode-architecture](game-mode-architecture.md) — a floor is a CPU match, so
 it runs under the mode selector. Both halves have landed (the CPU series and the
 length choice, then the online queue taking the same lengths); the mode-selector
-split that follows is [game-modes](../open/game-modes.md)'s.
+split that follows is [game-modes](game-modes.md)'s.
 
 ## The one server change it needed
 

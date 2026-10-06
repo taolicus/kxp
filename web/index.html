@@ -33,18 +33,22 @@
       <button id="btn-cpu">Play vs CPU</button>
       <button id="btn-ladder">Arcade Mode</button>
     </div>
-    <!-- How many round wins end a CPU match. The numbers live in the markup
+    <!-- The length and draw rule a match runs as. The numbers live in the markup
          because they are a choice the player reads here; app.js posts whatever
-         is selected and the server decides whether it is one it offers. Online
-         is absent from this choice on purpose: a PvP match is one round, which
-         is the other half of docs/tasks/open/game-mode-architecture.md. -->
+         is selected and the server decides whether it is one it offers. The rule
+         rides with the length because a 1-off and a first-to-1 share one. Online
+         takes the same choice (the queue pairs entries that agree on both); the
+         "Vs CPU:" caption that no longer describes it is the UI pass's. -->
     <div id="cpu-length" class="seg" role="group" aria-label="CPU match length">
       <span class="seg-label">Vs CPU:</span>
-      <!-- Neither option is marked selected: the client decides, once the lobby
+      <!-- No option is marked selected: the client decides, once the lobby
            is framed, so a saved choice is shown from the first paint instead of
-           the default flashing and then being swapped out. -->
-      <button class="seg-btn" data-rounds="1">1 round</button>
-      <button class="seg-btn" data-rounds="3">First to 3</button>
+           the default flashing and then being swapped out. Each button names its
+           rule too: the first two share a length, and the draw rule is the only
+           thing that tells them apart. -->
+      <button class="seg-btn" data-rounds="1" data-draw-ends="true">1 round</button>
+      <button class="seg-btn" data-rounds="1" data-draw-ends="false">First to 1</button>
+      <button class="seg-btn" data-rounds="3" data-draw-ends="false">First to 3</button>
     </div>
   </section>
 

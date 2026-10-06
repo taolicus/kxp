@@ -118,15 +118,21 @@ through it, because its client is the human's own screen, already up.
 
 **The lobby's default is one round, and its choice is remembered.** A player who
 never touches the toggle gets one round, and a player who picked first-to-three
-and comes back after a reload finds it still picked — the length is stored under
-its own `localStorage` key (`kxp-cpu-length`). Nothing is marked selected in the
-markup for that control: the selection is decided once the roster that frames
-the lobby has arrived, so a saved choice is the one lit from the first paint
-rather than arriving as a flash of the default that swaps out. The stored value
-is read back as untrusted input the way `kxp-arcade` is: only a choice the
-control still offers is honoured, and anything else — a value edited by hand, or
-one left over from a control that offered other lengths — falls back to the
-control's first option rather than posting a length no button carries.
+and comes back after a reload finds it still picked. The choice is a *(length,
+rule)* pair, because two of the three modes share a length and the number alone
+cannot name the mode: `kxp-cpu-length` holds the number it always did, and
+`kxp-cpu-draw-ends` (`"true"`/`"false"`) the rule the button carried. Nothing is
+marked selected in the markup for that control: the selection is decided once
+the roster that frames the lobby has arrived, so a saved choice is the one lit
+from the first paint rather than arriving as a flash of the default that swaps
+out. The stored pair is read back as untrusted input the way `kxp-arcade` is:
+only a choice the control still offers is honoured, and anything else — a value
+edited by hand, or one left over from a control that offered other modes — falls
+back to the control's first option rather than posting a mode no button carries.
+A store without the rule key predates the split, so it restores on length alone
+(1 → "1 round", 3 → "First to 3"), the one reading that keeps an old length's
+meaning unchanged; where two buttons share a length, the first match wins,
+because the control lists each length's original mode first.
 
 **A match the client asked to end on a draw is over whatever that round was.** A
 draw is worth nothing to either side and replays — but replaying it means playing
@@ -139,7 +145,10 @@ whose result is final whatever it came to. Scoped to the field rather than the
 mode, because the default is a statement about the number of rounds there are,
 not about who is playing — and the arcade ladder is the one caller with a
 different answer, posting `drawEnds: false` on every floor so a drawn round
-replays rather than deciding one.
+replays rather than deciding one. The lobby asks per button too: at a length of
+one the request says which mode it is — "1 round" posts `true`, "First to 1"
+posts `false` — so the number alone no longer names the rule, and the field is
+what the player asked for rather than something inferred from the count.
 
 **The target is a constructor argument, not a constant.** `newMatch(id,
 roundsTarget)` takes the length, because the lobby offers a one-round CPU match
@@ -157,11 +166,14 @@ the pip row has to come from the server, or the client ends up holding a copy of
 the rules. `drawEnds` rides along because the two together are the mode: a
 first-to-1 floor and a 1-off match both have a target of 1, and only the field
 tells them apart — so a rule that ships in the engine belongs on the wire, where
-the client will read it when it offers the mode, rather than in the client's
-head. On a one-round match both are absent, and absent is the meaning: the client
-draws no scoreboard, which is the only honest rendering of a match that cannot
-go past round one. Sending `3` there instead would put a three-pip row over a
-one-round game and promise rounds that never arrive.
+the client reads it, rather than in the client's head. A 1-off is not always
+absent, either: a CPU opponent is always a series by `seriesMatch()`, so a bot
+1-off carries `{roundsTarget: 1, drawEnds: true}`, while an online 1-off carries
+neither field — and the client's inference, an absent rule at a target of one is
+1-off, renders both the same quiet way. Only a match that can span rounds draws
+pips: a target above one, or a target of one whose draws replay. Sending `3` for
+a one-round game instead would put a three-pip row over it and promise rounds
+that never arrive.
 
 **The series bookkeeping lives in `judge()`, and the result is announced after
 it.** The tally is updated, `seriesOver` is decided, and only then does

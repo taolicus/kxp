@@ -7,15 +7,17 @@ original terminal game.
 ## Features
 
 - **Single-binary web app** — the UI is embedded in the executable.
-- **Play Online** — matchmaking pairs you with another player at the length the
-  lobby's control is showing: one round, or first to 3 with the score kept as
-  pips under each fighter and the ready handshake re-opened between rounds.
-  Synced countdown and a shared **PUN!** instant either way.
+- **Play Online** — matchmaking pairs you with another player at the mode the
+  lobby's control is showing: one round, first to 1, or first to 3. The first two
+  share a length, so the control names the draw rule with it — a 1-off ends on a
+  drawn round, while first to 1 replays it. A series keeps the score as pips
+  under each fighter and re-opens the ready handshake between rounds. Synced
+  countdown and a shared **PUN!** instant either way.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay, in
-  a series you pick in the lobby: one round (a draw is the result), or best of 5
-  (first to 3; a draw replays). One round is the default, and the lobby remembers
-  the length you last chose. A series is scored as pips under each fighter;
-  one round has no score to keep.
+  a series you pick in the lobby: one round (a draw is the result), first to 1, or
+  best of 5 (first to 3; a draw replays). One round is the default, and the lobby
+  remembers the mode you last chose — its length and what a draw does. A series
+  is scored as pips under each fighter; a 1-off has no score to keep.
 - **Arcade Mode** — one floor per character in a random order, your own
   character as the final mirror, the same stock bot on every floor. A win climbs a
   floor, a loss sends you back to the bottom, and progress is remembered in this

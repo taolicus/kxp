@@ -1,7 +1,11 @@
 # A one-round match ends on a draw
 
 At a series length of one, a drawn round is the last round: `judge()` sets
-`seriesOver` and the client offers the rematch.
+`seriesOver` and the client offers the rematch. That is the mode the lobby calls
+**1-off**, and it is still what an unqualified one-round match does; a
+**first-to-1** beside it at the same length, added by
+[game-modes](game-modes.md), replays the draw instead — "Scoped so the ladder can
+opt out" below records how the two are told apart.
 
 ## Why
 
@@ -37,6 +41,15 @@ thought for it keeps the rule above; and the ladder — the one caller with a
 different answer — posts `drawEnds: false` on every floor, because a drawn round
 must not decide a floor. "Scoped to the length" is still true of the default; the
 field exists so a caller can pick the other reading, and the ladder is that caller.
+
+[game-modes](game-modes.md) then added the second caller *inside* the lobby, and
+with it the length-only reading stopped being enough at a target of one. The
+lobby now offers a 1-off and a first-to-1 side by side — same length, opposite
+rule — so the client asks for the mode explicitly rather than letting the server
+infer it from the count, and the wire carries `drawEnds` on every lobby request.
+The default above still stands — a match built without a thought for the field is
+1-off at one round — so "scoped to the length" now describes the default alone,
+not the only reachable reading.
 
 A `void` needed no change: it is a round win for the opponent, so a one-round
 match already ended on one through the ordinary tally. The draw was the only
