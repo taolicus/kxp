@@ -108,6 +108,15 @@ series continues. PvP matches are still one round, which is the other half of
 oversight: re-opening the ready handshake between rounds is a wire-visible
 decision that belongs with the series loop, not beside it.
 
+**The lobby's default is one round, and its choice is remembered.** A player who
+never touches the toggle gets one round, and a player who picked first-to-three
+and comes back after a reload finds it still picked — the length is stored under
+its own `localStorage` key (`kxp-cpu-length`) and read back as untrusted input
+the way `kxp-arcade` is: only a choice the control still offers is honoured, and
+anything else — a value edited by hand, or one left over from a control that
+offered other lengths — falls back to the markup default rather than posting a
+length no button carries.
+
 **A match the client asked to end on a draw is over whatever that round was.** A
 draw is worth nothing to either side and replays — but replaying it means playing
 a second round, which is the series a player declined by choosing one round. So

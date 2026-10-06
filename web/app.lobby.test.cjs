@@ -18,8 +18,9 @@ const SM = require('./machine.js');
 // own number, and the `.selected` selector resolving to whichever is on. The
 // harness does not read index.html, so the markup is described here -- and a
 // length added to the lobby without a button here fails the test rather than
-// silently not being the one that ships.
-function lobby(app, { selected = 3, lengths = [1, 3] } = {}) {
+// silently not being the one that ships. The default tracks the markup: "1
+// round" is what a player who never touches the toggle gets.
+function lobby(app, { selected = 1, lengths = [1, 3] } = {}) {
   const btns = lengths.map((rounds) => {
     const b = stubElement();
     b.dataset.rounds = String(rounds);
@@ -47,16 +48,17 @@ async function started(app) {
 test('a CPU match starts at the length the lobby is showing', async () => {
   // Default: the option marked selected in the markup is the one posted. If the
   // client defaulted from a literal instead, the two could disagree and the
-  // control would be a decoration on the value the server happens to get.
+  // control would be a decoration on the value the server happens to get. The
+  // markup's default is "1 round", and the harness default tracks it.
   const app = loadApp({ next: SM.next });
-  lobby(app, { selected: 3 });
+  lobby(app);
   await started(app);
 
   app.tap('#btn-cpu');
   app.tap('#btn-start');
   await app.settle();
 
-  assert.equal(bodyOf(app, '/cpu').roundsTarget, 3);
+  assert.equal(bodyOf(app, '/cpu').roundsTarget, 1);
 });
 
 test('choosing one round is what the server is asked for', async () => {
@@ -71,6 +73,50 @@ test('choosing one round is what the server is asked for', async () => {
   btns[0].handlers.click();
   assert.ok(btns[0].classList.contains('selected'), 'the one-round option is now selected');
   assert.ok(!btns[1].classList.contains('selected'), 'and the other is not');
+
+  app.tap('#btn-cpu');
+  app.tap('#btn-start');
+  await app.settle();
+
+  assert.equal(bodyOf(app, '/cpu').roundsTarget, 1);
+});
+
+test('the chosen length is the one a reload starts with', async () => {
+  // The toggle is a short-lived choice, but the next lobby visit is not a change
+  // of heart: someone who picked first-to-three and comes back after the tab sat
+  // for an hour should find it still chosen, not silently offered a one-round
+  // match. What is saved is the *number*, not a button, so this is the natural
+  // place to pin that restore against the control's own options.
+  const app = loadApp({ next: SM.next });
+  const btns = lobby(app, { selected: 3 });
+  await started(app);
+
+  btns[1].handlers.click();
+  assert.ok(btns[1].classList.contains('selected'), 'the first-to-three option is now selected');
+  assert.strictEqual(app.saved('kxp-cpu-length'), 3, 'the choice is what gets stored');
+
+  const next = loadApp({ next: SM.next, store: { 'kxp-cpu-length': 3 } });
+  const nextBtns = lobby(next, { selected: 1 });
+  await started(next);
+  assert.ok(nextBtns[1].classList.contains('selected'), 'a reload restores the chosen option');
+  assert.ok(!nextBtns[0].classList.contains('selected'), 'and unselects the markup default');
+
+  next.tap('#btn-cpu');
+  next.tap('#btn-start');
+  await next.settle();
+
+  assert.equal(bodyOf(next, '/cpu').roundsTarget, 3, 'the match is the length of the last visit');
+});
+
+test('a stored length the control no longer offers falls back to the default', async () => {
+  // The restore is defensive against its own store the way the arcade read is: a
+  // value written by hand (or left over from a control that offered other
+  // lengths) must not post a length the server has no button for. In the markup
+  // the default is "1 round", so that is what a player who never touches the
+  // toggle gets, stored junk or not.
+  const app = loadApp({ next: SM.next, store: { 'kxp-cpu-length': 2 } });
+  lobby(app, { selected: 1 });
+  await started(app);
 
   app.tap('#btn-cpu');
   app.tap('#btn-start');

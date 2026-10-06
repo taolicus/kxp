@@ -5,9 +5,11 @@ let id = null;
 let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
 let lastMode = 'online'; // online | cpu — mode of the finished match
 // The CPU series length the lobby has selected, and the one the finished match
-// actually played. Both come off the wire rather than from a literal here: the
-// selection is read from the control that offers it, and a rematch repeats what
-// the player just played rather than what the lobby happens to show now.
+// actually played. Nothing here is a literal copy of the rules: the selection is
+// read from the control that offers it -- or, when the player has a saved choice
+// the control still offers (see the wiring below), from storage -- and a rematch
+// repeats what the player just played rather than what the lobby happens to show
+// now.
 let cpuTarget = 0;
 let lastTarget = 0;
 // The floor of the ladder match in progress, and -1 when the match is not a
@@ -221,6 +223,12 @@ function saveStats(s) {
 // client's own state, so nothing here is authoritative: the server judges every
 // round and is told which fighter to send out.
 const ARCADE_KEY = 'kxp-arcade';
+
+// Where the lobby remembers its chosen CPU series length, so a reload is not a
+// change of heart. It holds the number, not a button: a control that no longer
+// offers the stored length must fall back rather than post one nothing on screen
+// matches (see the wiring below).
+const CPU_LENGTH_KEY = 'kxp-cpu-length';
 
 // readArcade returns the saved run, repaired against the current roster. A run
 // with no saved order is a first run, and draws one -- deliberately not at
@@ -1038,16 +1046,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   // The length a CPU match runs for. The numbers are the control's own, so the
   // client posts a choice it was shown rather than a copy of the rules; the
-  // server decides whether it is a length it offers.
+  // server decides whether it is a length it offers. The choice is also
+  // remembered for the next visit, and a remembered choice wins over the markup
+  // default when the control still offers it -- storage that refuses a write
+  // must not stop the match from starting, and a store edited by hand must fall
+  // back rather than post a length no button carries.
   document.querySelectorAll('#cpu-length .seg-btn').forEach((b) => {
     b.addEventListener('click', () => {
       document.querySelectorAll('#cpu-length .seg-btn').forEach((o) => {
         o.classList.toggle('selected', o === b);
       });
       cpuTarget = Number(b.dataset.rounds) || 0;
+      try { localStorage.setItem(CPU_LENGTH_KEY, String(cpuTarget)); } catch (e) {}
     });
   });
   cpuTarget = Number($('#cpu-length .seg-btn.selected').dataset.rounds) || 0;
+  const savedTarget = Number(localStorage.getItem(CPU_LENGTH_KEY));
+  if (savedTarget) {
+    let restored = null;
+    document.querySelectorAll('#cpu-length .seg-btn').forEach((b) => {
+      if (Number(b.dataset.rounds) === savedTarget) restored = b;
+    });
+    if (restored) {
+      document.querySelectorAll('#cpu-length .seg-btn').forEach((o) => {
+        o.classList.toggle('selected', o === restored);
+      });
+      cpuTarget = savedTarget;
+    }
+  }
 
   $('#btn-back').addEventListener('click', () => show('lobby'));
   $('#btn-cancel').addEventListener('click', () => {

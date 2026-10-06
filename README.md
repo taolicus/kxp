@@ -11,7 +11,8 @@ original terminal game.
   and a shared **PUN!** instant.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay, in
   a series you pick in the lobby: one round (a draw is the result), or best of 5
-  (first to 3; a draw replays). A series is scored as pips under each fighter;
+  (first to 3; a draw replays). One round is the default, and the lobby remembers
+  the length you last chose. A series is scored as pips under each fighter;
   one round has no score to keep.
 - **Arcade Mode** — one floor per character in a random order, your own
   character as the final mirror, the same stock bot on every floor. A win climbs a
