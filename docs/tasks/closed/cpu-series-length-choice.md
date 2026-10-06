@@ -29,15 +29,17 @@ Absent is not an error. No `roundsTarget` means the client predates the field �
 an older tab, or a probe — and it gets `defaultSeriesTarget`, because a deploy
 must not be able to stop a returning player starting a match.
 
-## CPU only
+## CPU only, then — both paths now
 
-The lobby control sits under "Play vs CPU" and `/queue` takes no length, because
-a PvP match is still one round: the ready-per-round half of
-[game-mode-architecture](../open/game-mode-architecture.md) has not landed, and
-honouring a series there would park two players in a match neither can leave.
-The online path passes `defaultSeriesTarget` into `makeMatch` unused rather than
-zero, so the day that half lands the default is a series and not a match that
-ends before its first round is judged.
+The lobby control sat under "Play vs CPU" and `/queue` took no length, because
+a PvP match was one round: the ready-per-round half of
+[game-mode-architecture](game-mode-architecture.md) had not landed, and
+honouring a series there would have parked two players in a match neither could
+leave. That half has since landed — the queue pairs equal lengths, re-opens the
+ready handshake between rounds, and forfeits a failed one — so the same control
+now sets the length for both paths, and an absent `/queue` target asks for the
+one round the button always asked for rather than a series. Splitting the
+control into per-mode segments is [game-modes](../open/game-modes.md)'s.
 
 ## A rematch repeats the match, not the lobby
 

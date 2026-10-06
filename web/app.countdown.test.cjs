@@ -416,3 +416,40 @@ test('a client that misses the whole countdown is still told to shoot', () => {
   );
   assert.match(app.count(), /PUN/i, 'and still paints the PUN cue');
 });
+
+test('a forfeit announced between rounds renders on the panel it interrupts', async () => {
+  // The between-rounds gate's forfeit arrives while the player is reading the
+  // previous round's result. Dispatch is the thing under test: as a second
+  // `result` event the machine drops the frame as a duplicate (its self-loop is
+  // closed on purpose, or one round's tally would be applied twice), and the
+  // player would never learn the series was awarded to them.
+  const shootAt = 1700000003000;
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  app.fire('connected', { id: null, now: 1700000000000, online: 0 });
+  app.fire('matched', { opponentName: 'Someone', background: BGS[0], roundsTarget: 3 });
+  app.loadImages();
+  await app.settle();
+  app.fire('countdown', { n: 'READY', shootAt, windowMs: 2000 });
+  app.fire('shoot', { windowMs: 2000, shootAt });
+  app.runUntil(shootAt + 2500);
+  app.fire('result', { outcome: 'draw', mode: 'online', opponentName: 'Someone', seriesOver: false, roundsTarget: 3 });
+  assert.equal(runInContext('state', app.ctx), 'result');
+  assert.match(app.html('#banner'), /Draw/, 'sanity: the panel shows the round that was just drawn');
+
+  app.fire('opponent-left', {
+    outcome: 'win', mode: 'online', seriesOver: true,
+    youRoundWins: 1, oppRoundWins: 0, roundsTarget: 3,
+  });
+  assert.equal(runInContext('state', app.ctx), 'result', 'still on the result panel');
+  assert.match(app.html('#banner'), /Opponent left/, 'and it re-rendered with the award');
+
+  // The timeout form goes to the side that never answered as well, and that
+  // side is told a loss. The note is a claim about the recipient: "you win"
+  // drawn over an outcome of loss would contradict the frame it comes from.
+  app.fire('opponent-left', {
+    outcome: 'loss', mode: 'online', seriesOver: true,
+    youRoundWins: 1, oppRoundWins: 0, roundsTarget: 3,
+  });
+  assert.match(app.html('#banner'), /You lose/, 'the losing side is not told it won');
+});

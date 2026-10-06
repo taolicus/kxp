@@ -10,8 +10,8 @@ Three match lengths and one ladder, and the difference between the first two is
 a rule the server currently infers instead of being told:
 
 - **1-off** — one round, whatever it came to. No pips. A drawn round ends the
-  match and the result offers Play Again. This is today's "one round", and it is
-  every online match.
+  match and the result offers Play Again. This is today's "one round", and it
+  is what a queue post with no length of its own asks for.
 - **first-to-1** — one *decisive* round win; drawn rounds replay until there is
   one. One pip per side.
 - **first-to-3** — first to three decisive rounds, pips, drawn rounds replay.
@@ -48,17 +48,19 @@ for a floor.
   1". Unreachable against a server that honours the floor's request, so this is
   the client-side half of the same invariant rather than a second feature: the
   ladder must not be resettable by an outcome that no longer decides a floor.
-- **Online stays 1-off.** This changes only how the one-round draw rule is
-  chosen; the `!seriesMatch()` term that ends every PvP match after its first
-  round is [game-mode-architecture](game-mode-architecture.md)'s to remove, and
-  neither task waits on the other. That one re-opens the ready handshake per
-  round; this one splits the modes.
+- **Online takes the length the lobby shows.** The `!seriesMatch()` term that
+  used to end every PvP match after its first round was
+  [game-mode-architecture](../closed/game-mode-architecture.md)'s to remove, and
+  that task has landed: the queue pairs equal lengths, re-opens the ready
+  handshake between rounds, and forfeits a failed one. What is left here is the
+  UI split — one control (today's "Vs CPU" caption) still drives both paths,
+  and the modes' own segments are this task's.
 - **first-to-1 shows its pip.** `renderPips`' cutoff is currently `target > 1`,
   and its reason is specific: a one-round match was over before a row could say
   anything. first-to-1 can span rounds now, so an empty pip row is exactly what a
-  drawn round leaves behind — the thing the player needs to see. 1-off and PvP
-  still draw no row, for their own reasons (`drawEnds` says so; `roundsTarget` is
-  absent).
+  drawn round leaves behind — the thing the player needs to see. 1-off still
+  draws no row (`drawEnds` says so), and neither does a match whose
+  `roundsTarget` is absent (a pre-series server, or a bare queue post).
 - **The landed rule of one-round-draw-is-final is narrowed, not reversed.** Its
   argument — one round means one round, and replaying a draw is the series the
   player declined — is what 1-off *is*. What this changes is its scoping
@@ -126,4 +128,4 @@ for a floor.
 The UI pass: the label collision between "1 round" and "First to 1" (they differ
 only in what a draw does), the "Vs CPU:" caption that already misdescribes the
 ladder, and the arcade getting its own length control. Online first-to-n waits on
-[game-mode-architecture](game-mode-architecture.md).
+[game-mode-architecture](../closed/game-mode-architecture.md).

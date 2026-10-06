@@ -85,6 +85,7 @@ Make the system testable and debuggable in production.
 Build on a stable foundation without rewriting the core.
 
 - [Pure game engine](tasks/closed/pure-game-engine.md)
+- [Game mode architecture](tasks/closed/game-mode-architecture.md)
 
 ## Phase 4 — Public features
 

@@ -98,9 +98,10 @@ progress waits for the final result of a floor.
 
 ## Depends on
 
-[game-mode-architecture](../open/game-mode-architecture.md) — a floor is a CPU match, so
-it runs under the mode selector. The CPU half has landed (the series and the
-length choice); the PvP half is irrelevant here and stays open on its own.
+[game-mode-architecture](game-mode-architecture.md) — a floor is a CPU match, so
+it runs under the mode selector. Both halves have landed (the CPU series and the
+length choice, then the online queue taking the same lengths); the mode-selector
+split that follows is [game-modes](../open/game-modes.md)'s.
 
 ## The one server change it needed
 

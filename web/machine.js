@@ -28,7 +28,11 @@
     // followed by the next round's countdown frames. Without it the frame is
     // dropped, the round never starts, and the match hangs on a result screen --
     // so this edge is what makes "first to N" playable at all.
-    result: { matched: 'matched', countdown: 'countdown', 'rematch:online': 'waiting', mode: 'lobby', climb: 'ladder' },
+    // `opponentLeft` is how the between-rounds gate's forfeit arrives, while the
+    // player is still reading the round that pause follows. It stays a distinct
+    // event because the result self-loop must stay closed: a duplicate `result`
+    // is an out-of-order frame, and accepting it would tally the same round twice.
+    result: { matched: 'matched', countdown: 'countdown', opponentLeft: 'result', 'rematch:online': 'waiting', mode: 'lobby', climb: 'ladder' },
     // The tower between arcade floors. `climb` is how the run gets to it from both
     // directions: the result screen hands over after a floor, and the picker's
     // start button does from the lobby -- the picker is not a machine state, so

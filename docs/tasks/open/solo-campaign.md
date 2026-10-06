@@ -14,7 +14,7 @@ Fights run under the mode selector (best-of-5 default; draws replayed).
 
 ## Blocked on
 
-[game-mode-architecture](game-mode-architecture.md) — the mode selector it runs
+[game-mode-architecture](../closed/game-mode-architecture.md) — the mode selector it runs
 under is the series work.
 
 Not blocked on the identity primitive: this persists to `localStorage` like the

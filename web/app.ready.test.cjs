@@ -156,3 +156,70 @@ test('a background that fails to load still acknowledges', async () => {
   app.frame();
   assert.equal(readies(app), 1, 'a failed asset defers nothing');
 });
+
+// --- the between-rounds gate, opened from the result screen ------------------
+
+// A non-final result for an online series: the server has paused for the
+// seriesBreak and is holding the same readiness gate open again. The player is
+// looking at the result panel, not at `matched`, and nothing else will ack for
+// them -- the next countdown cannot arrive until somebody does.
+const NON_FINAL = { mode: 'online', seriesOver: false, roundsTarget: 3, outcome: 'draw' };
+const FINAL = { mode: 'online', seriesOver: true, outcome: 'win', roundsTarget: 3, youRoundWins: 3, oppRoundWins: 1 };
+
+test('a non-final online result re-arms the ack for the next round’s gate', async () => {
+  const app = await matched();
+  app.frame();
+  assert.equal(readies(app), 1, 'the opening gate was acked');
+
+  app.fire('result', NON_FINAL);
+  await app.settle();
+  app.frame();
+  assert.equal(readies(app), 2, 'the between-rounds gate must be acked from the result screen');
+});
+
+test('a final result does not arm the ack', async () => {
+  // The same state -- `result` -- means the gate is open after a non-final
+  // round and closed after the last one, so arming on every result would ask a
+  // finished match to start another round.
+  const app = await matched();
+  app.frame();
+  assert.equal(readies(app), 1);
+
+  app.fire('result', FINAL);
+  await app.settle();
+  app.frame();
+  assert.equal(readies(app), 1, 'a finished match has no gate left to ack');
+  assert.equal(app.pendingFrames(), 0, 'and no frame is owed for one');
+});
+
+test('a queued frame from a superseded arm does not ack a finished match', async () => {
+  // The interleaving the state check alone cannot close: the arm's rAF is
+  // queued behind the background hop when the series ends before it is
+  // presented -- the gate's forfeit is the realistic form, and it lands in the
+  // same `result` state the arm was raised from. `state` says nothing; what
+  // separates the two frames is that stop disarmed the arm.
+  const app = await matched();
+  app.frame();
+  app.fire('result', NON_FINAL);
+  await app.settle();
+  assert.equal(app.pendingFrames(), 1, 'the non-final result owes a frame');
+  app.fire('opponent-left', {
+    outcome: 'win', mode: 'online', seriesOver: true,
+    youRoundWins: 1, oppRoundWins: 0, roundsTarget: 3,
+  });
+  app.frame();
+  assert.equal(readies(app), 1, 'the superseded arm never acknowledges');
+});
+
+test('a non-final CPU result does not arm the ack', async () => {
+  // A bot's rounds never pass through the gate -- its client is the human's
+  // own screen, already up -- so arming here would only send /ready into a
+  // 409 for the whole seriesBreak.
+  const app = await matched();
+  app.frame();
+  app.fire('result', { mode: 'cpu', seriesOver: false, roundsTarget: 3, outcome: 'draw' });
+  await app.settle();
+  app.frame();
+  assert.equal(readies(app), 1, 'no ack for a match the server never gates');
+  assert.equal(app.pendingFrames(), 0, 'and no frame is owed for one');
+});

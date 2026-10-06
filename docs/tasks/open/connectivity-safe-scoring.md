@@ -21,7 +21,7 @@ indistinguishable from a skill result.
 Win/loss stays arrival-time-authoritative (see the anti-cheat constraints in
 [leaderboard](leaderboard.md)); this changes how an *absent* side scores, not how
 a present one is timed. Series mode counts a `void` round as a round win for the
-opposing side — see [game-mode-architecture](game-mode-architecture.md).
+opposing side — see [game-mode-architecture](../closed/game-mode-architecture.md).
 
 ## The rule in full
 

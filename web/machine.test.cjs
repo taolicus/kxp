@@ -66,6 +66,17 @@ test('a series re-enters the countdown from the result state', () => {
   assert.strictEqual(next('countdown', 'shoot'), 'shoot');
 });
 
+test('a forfeit between rounds lands on the result screen it interrupts', () => {
+  // The between-rounds gate's forfeit arrives while the player is sitting on
+  // the previous round's result panel -- the pause the server takes before the
+  // next countdown. Without this edge the frame is dropped as a bad transition
+  // and the player never learns the series was awarded to them. It must be the
+  // `opponentLeft` event and not a second `result`: the result self-loop stays
+  // closed above, because accepting a duplicate result would apply the same
+  // round's tally twice.
+  assert.strictEqual(next('result', 'opponentLeft'), 'result');
+});
+
 test('rematch routing after a result', () => {
   assert.strictEqual(next('result', 'matched'), 'matched');
   assert.strictEqual(next('result', 'rematch:online'), 'waiting');

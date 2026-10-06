@@ -27,7 +27,7 @@ client's own channel, not the engine's view.
 
 The current path is correct and pinned by `finish_test.go`; this is a structural
 refactor of the finish seam, and the Phase 3 work that actually pays off — series
-mode (see [game-mode-architecture](game-mode-architecture.md)) — has to add
+mode (see [game-mode-architecture](../closed/game-mode-architecture.md)) — has to add
 per-round termination *on top of* whatever shape this takes. Do it in that
 order, not before, or it is paid for twice.
 

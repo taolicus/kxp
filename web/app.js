@@ -128,8 +128,14 @@ function showGame() {
 const $ = (sel) => document.querySelector(sel);
 
 let readyTimer = null;
+// True while an arm is live. rAF cannot be cancelled, and `state` alone cannot
+// tell a non-final result (the between-rounds gate is open) from a final one
+// (the match is over) -- both are the `result` state -- so a frame queued by an
+// earlier arm needs a way to find out that stop has superseded it.
+let readyArmed = false;
 
 function stopReadyLoop() {
+  readyArmed = false;
   clearInterval(readyTimer);
   readyTimer = null;
 }
@@ -153,12 +159,19 @@ function sendReady() { post('/ready'); }
 // rendering, acknowledges happily while nobody is looking; nothing client-side
 // can close that gap, because the server only ever sees an ack.
 //
-// The gate is a buffer, not a guarantee, and the cost is a lost round: if the
-// link is too slow to deliver an ack within the server's 8s, it cancels the
-// pending match and sends `state idle`, which drops us back to the lobby with the
-// reason shown.
+// The gate is a buffer, not a guarantee, and the cost is whatever a cancelled
+// handshake costs: if the link is too slow to deliver an ack within the
+// server's 8s at the opening, it cancels the pending match and sends
+// `state idle`, which drops us back to the lobby with the reason shown; the
+// same 8s between rounds of an online series ends the series instead, awarded
+// to whichever side did answer. The ack it waits on is the same one either way.
 function armReadyLoop() {
-  if (state !== 'matched') return;
+  // The span in which the server still accepts an ack: the opening handshake
+  // (`matched`) and, for an online series, the pause between rounds, which the
+  // client sits in as a non-final `result`. Outside that span the gate is
+  // closed and the ack would be a claim about a round that will not run.
+  if (state !== 'matched' && state !== 'result') return;
+  readyArmed = true;
   // Behind bgReady, so the frame we wait for is a frame of the match screen
   // rather than of whatever was on screen while the background downloaded.
   // setBg() runs before this in every handler that reaches it, so bgReady is
@@ -166,13 +179,15 @@ function armReadyLoop() {
   bgReady.then(() => {
     // The match can end while the background is still loading; arming then would
     // ack a match that no longer exists.
-    if (state !== 'matched') return;
+    if (!readyArmed || (state !== 'matched' && state !== 'result')) return;
     const go = () => {
-      if (state !== 'matched' || document.visibilityState === 'hidden') return;
+      if (!readyArmed || (state !== 'matched' && state !== 'result') || document.visibilityState === 'hidden') return;
       sendReady();
-      stopReadyLoop();
+      // Clear without disarming: this arm's own interval is being replaced, and
+      // stop -- the thing that invalidates a pending frame -- is not.
+      clearInterval(readyTimer);
       readyTimer = setInterval(() => {
-        if (state !== 'matched') { stopReadyLoop(); return; }
+        if (!readyArmed || (state !== 'matched' && state !== 'result')) { stopReadyLoop(); return; }
         sendReady();
       }, 2000);
     };
@@ -785,6 +800,8 @@ const enter = {
       stopReadyLoop();
       showGame();
     } else if (from === 'result') {
+      // The gate this round waited on has passed; stop asking.
+      stopReadyLoop();
       // Round two of a series. The match screen, background and opponent slot
       // were established by round one and a countdown frame carries neither, so
       // the rejoin branch below would wipe the opponent back to a generic
@@ -874,6 +891,13 @@ const enter = {
     if (wasFloor >= 0 && d.seriesOver !== false) ladderNext = advanceLadder(d.outcome);
     else if (wasFloor >= 0) ladderNext = null;
     renderResult(d);
+    // The between-rounds gate. An online series pauses after every non-final
+    // round with the same readiness handshake open again, and the next
+    // countdown cannot arrive until this client acks it -- the player is
+    // looking at the result panel, so this arm is the only one that will run.
+    // A bot's series never opens that gate (its side is this screen), so a CPU
+    // result arms nothing rather than posting into 409s all through the pause.
+    if (d.seriesOver === false && d.mode === 'online') armReadyLoop();
   },
 
   // The tower, between arcade floors. Reached from the result screen when the
@@ -916,16 +940,18 @@ function connect() {
     post('/character', { character: loadCharacter() });
     if (d.state === 'waiting') transition('snapshot:waiting', d);
     else if (d.state === 'ingame') {
-      if (d.phase === 'done') {
-        // Match already finished; there is no result to catch up on.
-        transition('snapshot:idle', d);
-      } else if ((d.phase === 'preparing' || d.phase === 'countdown') && d.pending) {
+      if ((d.phase === 'preparing' || d.phase === 'countdown' || d.phase === 'done') && d.pending) {
         // Mid-handshake: the server is still holding the readiness gate open and
         // has told us to re-admit, so come back as `matched`, which re-arms the
         // ack. `preparing` is the server's name for this span; `countdown` is
         // still accepted because a server predating the phase split reports the
-        // same state under the old name.
+        // same state under the old name. `done` with `pending` is the
+        // between-rounds pause of an online series: the round is over, the
+        // match is not, and the gate is what the client must ack to continue.
         transition('snapshot:matched', d);
+      } else if (d.phase === 'done') {
+        // Match already finished; there is no result to catch up on.
+        transition('snapshot:idle', d);
       } else if (d.phase === 'shoot' && d.shootAt && d.windowMs && Date.now() + clockSkew - d.shootAt >= d.windowMs) {
         // PUN window already closed; nothing playable to rejoin.
         report('rejoin-past-window', 'shoot');
@@ -961,7 +987,14 @@ function connect() {
   });
 
   es.addEventListener('opponent-left', (e) => {
-    transition('result', { ...JSON.parse(e.data), note: 'Opponent left \u2014 you win!' });
+    const d = JSON.parse(e.data);
+    // The note is a claim about the recipient. The between-rounds timeout sends
+    // this frame to the side that never answered as well, and "you win" drawn
+    // over an outcome of loss would contradict the frame it comes from. The
+    // distinct event matters too: from the result screen this is a re-decision
+    // of the series, not a duplicate round result, which is the edge
+    // `result`+`opponentLeft` exists for.
+    transition('opponentLeft', d.outcome === 'loss' ? d : { ...d, note: 'Opponent left \u2014 you win!' });
   });
 
   es.addEventListener('state', (e) => {
@@ -1036,7 +1069,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       return;
     }
-    const p = mode === 'online' ? post('/queue') : postCPU(mode);
+    // The length rides the same control the CPU path posts: one server-side
+    // closed set serves both, so the choice is read off the button the player
+    // was shown rather than restated here. Absent would mean one round on the
+    // wire, but the client sends its explicit choice so the match asked for is
+    // the match the control is showing.
+    const p = mode === 'online' ? post('/queue', { roundsTarget: cpuTarget }) : postCPU(mode);
     Promise.resolve(p).then((res) => {
       if (res && res.ok) return;
       btn.disabled = false;
@@ -1118,7 +1156,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     } else {
       transition('rematch:online');
-      post('/queue');
+      // The match that just ended, not the lobby's current selection -- the same
+      // rule the CPU branch follows above, with the same fallback for a result
+      // that reported no target (a one-round match omits it, as an older server
+      // would).
+      post('/queue', { roundsTarget: lastTarget || cpuTarget });
     }
   });
   $('#btn-mode').addEventListener('click', () => {

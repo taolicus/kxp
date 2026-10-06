@@ -12,7 +12,7 @@ tournaments.
 
 ## Blocked on
 
-- [game-mode-architecture](game-mode-architecture.md) — a bracket is a tree of
+- [game-mode-architecture](../closed/game-mode-architecture.md) — a bracket is a tree of
   series, so it cannot exist before series mode does.
 - [player-identity](../../issues/player-identity.md) — entrants have to persist
   across matches, which is what the identity model decides.

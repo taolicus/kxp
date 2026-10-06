@@ -7,8 +7,10 @@ original terminal game.
 ## Features
 
 - **Single-binary web app** — the UI is embedded in the executable.
-- **Play Online** — matchmaking pairs you with another player, synced countdown
-  and a shared **PUN!** instant.
+- **Play Online** — matchmaking pairs you with another player at the length the
+  lobby's control is showing: one round, or first to 3 with the score kept as
+  pips under each fighter and the ready handshake re-opened between rounds.
+  Synced countdown and a shared **PUN!** instant either way.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay, in
   a series you pick in the lobby: one round (a draw is the result), or best of 5
   (first to 3; a draw replays). One round is the default, and the lobby remembers

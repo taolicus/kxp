@@ -22,10 +22,13 @@ round should not have been a way to lose that.
 
 The rule landed as `m.roundsTarget <= 1 && res[0] == ResultDraw`, with no mode
 test: it is a statement about how many rounds the match has, not about who is
-playing, and a PvP match is already ended by `!m.seriesMatch()` on the line
-above. Gating the original on the CPU would have been a second thing to get wrong
-when the PvP half of
-[game-mode-architecture](../open/game-mode-architecture.md) lands.
+playing, and at the time every PvP match was already ended by `!m.seriesMatch()`
+on the line above, so only a CPU one-round match could reach it. Gating the
+original on the CPU would have been a second thing to get wrong when the PvP half
+of [game-mode-architecture](game-mode-architecture.md) landed — and it has
+landed, without the gating ever being needed: `seriesMatch()` now means "a bot
+opponent or a multi-round match", and the line above this rule has since been
+replaced by the `drawEnds` field described next.
 
 It became a field when the arcade ladder needed the opposite reading at the same
 length. `judge()` now ends the match on a draw when `m.drawEnds` is true;

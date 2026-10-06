@@ -50,6 +50,7 @@ test('a snapshot routes to the state that matches where the server thinks we are
   const cases = [
     ['queued, so back to the queue', { state: 'waiting' }, 'snapshot:waiting'],
     ['match already over, nothing to catch up', { state: 'ingame', phase: 'done' }, 'snapshot:idle'],
+    ['between rounds with the gate open, re-admit and re-arm', { state: 'ingame', phase: 'done', pending: true }, 'snapshot:matched'],
     ['handshake still open, re-arm the ack', { state: 'ingame', phase: 'countdown', pending: true }, 'snapshot:matched'],
     ['handshake already settled, resume the count', { state: 'ingame', phase: 'countdown', pending: false }, 'snapshot:countdown'],
     ['PUN window still open', { state: 'ingame', phase: 'shoot', ...OPEN }, 'snapshot:shoot'],

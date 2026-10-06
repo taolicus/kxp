@@ -8,7 +8,7 @@ gated-on: []
 
 A match can be a sequence of rounds — first to `N` decisive wins, a drawn round
 replayed, a `void` round counting as a round win for the opposing side (the
-[connectivity-safe-scoring](connectivity-safe-scoring.md) rule) — and for CPU
+[connectivity-safe-scoring](../open/connectivity-safe-scoring.md) rule) — and for CPU
 matches it already is: `run()` loops `playRound()` until `judge()` says the
 series is over, and `result` carries `round`, `youRoundWins`, `oppRoundWins`,
 `roundsTarget`, `seriesOver`, which is what lets the client scoreboard re-enter
@@ -48,7 +48,7 @@ Builds on the Protocol rework Task A schedule, which shipped first.
   Rejected: a new endpoint or event for queueing with a length (the wire is
   additive or it is wrong); `roundsTarget: 0` as "one round" (collides with
   absent-means-default, already rejected in
-  [game-modes](game-modes.md)).
+  [game-modes](../open/game-modes.md)).
 
 - **Pairing is equal-mode only: `tryMatch` scans the FIFO for the first entry
   whose (target, `drawEnds`) matches, so no player's selection is ever
@@ -210,7 +210,7 @@ Builds on the Protocol rework Task A schedule, which shipped first.
   timeouts to an ordinary final result. The client re-arm is mode-gated, so
   adopting it later is one server condition, not a client change.
 - **Records and leaderboards** — the remaining half of
-  [connectivity-safe-scoring](connectivity-safe-scoring.md), gated on identity
+  [connectivity-safe-scoring](../open/connectivity-safe-scoring.md), gated on identity
   in a later phase; the queue and series mechanics do not read records.
 - **Pairing beyond equal-mode** — ordering or fairness policies across modes
   (priority, rotation) have no requirements yet.

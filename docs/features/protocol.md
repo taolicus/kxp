@@ -407,7 +407,7 @@ that are purely client-generated are marked with `*`.
 | `countdown` | `countdown`→`countdown`, `matched`→`countdown`, `shoot`→`shoot`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
 | `shoot` | `move*`→`locked`, `lock*`→`locked`, `reject*`→`locked`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
 | `locked` | `move*`→`locked`, `reject*`→`locked`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
-| `result` | `matched`→`matched`, `countdown`→`countdown`, `climb*`→`ladder`, `rematch:online*`→`waiting`, `mode*`→`lobby` |
+| `result` | `matched`→`matched`, `countdown`→`countdown`, `opponentLeft`→`result`, `climb*`→`ladder`, `rematch:online*`→`waiting`, `mode*`→`lobby` |
 | `ladder` | `matched`→`matched`, `mode*`→`lobby` |
 
 Snapshot events are total: from any state, `snapshot:idle`→`lobby`,

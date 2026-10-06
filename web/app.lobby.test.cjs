@@ -149,11 +149,14 @@ test('a rematch repeats the length just played, not the one on screen', async ()
   assert.equal(bodyOf(app, '/cpu').roundsTarget, 1);
 });
 
-test('an online match is not started with a series length', async () => {
-  // The pin against over-correction. A PvP match is one round, and it is paired
-  // by the queue -- asking for a length there would be a field the server has to
-  // ignore, and one a future ready-per-round change could start honouring in the
-  // wrong place.
+test('the length the lobby is showing rides the queue, not just /cpu', async () => {
+  // Flipped from its old form ("an online match is not started with a series
+  // length"), whose comment anticipated this very change: the field used to be
+  // one the server had to ignore, and a ready-per-round change could start
+  // honouring it in the wrong place. The server now honours it in the right
+  // place — equal-length pairing — so the control's choice is what the queue
+  // is asked for. The default case first: the client's own default, not the
+  // markup's, and an explicit field rather than the absent-means-one fallback.
   const app = loadApp({ next: SM.next });
   lobby(app);
   await started(app);
@@ -162,5 +165,41 @@ test('an online match is not started with a series length', async () => {
   app.tap('#btn-start');
   await app.settle();
 
-  assert.equal(bodyOf(app, '/queue').roundsTarget, undefined);
+  assert.equal(bodyOf(app, '/queue').roundsTarget, 1, 'the default length is sent, not omitted');
+});
+
+test('choosing first-to-3 online is what the queue is asked for', async () => {
+  const app = loadApp({ next: SM.next });
+  const btns = lobby(app);
+  await started(app);
+
+  btns[1].handlers.click();
+  app.tap('#btn-online');
+  app.tap('#btn-start');
+  await app.settle();
+
+  assert.equal(bodyOf(app, '/queue').roundsTarget, 3, 'the picked length is the match the queue pairs');
+});
+
+test('an online rematch queues at the length just played', async () => {
+  // The same rule the CPU branch already follows: "Play Again" means the match
+  // that just ended, read off the result frame rather than off the lobby's
+  // current selection — with the same older-server fallback for a result that
+  // reported no target.
+  const app = loadApp({ next: SM.next });
+  lobby(app);
+  await started(app);
+
+  app.tap('#btn-online');
+  app.tap('#btn-start');
+  await app.settle();
+  app.fire('matched', { opponentName: 'Opponent', roundsTarget: 3 });
+  app.fire('result', {
+    mode: 'online', seriesOver: true, outcome: 'win',
+    roundsTarget: 3, youRoundWins: 3, oppRoundWins: 1,
+  });
+  app.tap('#btn-again');
+  await app.settle();
+
+  assert.equal(bodyOf(app, '/queue').roundsTarget, 3, 'the rematch repeats the series just played');
 });
