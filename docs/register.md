@@ -100,13 +100,14 @@ Urgency is therefore a per-session judgement made from current state, and the
 fields that survive are the ones that change when their subject changes.
 `depends-on` and `gated-on` are the live signal: the useful question is which tasks
 have no unmet dependency and no gate, and it is answerable without a rank.
-[latency-profile-visibility](tasks/open/latency-profile-visibility.md) is the only
-gated task, waiting on two unconfirmed issues — which is a fact about the world,
-whereas "priority 11" would only have been a fact about a list.
+[latency-profile-visibility](tasks/open/latency-profile-visibility.md) waits on two
+unconfirmed issues — a fact about the world, whereas "priority 11" would only have
+been a fact about a list.
 
 There is deliberately no index file for the open tasks either. It would be a
 second copy of the frontmatter, and a second copy is the one thing in this tree
-that can silently drift. Eighteen titles is a screen; print them or read them.
+that can silently drift. The titles are a screen's worth; print them or read
+them.
 
 ## How an entry graduates
 
