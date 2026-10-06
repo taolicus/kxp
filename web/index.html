@@ -36,7 +36,10 @@
          is the other half of docs/tasks/open/game-mode-architecture.md. -->
     <div id="cpu-length" class="seg" role="group" aria-label="CPU match length">
       <span class="seg-label">Vs CPU:</span>
-      <button class="seg-btn selected" data-rounds="1">1 round</button>
+      <!-- Neither option is marked selected: the client decides, once the lobby
+           is framed, so a saved choice is shown from the first paint instead of
+           the default flashing and then being swapped out. -->
+      <button class="seg-btn" data-rounds="1">1 round</button>
       <button class="seg-btn" data-rounds="3">First to 3</button>
     </div>
   </section>

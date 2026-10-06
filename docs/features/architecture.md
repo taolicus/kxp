@@ -111,11 +111,14 @@ decision that belongs with the series loop, not beside it.
 **The lobby's default is one round, and its choice is remembered.** A player who
 never touches the toggle gets one round, and a player who picked first-to-three
 and comes back after a reload finds it still picked — the length is stored under
-its own `localStorage` key (`kxp-cpu-length`) and read back as untrusted input
-the way `kxp-arcade` is: only a choice the control still offers is honoured, and
-anything else — a value edited by hand, or one left over from a control that
-offered other lengths — falls back to the markup default rather than posting a
-length no button carries.
+its own `localStorage` key (`kxp-cpu-length`). Nothing is marked selected in the
+markup for that control: the selection is decided once the roster that frames
+the lobby has arrived, so a saved choice is the one lit from the first paint
+rather than arriving as a flash of the default that swaps out. The stored value
+is read back as untrusted input the way `kxp-arcade` is: only a choice the
+control still offers is honoured, and anything else — a value edited by hand, or
+one left over from a control that offered other lengths — falls back to the
+control's first option rather than posting a length no button carries.
 
 **A match the client asked to end on a draw is over whatever that round was.** A
 draw is worth nothing to either side and replays — but replaying it means playing

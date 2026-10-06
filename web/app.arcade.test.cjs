@@ -48,17 +48,20 @@ const saved = (app) => app.saved('kxp-arcade');
 
 // The series-length toggle is a NodeList the harness does not read from markup,
 // and it is wired from that list. Which lengths exist is the lobby's business
-// (app.lobby.test.cjs pins that); all a ladder test needs is *a* length wired, so
-// the floor is fought for real rather than with an unwired 0.
+// (app.lobby.test.cjs pins that); all a ladder test needs is *a* length wired,
+// so the floor is fought for real rather than with an unwired 0. No button is
+// seeded selected -- the markup paints none, and the client decides -- so the
+// length is seeded through the very localStorage key the player's own choice
+// writes (`kxp-cpu-length`), which is the restore path the toggle's wiring
+// honours: nothing here re-types the decision the client owns twice.
 function lengthToggle(app, selected = 3) {
   const btns = [1, 3].map((rounds) => {
     const b = stubElement();
     b.dataset.rounds = String(rounds);
-    if (rounds === selected) b.classList.add('selected');
     return b;
   });
   app.seed('#cpu-length .seg-btn', btns);
-  app.seed('#cpu-length .seg-btn.selected', btns.find((b) => b.dataset.rounds === String(selected)));
+  app.setStored('kxp-cpu-length', selected);
 }
 
 // The screens `show()` toggles, which the harness cannot model from markup it does

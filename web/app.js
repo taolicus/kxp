@@ -1046,29 +1046,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   // The length a CPU match runs for. The numbers are the control's own, so the
   // client posts a choice it was shown rather than a copy of the rules; the
-  // server decides whether it is a length it offers. The choice is also
-  // remembered for the next visit, and a remembered choice wins over the markup
-  // default when the control still offers it -- storage that refuses a write
-  // must not stop the match from starting, and a store edited by hand must fall
-  // back rather than post a length no button carries.
-  document.querySelectorAll('#cpu-length .seg-btn').forEach((b) => {
+  // server decides whether it is a length it offers. No option is marked
+  // selected in the markup: the choice is made here, once the roster that
+  // frames the lobby has arrived, because an option painted in markup would
+  // flash in the first paint and then swap to whatever the player saved.
+  const lengthBtns = document.querySelectorAll('#cpu-length .seg-btn');
+  lengthBtns.forEach((b) => {
     b.addEventListener('click', () => {
-      document.querySelectorAll('#cpu-length .seg-btn').forEach((o) => {
+      lengthBtns.forEach((o) => {
         o.classList.toggle('selected', o === b);
       });
       cpuTarget = Number(b.dataset.rounds) || 0;
       try { localStorage.setItem(CPU_LENGTH_KEY, String(cpuTarget)); } catch (e) {}
     });
   });
-  cpuTarget = Number($('#cpu-length .seg-btn.selected').dataset.rounds) || 0;
+  // The default is the control's first option (today "1 round"), decided here
+  // rather than claimed by the markup. A saved choice overrides it when the
+  // control still offers that one; storage that refuses a write must not stop
+  // the match from starting, and a store edited by hand falls back rather than
+  // posting a length no button carries.
+  const firstLength = lengthBtns[0];
+  if (firstLength) {
+    firstLength.classList.add('selected');
+    cpuTarget = Number(firstLength.dataset.rounds) || 0;
+  }
   const savedTarget = Number(localStorage.getItem(CPU_LENGTH_KEY));
   if (savedTarget) {
     let restored = null;
-    document.querySelectorAll('#cpu-length .seg-btn').forEach((b) => {
+    lengthBtns.forEach((b) => {
       if (Number(b.dataset.rounds) === savedTarget) restored = b;
     });
     if (restored) {
-      document.querySelectorAll('#cpu-length .seg-btn').forEach((o) => {
+      lengthBtns.forEach((o) => {
         o.classList.toggle('selected', o === restored);
       });
       cpuTarget = savedTarget;
