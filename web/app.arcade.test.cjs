@@ -424,7 +424,7 @@ test('clearing the mirror completes the ladder, and the next request draws a new
 
   assert.strictEqual(saved(app).cleared, true, 'the run says it is complete');
   assert.strictEqual(saved(app).best, ROSTER.length, 'with every floor counted');
-  assert.strictEqual(ladderLabel(app), 'New Ladder');
+  assert.strictEqual(ladderLabel(app), 'New Arcade Mode');
 
   // A cleared run must still be startable -- the player has just beaten the whole
   // ladder and the button cannot dead-end them.
@@ -448,8 +448,8 @@ test('a cleared ladder says so in the lobby, and the entry starts a new one', as
 
   // Back to the lobby the only way a player can: the Change mode button.
   await app.tap('#btn-mode');
-  assert.match(text(app, '#ladder-info'), /Ladder complete/, 'the lobby reports the completed run');
-  assert.strictEqual(app.el('#btn-ladder').textContent, 'New Ladder', 'and the entry says what it does');
+  assert.match(text(app, '#ladder-info'), /Arcade complete/, 'the lobby reports the completed run');
+  assert.strictEqual(app.el('#btn-ladder').textContent, 'New Arcade Mode', 'and the entry says what it does');
 
   await app.tap('#btn-ladder');
   await app.tap('#btn-start');
@@ -622,8 +622,8 @@ test('a completed ladder stands at the top, and its fight draws the next one', a
   const doneOrder = saved(app).order;
   await wonFloor(app);
 
-  assert.strictEqual(text(app, '#ladder-title'), 'Ladder complete');
-  assert.strictEqual(text(app, '#ladder-fight'), 'New Ladder');
+  assert.strictEqual(text(app, '#ladder-title'), 'Arcade complete');
+  assert.strictEqual(text(app, '#ladder-fight'), 'New Arcade Mode');
   const stood = towerRows(app).find((r) => r.here);
   assert.strictEqual(stood.floor, ROSTER.length - 1, 'the player is left on the mirror they beat');
   assert.strictEqual(stood.hop, '', 'with nowhere further to climb');

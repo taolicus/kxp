@@ -13,7 +13,7 @@ original terminal game.
   a series you pick in the lobby: one round (a draw is the result), or best of 5
   (first to 3; a draw replays). A series is scored as pips under each fighter;
   one round has no score to keep.
-- **Arcade Ladder** — one floor per character in a random order, your own
+- **Arcade Mode** — one floor per character in a random order, your own
   character as the final mirror, the same stock bot on every floor. A win climbs a
   floor, a loss sends you back to the bottom, and progress is remembered in this
   browser (`localStorage`). Between floors you get the tower: the whole order
@@ -43,7 +43,7 @@ Then open `http://localhost:<port>`.
 
 1. Open the app in two browser tabs (one per player) and hit **Play Online** in
    both to face each other, hit **Play vs CPU** for a solo match, or hit **Arcade
-   Ladder** to climb the roster one floor at a time.
+   Mode** to climb the roster one floor at a time.
 2. When a match is found, the round waits for you. **Both sides do** — keep the
    app in the foreground and a round never fires at someone who wasn't looking at
    the screen.

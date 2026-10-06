@@ -216,7 +216,7 @@ Clearing the mirror is a **state**, not a position. The run records `cleared`
 rather than leaving the floor wrapping to zero, because a run sitting on floor one
 is a run in progress, and the lobby would invite the player to resume a ladder they
 had already beaten. A cleared run draws a new order on the next request — the one
-redraw in the code, shared by the result screen's "New Ladder" and the lobby's
+redraw in the code, shared by the result screen's "New Arcade Mode" and the lobby's
 entry, so neither can leave a player with nothing to do. The high-water mark
 survives it, being a count.
 

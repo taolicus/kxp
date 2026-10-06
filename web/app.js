@@ -354,7 +354,7 @@ function setLadderInfo() {
     // A cleared ladder has nothing to resume, so the entry says it will draw a new
     // one. Leaving the label alone would have the player pick a fighter and be told
     // there is nothing to fight.
-    btn.textContent = a.cleared ? 'New Ladder' : 'Arcade Ladder';
+    btn.textContent = a.cleared ? 'New Arcade Mode' : 'Arcade Mode';
   }
   // Hidden rather than empty: an empty paragraph still carries its margin, which
   // would be a gap above the buttons for the moment before the roster arrives.
@@ -365,9 +365,9 @@ function setLadderInfo() {
   }
   el.classList.remove('hidden');
   const c = a.cleared ? null : characterByID(a.order[a.floor]);
-  const at = a.cleared ? 'Ladder complete'
+  const at = a.cleared ? 'Arcade complete'
     : `Floor ${a.floor + 1} of ${a.order.length}${c ? ` \u00b7 ${c.name}` : ''}`;
-  el.textContent = a.best > 0 ? `Arcade Ladder \u00b7 ${at} \u00b7 Best ${a.best}` : `Arcade Ladder \u00b7 ${at}`;
+  el.textContent = a.best > 0 ? `Arcade Mode \u00b7 ${at} \u00b7 Best ${a.best}` : `Arcade Mode \u00b7 ${at}`;
 }
 
 // The tower: the run drawn as the ladder it is. One row per floor, in the order
@@ -403,10 +403,10 @@ function showTower() {
     return `<div role="listitem" class="floor${i < pos ? ' cleared' : ''}${i === pos ? ' here' : ''}" data-floor="${i}"><span class="floor-no">${i + 1}</span><span class="floor-foe">${foe}</span>${meRow}</div>`;
   }).join('');
   $('#ladder-title').textContent = a.cleared
-    ? 'Ladder complete'
+    ? 'Arcade complete'
     : `Floor ${pos + 1} of ${a.order.length}`;
   const btn = $('#ladder-fight');
-  btn.textContent = a.cleared ? 'New Ladder' : `Fight Floor ${pos + 1}`;
+  btn.textContent = a.cleared ? 'New Arcade Mode' : `Fight Floor ${pos + 1}`;
   // Armed on every render: the button disarms itself while its request is in
   // flight, and the next floor arrives by showing the tower again, so nothing
   // else would put it back.
@@ -587,7 +587,7 @@ function renderResult(d) {
     // because it is not the same match: it is a different fighter, and the button
     // saying otherwise would be the one piece of the ladder a player never sees.
     if (ladderNext) {
-      $('#btn-again').textContent = ladderNext === 'done' ? 'New Ladder'
+      $('#btn-again').textContent = ladderNext === 'done' ? 'New Arcade Mode'
         : ladderNext === 'retry' ? 'Back to Floor 1' : 'Next Floor';
     }
     $('#btn-mode').classList.remove('hidden');
@@ -646,7 +646,7 @@ function postCPU(mode, { roundsTarget = cpuTarget } = {}) {
   }
   // A cleared run -- or a stored position past the end of the order, which the
   // clamp cannot produce but a hand-edited store can -- starts a new ladder. This is
-  // the only redraw, so both the result screen's "New Ladder" and the lobby's entry
+  // the only redraw, so both the result screen's "New Arcade Mode" and the lobby's entry
   // go through it, and neither can leave a player with nothing to do.
   const a = readArcade();
   if (a.cleared || a.floor >= a.order.length) {
