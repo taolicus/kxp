@@ -91,11 +91,18 @@ async function started(app) {
   return v;
 }
 
-// Pick a fighter, start a match, and leave the request recorded.
+// Pick a fighter and start a match, leaving the request recorded. For a ladder
+// that is two edges, not one: the picker's start button opens the tower -- the
+// mode's first screen is the run, not the match -- and the tower's Fight button
+// posts the floor.
 async function fight(app, mode = 'ladder') {
   await app.tap(`#btn-${mode}`);
   await app.tap('#btn-start');
   await app.settle();
+  if (mode === 'ladder') {
+    await app.tap('#ladder-fight');
+    await app.settle();
+  }
 }
 
 test('a ladder is the roster shuffled, with the player last, and floor one names its fighter', async () => {
@@ -229,6 +236,33 @@ test('the ladder is not offered before the roster arrives', async () => {
   assert.strictEqual(app.el('#ladder-info').classList.contains('hidden'), true,
     'and takes no space while it has nothing to say');
   assert.strictEqual(app.el('#btn-ladder').disabled, true, 'the button waits for a roster');
+});
+
+test('the Arcade Mode entry opens on the tower, saving the run before anything is fought', async () => {
+  // The mode's first screen is the run, not floor one's match: choosing the mode
+  // shows the tower, and the first floor starts from its Fight button. That is
+  // also where a first run becomes real -- the tower draws an order the picker's
+  // fighter decided, and it must already be in storage when the Fight button
+  // posts, or the request would draw a second ladder under the player.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  const view = await started(app);
+  await app.tap('#btn-ladder');
+  await app.tap('#btn-start');
+  await app.settle();
+
+  assert.strictEqual(showing(view.ladder), true, 'the tower is the first screen of the mode');
+  assert.strictEqual(showing(view.lobby), false, 'and the lobby is not');
+  assert.strictEqual(cpuRequests(app), 0, 'nothing has been asked for yet');
+  assert.ok(saved(app), 'the run the tower shows is in storage before the fight');
+  assert.deepStrictEqual([...saved(app).order].sort(), [...IDS].sort(),
+    'and its order is a real draw, not the roster order');
+  assert.strictEqual(towerRows(app)[0].foe, fighter(saved(app).order[0]),
+    'the tower draws the stored floor, not a second draw of its own');
+
+  await app.tap('#ladder-fight');
+  await app.settle();
+  assert.strictEqual(askedFor(app).opponentCharacter, saved(app).order[0],
+    'and the first floor is the one the tower showed');
 });
 
 test('an unreadable saved run is treated as a first run', async () => {
@@ -439,7 +473,7 @@ test('clearing the mirror completes the ladder, and the next request draws a new
   assert.notDeepStrictEqual(fresh.order, doneOrder, 'and the order was redrawn');
 });
 
-test('a cleared ladder says so in the lobby, and the entry starts a new one', async () => {
+test('a cleared arcade says so in the lobby, and the entry shows it before its restart', async () => {
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
   await started(app);
   await climbTo(app, ROSTER.length - 1);
@@ -454,8 +488,17 @@ test('a cleared ladder says so in the lobby, and the entry starts a new one', as
   await app.tap('#btn-ladder');
   await app.tap('#btn-start');
   await app.settle();
-  assert.strictEqual(saved(app).floor, 0);
+  // The entry only shows the run: a completed ladder enters completed -- its
+  // restart is not hers -- so the redraw still belongs to the request.
+  assert.strictEqual(saved(app).cleared, true, 'a completed run enters completed');
+  assert.strictEqual(text(app, '#ladder-title'), 'Arcade complete');
+
+  await app.tap('#ladder-fight');
+  await app.settle();
+  assert.strictEqual(saved(app).floor, 0, 'the Fight button draws the next run');
   assert.strictEqual(saved(app).cleared, false);
+  assert.strictEqual(askedFor(app).opponentCharacter, saved(app).order[0],
+    'and fights its first floor');
 });
 
 test('a plain CPU match is still offered as the same match again', async () => {

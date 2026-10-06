@@ -231,12 +231,14 @@ Server-side persistence is deferred to
 means two browsers each climb their own, which is the visible consequence of that
 debt and the reason it is recorded rather than forgotten.
 
-### The tower is a screen between floors, not a decoration on the result
+### The tower is the run's own screen, not a decoration on the result
 
-A won floor does not drop straight into the next match. The result screen hands
-over to the tower — the whole order, floor one at the bottom, the player standing
-on the floor the run moved to, beside the fighter that floor holds — and the fight
-is started from there. Three decisions are in that:
+A won floor does not drop straight into the next match, and a run does not start
+in one either. After a floor the result screen hands over to the tower, and when
+the mode is entered the lobby does — the whole order, floor one at the bottom,
+the player standing on the floor the run moved to, beside the fighter that floor
+holds, with the fight started from the tower's own button. Three decisions are in
+that:
 
 - **The climb waits for the player.** Auto-advancing after the animation was
   considered and rejected: it puts a match on screen underneath the one moment the
@@ -256,20 +258,26 @@ is started from there. Three decisions are in that:
 A cleared run stands at the **top** of the tower. Its floor is reset to zero so the
 lobby would not offer a beaten ladder as a run in progress, and the tower is the one
 place that reset is not what happened — drawing it as "back at the bottom" would end
-the run the player just won by dumping them at its first floor. The new order is
-still drawn by the request, not by the view: redrawing on the way in would show an
-order that had never been saved, and a reload mid-tower would then fight a different
-ladder from the one on screen.
+the run the player just won by dumping them at its first floor.
 
-The tower is reached only from a decided floor, which makes it the one screen that
-lives entirely *after* a match. That is why the server's trailing `state idle` is
-ignored there rather than routed to the lobby like everywhere else, and why the
-machine gives `ladder` no `stateIdle` edge to take — the frame that arrives is the
-previous match's teardown, and honouring it would put a player standing on their own
-ladder back in the menu with the climb half played. Both are pinned in
-`app.arcade.test.cjs`, along with the screen itself: the rows in ladder order, the
-climb up after a win, the drop back down after a loss, the completed run at the top,
-a second visit finding its button armed, and the leave that returns to a lobby
+What a screen shows is saved before it is drawn. A first run draws its order on the
+way in — only then, because the draw depends on the fighter the picker just chose —
+and is stored in the same move, so a reload mid-tower resumes the same ladder
+rather than a new one. A *cleared* run is the exception that explains the rule: it
+enters as the completed run, and the fresh order for its restart is drawn by the
+request, which keeps the one redraw in one place and leaves a reload mid-tower on
+the ladder it shows.
+
+The tower is entered from the result screen after a decided floor and from the
+lobby when the mode begins — so on one side a match has just ended and on the other
+none has started, and in neither case is there a live match to reconcile. That is
+why the server's trailing `state idle` is ignored there rather than routed to the
+lobby like everywhere else, and why the machine gives `ladder` no `stateIdle` edge
+to take: honouring it would put a player standing on their own ladder back in the
+menu with the climb half played. All of it is pinned in `app.arcade.test.cjs` — the
+entry drawing and saving the run it shows, the rows in ladder order, the climb up
+after a win, the drop back down after a loss, the completed run at the top, a
+second visit finding its button armed, and the leave that returns to a lobby
 resuming the same floor.
 
 ## Matchmaking

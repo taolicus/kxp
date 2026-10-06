@@ -856,16 +856,25 @@ const enter = {
     renderResult(d);
   },
 
-  // The tower, between ladder floors. Reached from the result screen when the
-  // player asks for what comes next, so the climb happens on a screen they are
-  // looking at rather than over a result they are still reading.
+  // The tower, between arcade floors. Reached from the result screen when the
+  // player asks for what comes next -- the climb happens on a screen they are
+  // looking at rather than over a result they are still reading -- and from the
+  // picker's start button, so the mode's first screen is the run itself.
   ladder() {
     stopReadyLoop();
     clearTimeout(stallTimer);
     // A roster that emptied between the match and this frame -- a deploy, a
     // roster written down to nothing -- leaves no floors to draw and no fighter
     // to send out. The lobby is where the mode lives either way.
-    if (!readArcade().order.length) { transition('mode'); return; }
+    const a = readArcade();
+    if (!a.order.length) { transition('mode'); return; }
+    // Save the run before it is shown. A first run's order is drawn by
+    // readArcade -- only after the picker, because the draw depends on the fighter
+    // picked there -- and a match is otherwise the first thing to make it durable.
+    // That is safe from the result screen, where the fight just saved the order,
+    // but not from the lobby: showing a draw storage has never heard of would let
+    // the Fight button draw a different ladder under the player.
+    saveArcade(a);
     showTower();
   },
 };
@@ -996,6 +1005,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     pendingMode = '';
     btn.disabled = true;
     if (mode === 'online') transition('queue');
+    if (mode === 'ladder') {
+      // The mode's first screen is the tower: the run it would resume is already
+      // rendered there, and its Fight button starts the floor. No request is made
+      // from the picker, so nothing is re-armed on success -- the view is left
+      // behind -- but a refused route must not deaden the button.
+      if (!transition('climb')) {
+        btn.disabled = false;
+        pendingMode = mode;
+      }
+      return;
+    }
     const p = mode === 'online' ? post('/queue') : postCPU(mode);
     Promise.resolve(p).then((res) => {
       if (res && res.ok) return;
@@ -1071,9 +1091,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!res || !res.ok) btn.disabled = false;
     });
   });
-  // Leaving mid-ladder. The tower is only reachable from a decided floor, so
-  // without this the one place the whole run is drawn would be the one screen a
-  // player could not back out of.
+  // Leaving mid-run. The tower draws the whole run, so without this the one
+  // screen that shows all of it would be the one a player could not back out of.
   $('#ladder-leave').addEventListener('click', () => transition('mode'));
 
   document.querySelectorAll('.move').forEach((b) => {

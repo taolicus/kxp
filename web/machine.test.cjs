@@ -75,23 +75,26 @@ test('rematch routing after a result', () => {
   assert.strictEqual(next('countdown', 'matched'), 'countdown');
 });
 
-test('the tower is entered from the result screen and fought back out of it', () => {
-  // The screen between ladder floors: the result hands over to it, and the fight
-  // it starts comes back as a `matched` frame. That second edge is load-bearing —
-  // drop it and the match starts while the client is still on the tower, which then
-  // drops the frame as out-of-order and the player watches a countdown that belongs
-  // to somebody else.
+test('the tower is entered from the result screen and from the picker, and fought back out of it', () => {
+  // The screen between ladder floors: the result hands over to it after a floor,
+  // and the lobby does from the picker's start button (the picker is not a state,
+  // so the machine is still in `lobby` there). The fight it starts comes back as
+  // a `matched` frame -- that edge is load-bearing: drop it and the match starts
+  // while the client is still on the tower, which then drops the frame as
+  // out-of-order and the player watches a countdown that belongs to somebody else.
   assert.strictEqual(next('result', 'climb'), 'ladder');
+  assert.strictEqual(next('lobby', 'climb'), 'ladder');
   assert.strictEqual(next('ladder', 'matched'), 'matched');
   assert.strictEqual(next('ladder', 'mode'), 'lobby');
-  // Not from anywhere else: the tower is the ladder's, and a lobby or a countdown
+  // Not from anywhere else: the tower is the run's, and a countdown or a shoot
   // reaching it would mean a screen a player never asked for.
-  assert.strictEqual(next('lobby', 'climb'), null);
   assert.strictEqual(next('countdown', 'climb'), null);
+  assert.strictEqual(next('shoot', 'climb'), null);
   assert.strictEqual(next('ladder', 'result'), null);
   // No `stateIdle`: like `result`, the match is already decided by the time this
-  // is reachable, so the server's trailing teardown frame is expected here and
-  // routing it to the lobby would walk the player off their own ladder.
+  // is reachable -- and before a floor it has not started -- so a trailing
+  // teardown frame has nothing to reconcile either way in, and routing it to the
+  // lobby would walk the player off their own tower.
   assert.strictEqual(next('ladder', 'stateIdle'), null);
 });
 

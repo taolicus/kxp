@@ -16,9 +16,10 @@ original terminal game.
 - **Arcade Mode** — one floor per character in a random order, your own
   character as the final mirror, the same stock bot on every floor. A win climbs a
   floor, a loss sends you back to the bottom, and progress is remembered in this
-  browser (`localStorage`). Between floors you get the tower: the whole order
-  drawn bottom-up with your fighter standing on the floor you have reached, beside
-  the one you are about to fight, climbing into place.
+  browser (`localStorage`). The mode opens on the tower and each floor starts from
+  its Fight button: the whole order drawn bottom-up with your fighter standing on
+  the floor you have reached, beside the one you are about to fight — after a win,
+  climbing into place.
 - **Timing rules** — picks outside the shoot window are rejected with `400`
   (a second pick with `409`); no pick in time is a timeout loss.
 - Server-sent events (SSE) for push, plain `POST` for player actions — no

@@ -361,7 +361,7 @@ that are purely client-generated are marked with `*`.
 
 | from | event → to |
 | --- | --- |
-| `lobby` | `queue*`→`waiting`, `waiting`→`waiting`, `matched`→`matched` |
+| `lobby` | `queue*`→`waiting`, `waiting`→`waiting`, `matched`→`matched`, `climb*`→`ladder` |
 | `waiting` | `cancel*`→`lobby`, `matched`→`matched`, `waiting`→`waiting`, `stateIdle`→`lobby` |
 | `matched` | `cancel*`→`lobby`, `matched`→`matched`, `countdown`→`countdown`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
 | `countdown` | `countdown`→`countdown`, `matched`→`countdown`, `shoot`→`shoot`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
@@ -404,17 +404,18 @@ Notes:
   A reconnect mid-series does not restore the tally — `snapshot:countdown` is a
   schedule, and the score returns with that round's `result`.
 - `ladder` is the [arcade ladder](../tasks/closed/arcade-ladder.md)'s tower, the
-  screen between two floors: the result screen's "next floor" hands over to it, it
-  draws the stored order, and its fight button posts the next `POST /cpu`. Nothing
+  run's own screen: the result screen's "next floor" after a decided floor, and the
+  lobby's mode entry, both hand over to it. It draws the stored order, and its
+  fight button posts the next `POST /cpu`. Nothing
   about it is on the wire — no event, no field, no server-side state — because the
   tower draws the client's own run and the fight it starts is an ordinary CPU
   match. The `matched` edge out of `ladder` is the load-bearing one: the request
   that leaves the tower is a normal match request, so without the edge the client
   would decline the frame answering it and sit on the tower through a match it had
   already been admitted to. There is no `stateIdle` here for the reason there is
-  none in `result`: the match is decided before this state is reachable, so the
-  trailing teardown frame belongs to the match the player just finished, and
-  routing it to the lobby would walk them off their own ladder.
+  none in `result`: after a floor the match is decided, and before one it has not
+  started, so a trailing teardown frame has nothing to reconcile from either
+  direction, and routing it to the lobby would walk them off their own ladder.
 
 ## Clock handling
 

@@ -91,15 +91,15 @@ Build on a stable foundation without rewriting the core.
 Features that depend on identity, persistence, or ranking.
 
 - [Random fight backgrounds](tasks/closed/random-fight-backgrounds.md)
+- [Arcade entry opens on the tower](tasks/closed/arcade-tower-entry.md)
 
-Everything else in this phase is unstarted, and it is deliberately the last
-phase: three of the seven specified tasks wait on an identity primitive that
-has not been chosen yet
+The rest of this phase is unstarted, and it is deliberately the last phase:
+most of it waits on an identity primitive that has not been chosen yet
 ([player-identity](issues/player-identity.md)), so scheduling those now would
-mean scheduling work whose first step is still an open question. The other
-four do not wait on it — a solo campaign and a match history persist to
-`localStorage` like the arcade ladder, a challenge link identifies a match
-rather than a player, and the arcade's tower entry is client navigation. They
-are specified, so they are tasks rather than issues, and they are unscheduled
-rather than low-priority — seven files in [tasks/open/](tasks/open/) carrying
-`phase: 4`.
+mean scheduling work whose first step is still an open question — which tasks
+those are lives in that issue's blast radius and in each file's `gated-on`.
+The rest do not wait on it, and say why in their own files: a solo campaign
+and a match history persist to `localStorage` like the arcade ladder, and a
+challenge link identifies a match rather than a player. They are specified, so
+they are tasks rather than issues, and unscheduled rather than low-priority:
+they sit in [tasks/open/](tasks/open/) carrying `phase: 4`.

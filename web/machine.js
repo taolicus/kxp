@@ -18,7 +18,7 @@
   ];
 
   const transitions = {
-    lobby: { queue: 'waiting', waiting: 'waiting', matched: 'matched' },
+    lobby: { queue: 'waiting', waiting: 'waiting', matched: 'matched', climb: 'ladder' },
     waiting: { cancel: 'lobby', matched: 'matched', waiting: 'waiting', stateIdle: 'lobby' },
     matched: { cancel: 'lobby', matched: 'matched', countdown: 'countdown', result: 'result', opponentLeft: 'result', stateIdle: 'lobby', waiting: 'waiting' },
     countdown: { countdown: 'countdown', matched: 'countdown', shoot: 'shoot', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
@@ -29,14 +29,16 @@
     // dropped, the round never starts, and the match hangs on a result screen --
     // so this edge is what makes "first to N" playable at all.
     result: { matched: 'matched', countdown: 'countdown', 'rematch:online': 'waiting', mode: 'lobby', climb: 'ladder' },
-    // The tower between ladder floors. `climb` is how the result screen hands over
-    // to it -- only for a ladder match, since it is the run that has a tower. The
-    // fight button on it posts the request whose `matched` frame brings the client
-    // back, so that edge is not optional: without it the match would start and the
-    // client would drop the frame and sit on the tower. No `stateIdle`, for the
-    // reason `result` has none -- the match is already decided by the time this is
-    // reachable, so the server's trailing teardown frame is expected rather than a
-    // teardown, and routing it to the lobby would walk the player off the tower.
+    // The tower between arcade floors. `climb` is how the run gets to it from both
+    // directions: the result screen hands over after a floor, and the picker's
+    // start button does from the lobby -- the picker is not a machine state, so
+    // the machine is still in `lobby` there. The fight button on it posts the
+    // request whose `matched` frame brings the client back, so that edge is not
+    // optional: without it the match would start and the client would drop the
+    // frame and sit on the tower. No `stateIdle`, for the reason `result` has
+    // none -- after a floor the match is already decided, and before one it has
+    // not started, so a teardown frame has nothing to reconcile from either way in,
+    // and routing it to the lobby would walk the player off the tower.
     ladder: { matched: 'matched', mode: 'lobby' },
   };
 

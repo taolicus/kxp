@@ -62,7 +62,7 @@ wire; the client state machine gains one state and one event.
 
 ## Where the reasoning lives
 
-[architecture](../../features/architecture.md#the-tower-is-a-screen-between-floors-not-a-decoration-on-the-result)
+[architecture](../../features/architecture.md#the-tower-is-the-runs-own-screen-not-a-decoration-on-the-result)
 — why the climb waits for a tap, why the movement is CSS with no client-side
 geometry, why a completed run stands at the top, and why the trailing idle frame
 is expected here.
