@@ -326,6 +326,9 @@ func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
 	noSeriesBreak(t)
 	h := NewHub()
 	a, b := newClient(), newClient()
+	// Distinct fighters, so the terminal frame's identity fields round-trip to a
+	// value that cannot be confused with the sender's own.
+	a.character, b.character = "ronin", "kitsune"
 	t.Cleanup(a.cancel)
 	m := h.makeMatch("forfeit", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
@@ -354,6 +357,16 @@ func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
 	}
 	if w["youRoundWins"] != float64(0) || w["oppRoundWins"] != float64(0) {
 		t.Errorf("tally = %v/%v, want 0/0 after a drawn round one", w["youRoundWins"], w["oppRoundWins"])
+	}
+	// The terminal frame is rendered by the same result panel every other one
+	// goes through, and that panel re-reads the opponent slot from the frame --
+	// without these the forfeit's last screen shows a bare "(opponent)" where
+	// the fighter both players chose was.
+	if w["opponentCharacter"] != "kitsune" {
+		t.Errorf("opponentCharacter = %v, want the opponent's fighter kitsune", w["opponentCharacter"])
+	}
+	if _, ok := w["opponentName"]; !ok {
+		t.Error("forfeit frame carries no opponentName: the result panel would clear the opponent slot")
 	}
 	if _, ok := w["round"]; ok {
 		t.Errorf("forfeit frame carries round = %v: it decides a series, not a round", w["round"])
@@ -400,6 +413,7 @@ func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
 	// Registered for handleReady's id lookup, as in the reack test.
 	a := registerMoveTestClient(h, "to-between-a")
 	b := registerMoveTestClient(h, "to-between-b")
+	a.character, b.character = "ronin", "kitsune"
 	t.Cleanup(a.cancel)
 	t.Cleanup(b.cancel)
 	m := h.makeMatch("to-between", defaultSeriesTarget, side{client: a}, side{client: b})
@@ -431,6 +445,14 @@ func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
 	wb := waitEventWithin(t, b, "opponent-left", 5*time.Second)
 	if wb["outcome"] != "loss" {
 		t.Errorf("opponent-left outcome = %v, want loss for the side that never answered", wb["outcome"])
+	}
+	// Both sides get this frame, and both render it through the same result
+	// panel, so both need the opponent's identity to keep the slot painted.
+	if w["opponentCharacter"] != "kitsune" {
+		t.Errorf("opponentCharacter = %v, want kitsune for the side that answered", w["opponentCharacter"])
+	}
+	if wb["opponentCharacter"] != "ronin" {
+		t.Errorf("opponentCharacter = %v, want ronin for the side that did not", wb["opponentCharacter"])
 	}
 
 	d := waitForEvent(t, a, "state")

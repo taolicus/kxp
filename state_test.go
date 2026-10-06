@@ -78,6 +78,9 @@ func TestAllowedTransitionTable(t *testing.T) {
 func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
+	// Distinct fighters, so the terminal frame's identity fields round-trip to a
+	// value that cannot be confused with the sender's own.
+	a.character, b.character = "ronin", "kitsune"
 	m := h.makeMatch("da1", defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
@@ -95,6 +98,15 @@ func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 	d := waitForEvent(t, b, "opponent-left")
 	if d["mode"] != "online" {
 		t.Errorf("opponent-left mode = %v, want online", d["mode"])
+	}
+	// This frame lands in the result panel like any result, and the panel
+	// re-reads the opponent slot from it -- without the identity pair the
+	// survivor's terminal screen drops the fighter to a bare "(opponent)".
+	if d["opponentCharacter"] != "ronin" {
+		t.Errorf("opponentCharacter = %v, want the departed side's fighter ronin", d["opponentCharacter"])
+	}
+	if _, ok := d["opponentName"]; !ok {
+		t.Error("opponent-left carries no opponentName: the result panel would clear the opponent slot")
 	}
 	select {
 	case b2 := <-b.send:

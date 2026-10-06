@@ -575,12 +575,14 @@ func (m *match) announceForfeit(w int) {
 			outcome = ResultLoss
 		}
 		data := map[string]any{
-			"outcome":      string(outcome),
-			"mode":         "online",
-			"seriesOver":   true,
-			"youRoundWins": m.win[i],
-			"oppRoundWins": m.win[1-i],
-			"ts":           tsNow(),
+			"outcome":           string(outcome),
+			"mode":              "online",
+			"seriesOver":        true,
+			"youRoundWins":      m.win[i],
+			"oppRoundWins":      m.win[1-i],
+			"opponentName":      m.opponentName(i),
+			"opponentCharacter": m.opponentCharacter(i),
+			"ts":                tsNow(),
 		}
 		m.seriesFields(data)
 		m.send(i, evt("opponent-left", data))
@@ -1186,7 +1188,15 @@ func (m *match) abort() {
 		}
 		other := m.sides[1-i]
 		if other.emit != nil && (other.left == nil || !isClosed(other.left)) {
-			m.send(1-i, evt("opponent-left", map[string]any{"outcome": ResultWin, "mode": "online"}))
+			// The frame goes to 1-i, so what its slot must show is the departed
+			// side's identity: opponentName(1-i) is sides[i].name. opponentName(i)
+			// would name the recipient back to itself.
+			m.send(1-i, evt("opponent-left", map[string]any{
+				"outcome":           ResultWin,
+				"mode":              "online",
+				"opponentName":      m.opponentName(1 - i),
+				"opponentCharacter": m.opponentCharacter(1 - i),
+			}))
 		}
 	}
 }
