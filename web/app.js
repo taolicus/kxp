@@ -18,6 +18,10 @@ let lastDrawEnds = null;
 // ladder match. The mode on the wire is `cpu` for both, so the distinction has to
 // live here; the server has no ladder to know about.
 let ladderFloor = -1;
+// The length a ladder run is fought at, captured from the lobby when the mode is
+// entered. Every floor repeats the run's length rather than the match that ended
+// last, so a new run is not fought at the previous match's length.
+let ladderTarget = 0;
 // What the result screen offers a ladder match: 'next', 'retry', 'done', or null
 // when the match that ended was not a ladder match.
 let ladderNext = null;
@@ -275,22 +279,23 @@ function readArcade() {
   const order = fresh ? drawOrder() : repaired;
   // A fresh ladder starts at the bottom: the stored floor is a position in an
   // order that is gone, so keeping it would drop the player onto the top floor of
-  // a ladder they have not climbed. The high-water mark survives, because it is a
-  // count of floors cleared and means the same thing across any two orders.
+  // a ladder they have not climbed.
   const floor = fresh ? 0
     : Math.min(Math.max(Number(s.floor) || 0, 0), order.length - 1);
   // Cleared is a fact about the run -- the mirror is down -- not a position in the
   // order, so it survives a repair and does not survive a redraw.
-  return {
-    order,
-    floor,
-    best: Math.max(Number(s.best) || 0, 0),
-    cleared: !fresh && !!s.cleared,
-  };
+  return { order, floor, cleared: !fresh && !!s.cleared };
 }
 
 function saveArcade(a) {
   try { localStorage.setItem(ARCADE_KEY, JSON.stringify(a)); } catch (e) {}
+}
+
+// discardArcade forgets the run: the next readArcade draws a new ladder. A loss
+// and a change of the lobby's mode both end the run this way, since neither leaves
+// a ladder the player is still climbing.
+function discardArcade() {
+  try { localStorage.removeItem(ARCADE_KEY); } catch (e) {}
 }
 
 // drawOrder is a fresh run: the roster, shuffled, with the mirror last. The
@@ -333,8 +338,8 @@ function shuffle(ids) {
 }
 
 // advanceLadder moves the run on after a ladder match has been decided and says
-// which floor is next. A win climbs one floor; a loss puts the player back on
-// the first, as in the arcade original. A drawn floor is neither: the floor's
+// which floor is next. A win climbs one floor; a loss ends the run, and the next
+// entry draws a new ladder. A drawn floor is neither: the floor's
 // request always says its drawers replay (drawEnds: false), so a draw against an
 // honouring server replays and never reaches a result here -- the branch exists
 // as the client-side half of the same rule, that an outcome which cannot decide a
@@ -344,25 +349,16 @@ function shuffle(ids) {
 // valid.
 //
 // Returns what the result screen should offer, since the honest label differs:
-// the next floor after a win, the first again after a loss, the same floor again
-// after a draw, and a new ladder once the mirror is down. 'done' is not a stage
-// of the run -- the cleared run stays where it is, so the high-water mark and
-// the next request are both still readable -- but it is what the button says.
+// the next floor after a win, the same floor again after a draw, and a new ladder
+// after a loss or once the mirror is down.
 function advanceLadder(outcome) {
   const a = readArcade();
-  // Counted from the run's own floor, not from the floor the request was made on:
-  // the two agree in the normal sequence, and the run cannot disagree with itself.
-  // The request-time copy goes stale if a match is ever reached without going
-  // through postCPU, and it is the run that the high-water mark has to agree with.
-  // Only a win clears a floor -- counting a lost floor here would report a run that
-  // got further the more it lost, which is the opposite of a high-water mark.
-  if (outcome === 'win') a.best = Math.max(a.best, a.floor + 1);
   if (outcome === 'win') {
     if (a.floor >= a.order.length - 1) {
       // The mirror is down. The run stays where it is and says it is cleared,
       // rather than the floor wrapping to zero and the ladder reading as a run in
-      // progress that has already been beaten -- which is what the lobby would
-      // otherwise invite the player to resume.
+      // progress that has already been beaten -- which is what the entry would
+      // otherwise offer to resume.
       a.cleared = true;
       a.floor = 0;
       saveArcade(a);
@@ -370,7 +366,13 @@ function advanceLadder(outcome) {
     }
     a.floor += 1;
   } else if (outcome === 'loss') {
-    a.floor = 0;
+    // A lost floor ends the run: unlike the arcade original, a defeat does not
+    // drop the player back onto the same ladder. The next entry draws a new one,
+    // and the floor is forgotten with it so the tower opens at the bottom rather
+    // than animating a drop onto a ladder the player no longer has.
+    discardArcade();
+    ladderFloor = -1;
+    return 'done';
   } else {
     a.cleared = false;
     saveArcade(a);
@@ -378,37 +380,21 @@ function advanceLadder(outcome) {
   }
   a.cleared = false;
   saveArcade(a);
-  return outcome === 'win' ? 'next' : 'retry';
+  return 'next';
 }
 
 
-// The lobby's ladder line: which floor the player would resume on, who is
-// standing on it, and how far the run has ever got. Read-only -- resuming is a
-// stored order, not a flag, so this never draws.
-function setLadderInfo() {
-  const el = $('#ladder-info');
-  if (!el) return;
-  const a = readArcade();
+// The lobby's Arcade Mode entry. Read-only -- resuming is a stored order, not a
+// flag, so this never draws.
+function setLadderEntry() {
   const btn = $('#btn-ladder');
-  if (btn) {
-    btn.disabled = !CHARACTERS.length;
-    // A cleared ladder has nothing to resume, so the entry says it will draw a new
-    // one. Leaving the label alone would have the player pick a fighter and be told
-    // there is nothing to fight.
-    btn.textContent = a.cleared ? 'New Arcade Mode' : 'Arcade Mode';
-  }
-  // Hidden rather than empty: an empty paragraph still carries its margin, which
-  // would be a gap above the buttons for the moment before the roster arrives.
-  if (!CHARACTERS.length) {
-    el.textContent = '';
-    el.classList.add('hidden');
-    return;
-  }
-  el.classList.remove('hidden');
-  const c = a.cleared ? null : characterByID(a.order[a.floor]);
-  const at = a.cleared ? 'Arcade complete'
-    : `Floor ${a.floor + 1} of ${a.order.length}${c ? ` \u00b7 ${c.name}` : ''}`;
-  el.textContent = a.best > 0 ? `Arcade Mode \u00b7 ${at} \u00b7 Best ${a.best}` : `Arcade Mode \u00b7 ${at}`;
+  if (!btn) return;
+  const a = readArcade();
+  btn.disabled = !CHARACTERS.length;
+  // A cleared ladder has nothing to resume, so the entry says it will draw a new
+  // one. Leaving the label alone would have the player pick a fighter and be told
+  // there is nothing to fight.
+  btn.textContent = a.cleared ? 'New Arcade Mode' : 'Arcade Mode';
 }
 
 // The tower: the run drawn as the ladder it is. One row per floor, in the order
@@ -417,7 +403,7 @@ function setLadderInfo() {
 //
 // Two things are decided here rather than left to the CSS. Where the player
 // stands: a cleared run stands at the top, because its floor was reset to zero so
-// the lobby would not offer a beaten ladder as a run in progress, and the tower is
+// the entry would not treat a beaten ladder as one to resume, and the tower is
 // the one place that is not true. And which way the climb went, from the floor
 // just fought to the floor the run moved to -- `ladderFloor` is the only record of
 // where the player came from, since the run stores where they are.
@@ -765,7 +751,8 @@ const enter = {
     clearTimeout(stallTimer);
     resetGame();
     ladderFloor = -1;
-    setLadderInfo();
+    ladderTarget = 0;
+    setLadderEntry();
     // The match is over -- finished, cancelled or abandoned -- so the series it
     // belonged to is too, and the next one starts from empty pips.
     seriesTally = null;
@@ -1046,7 +1033,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadRoster();
   connect();
   setStats();
-  setLadderInfo();
+  setLadderEntry();
   renderFighters();
 
   $('#fighters').addEventListener('click', (e) => {
@@ -1078,7 +1065,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // The mode's first screen is the tower: the run it would resume is already
       // rendered there, and its Fight button starts the floor. No request is made
       // from the picker, so nothing is re-armed on success -- the view is left
-      // behind -- but a refused route must not deaden the button.
+      // behind -- but a refused route must not deaden the button. The run's length
+      // is captured here, from the selection the lobby is showing, so a floor is
+      // fought at the lobby's mode rather than at whatever match ended last.
+      ladderTarget = cpuTarget;
       if (!transition('climb')) {
         btn.disabled = false;
         pendingMode = mode;
@@ -1110,6 +1100,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const lengthBtns = document.querySelectorAll('#cpu-length .seg-btn');
   lengthBtns.forEach((b) => {
     b.addEventListener('click', () => {
+      // A mode the player has not already picked: the run they were climbing
+      // belongs to the mode it was started in, so choosing another ends it. A
+      // re-tap of the mode already showing is not a change of heart and leaves
+      // the run alone.
+      const changed = (Number(b.dataset.rounds) || 0) !== cpuTarget
+        || (b.dataset.drawEnds === 'true') !== cpuDrawEnds;
       lengthBtns.forEach((o) => {
         o.classList.toggle('selected', o === b);
       });
@@ -1118,6 +1114,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // to the markup without one is a mode with a rule of its own, never an
       // accidental borrow of another button's.
       cpuDrawEnds = b.dataset.drawEnds === 'true';
+      if (changed) {
+        discardArcade();
+        setLadderEntry();
+      }
       try {
         localStorage.setItem(CPU_LENGTH_KEY, String(cpuTarget));
         localStorage.setItem(CPU_DRAWENDS_KEY, String(cpuDrawEnds));
@@ -1210,14 +1210,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // The tower's own fight button: the same request the result screen's would have
-  // made -- the floor the run is on, at the length just fought -- from the screen
+  // made -- the floor the run is on, at the run's own length -- from the screen
   // the player is looking at now. The re-arm on failure is the guard the other two
   // entry points carry, because a rejected tap must not be a dead button.
   $('#ladder-fight').addEventListener('click', () => {
     const btn = $('#ladder-fight');
     if (btn.disabled) return;
     btn.disabled = true;
-    const p = postCPU('ladder', { roundsTarget: lastTarget || cpuTarget });
+    const p = postCPU('ladder', { roundsTarget: ladderTarget || cpuTarget });
     Promise.resolve(p).then((res) => {
       if (!res || !res.ok) btn.disabled = false;
     });

@@ -94,6 +94,7 @@ Features that depend on identity, persistence, or ranking.
 
 - [Random fight backgrounds](tasks/closed/random-fight-backgrounds.md)
 - [Arcade entry opens on the tower](tasks/closed/arcade-tower-entry.md)
+- [Arcade run lifecycle](tasks/closed/arcade-run-lifecycle.md)
 
 The rest of this phase is unstarted, and it is deliberately the last phase:
 most of it waits on an identity primitive that has not been chosen yet

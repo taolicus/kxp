@@ -67,6 +67,7 @@ function lengthToggle(app, selected = 3) {
   });
   app.seed('#cpu-length .seg-btn', btns);
   app.setStored('kxp-cpu-length', selected);
+  return btns;
 }
 
 // The screens `show()` toggles, which the harness cannot model from markup it does
@@ -90,13 +91,21 @@ const showing = (el) => el.classList.contains('hidden') === false;
 // match" is a claim about what changed, not about what exists.
 const cpuRequests = (app) => app.posted().filter((p) => p === '/cpu').length;
 
-async function started(app) {
-  lengthToggle(app);
+async function started(app, selected) {
+  app.lengthBtns = lengthToggle(app, selected);
   const v = views(app);
   await app.boot();
   runInContext('connect()', app.ctx);
   app.fire('connected', { id: 'test-client', now: 1700000000000, online: 0 });
   return v;
+}
+
+// Pick the lobby's mode the way a player does: click the seeded button the client
+// wired, so the run-discarding behaviour that hangs off that click is exercised.
+function selectLength(app, rounds) {
+  const b = app.lengthBtns.find((b) => Number(b.dataset.rounds) === rounds);
+  assert.ok(b, `the lobby must offer ${rounds} rounds to select it`);
+  b.handlers.click();
 }
 
 // Pick a fighter and start a match, leaving the request recorded. For a ladder
@@ -177,11 +186,10 @@ test('a reload resumes the saved ladder rather than drawing a new one', async ()
   // the order itself is compared, not only the floor number on screen.
   const second = newApp({
     roster: ROSTER,
-    store: { 'kxp-character': 'hielito', 'kxp-arcade': { order, floor: 2, best: 2 } },
+    store: { 'kxp-character': 'hielito', 'kxp-arcade': { order, floor: 2 } },
   });
   await started(second);
-  assert.match(text(second, '#ladder-info'), /Floor 3 of 4/, 'the lobby resumes the saved floor');
-  assert.match(text(second, '#ladder-info'), /Best 2/, 'and remembers the run');
+  assert.strictEqual(text(second, '#btn-ladder'), 'Arcade Mode', 'the saved run is resumable');
 
   await fight(second);
   assert.deepStrictEqual(askedFor(second), { roundsTarget: 3, opponentCharacter: order[2] },
@@ -197,7 +205,7 @@ test('a saved order is repaired against a changed roster, keeping its positions'
   const later = [ROSTER[0], ROSTER[2], ROSTER[3], { id: 'nuevo', name: 'Nuevo', emoji: 'n' }];
   const app = loadApp({
     roster: later,
-    store: { 'kxp-arcade': { order: ['robok', 'hielito', 'rayito', 'robok'], floor: 1, best: 1 }, 'kxp-character': 'robok' },
+    store: { 'kxp-arcade': { order: ['robok', 'hielito', 'rayito', 'robok'], floor: 1 }, 'kxp-character': 'robok' },
   });
   await started(app);
   await fight(app);
@@ -211,14 +219,18 @@ test('a saved order is repaired against a changed roster, keeping its positions'
 test('a floor past the end of a shrunken roster is clamped into range', async () => {
   // Floor 9 of a four-floor ladder. The stored position cannot be honoured, and
   // the request must still name a fighter that exists rather than nothing.
-  const app = loadApp({
+  const app = newApp({
     roster: ROSTER,
-    store: { 'kxp-arcade': { order: IDS, floor: 9, best: 9 }, 'kxp-character': 'hielito' },
+    store: { 'kxp-arcade': { order: IDS, floor: 9 }, 'kxp-character': 'hielito' },
   });
   await started(app);
-  assert.match(text(app, '#ladder-info'), /Floor 4 of 4/, 'the floor is clamped to the ladder');
+  await app.tap('#btn-ladder');
+  await app.tap('#btn-start');
+  await app.settle();
+  assert.strictEqual(text(app, '#ladder-title'), 'Floor 4 of 4', 'the floor is clamped to the ladder');
 
-  await fight(app);
+  await app.tap('#ladder-fight');
+  await app.settle();
   assert.strictEqual(askedFor(app).opponentCharacter, 'hielito', 'a clamped ladder fights its last floor');
 });
 
@@ -240,9 +252,6 @@ test('a plain CPU match names no opponent, and does not disturb the ladder', asy
 test('the ladder is not offered before the roster arrives', async () => {
   const app = newApp({ roster: [] });
   await started(app);
-  assert.strictEqual(text(app, '#ladder-info'), '', 'there is nothing to say without a roster');
-  assert.strictEqual(app.el('#ladder-info').classList.contains('hidden'), true,
-    'and takes no space while it has nothing to say');
   assert.strictEqual(app.el('#btn-ladder').disabled, true, 'the button waits for a roster');
 });
 
@@ -308,7 +317,7 @@ test('the floor is announced on the match, then the countdown takes the element'
   // Which floor this is belongs on screen at the match rather than in a permanent
   // label: the opponent slot already carries the fighter, and the countdown needs
   // that element for its own beats immediately after.
-  const app = newApp({ roster: ROSTER, store: { 'kxp-arcade': { order: IDS, floor: 3, best: 3 } } });
+  const app = newApp({ roster: ROSTER, store: { 'kxp-arcade': { order: IDS, floor: 3 } } });
   await started(app);
   await fight(app);
 
@@ -322,7 +331,7 @@ test('the floor is announced on the match, then the countdown takes the element'
 test('a plain CPU match is not announced as a floor', async () => {
   // The negative direction: same element, same handler, no ladder. The ladder state
   // must not survive the end of the ladder match, or the next CPU match inherits it.
-  const app = newApp({ roster: ROSTER, store: { 'kxp-arcade': { order: IDS, floor: 3, best: 3 } } });
+  const app = newApp({ roster: ROSTER, store: { 'kxp-arcade': { order: IDS, floor: 3 } } });
   await started(app);
   await fight(app);
 
@@ -382,7 +391,6 @@ test('winning a floor advances to the next one', async () => {
   app.fire('result', series(true, 'win'));
 
   assert.strictEqual(saved(app).floor, 1, 'one floor higher');
-  assert.strictEqual(saved(app).best, 1, 'and one floor cleared');
   assert.strictEqual(saved(app).cleared, false);
   assert.strictEqual(ladderLabel(app), 'Next Floor');
 
@@ -410,7 +418,6 @@ test('progress moves on the final result only', async () => {
   assert.strictEqual(saved(app).floor, 0, 'round one of three is not a floor');
   assert.strictEqual(app.el('#btn-again').classList.contains('hidden'), true,
     'and no next floor is offered');
-  assert.strictEqual(saved(app).best, 0, 'nor counted as cleared');
 
   nextRound();
   app.fire('result', series(false, 'loss', 1, 1));
@@ -421,7 +428,7 @@ test('progress moves on the final result only', async () => {
   assert.strictEqual(saved(app).floor, 1, 'the final result is what moves it');
 });
 
-test('losing a floor puts the player back on the first, without redrawing', async () => {
+test('losing a floor ends the run, and the next entry draws a new ladder', async () => {
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
   await started(app);
   await climbTo(app, 2);
@@ -431,13 +438,49 @@ test('losing a floor puts the player back on the first, without redrawing', asyn
   app.fire('matched', { ...MATCHED, opponentCharacter: order[atFloor] });
   app.fire('result', series(true, 'loss'));
 
-  assert.strictEqual(saved(app).floor, 0, 'back to the bottom');
-  assert.deepStrictEqual(saved(app).order, order, 'the ladder is the same one -- a loss does not redraw');
-  assert.strictEqual(saved(app).best, 2, 'and the high-water mark is not forgotten');
-  assert.strictEqual(ladderLabel(app), 'Back to Floor 1');
+  assert.strictEqual(saved(app), null, 'the run is discarded');
+  assert.strictEqual(ladderLabel(app), 'New Arcade Mode', 'and the result offers a new one');
 
+  // The entry the result hands to draws a fresh ladder rather than the lost one.
   await nextFloor(app);
-  assert.strictEqual(askedFor(app).opponentCharacter, order[0], 'which is where it says it goes');
+  assert.strictEqual(saved(app).floor, 0, 'the next run starts at the bottom');
+  assert.strictEqual(askedFor(app).opponentCharacter, saved(app).order[0],
+    'and fights its first floor');
+});
+
+test('a new arcade run takes the lobby\'s length, not the last match\'s', async () => {
+  // The bug this pins: the tower's Fight button used the length of the match that
+  // ended last, so entering the arcade after a one-round CPU match fought floors
+  // at one round even with the lobby on First to 3.
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+
+  // A finished CPU match at one round leaves that length behind...
+  await fight(app, 'cpu');
+  app.fire('matched', { opponentName: 'CPU', roundsTarget: 1, drawEnds: true });
+  app.fire('result', { ...series(true, 'win'), mode: 'cpu', roundsTarget: 1, drawEnds: true });
+  await app.tap('#btn-mode');
+
+  // ...which the arcade run must not inherit: the lobby is still on First to 3.
+  await fight(app);
+  assert.strictEqual(askedFor(app).roundsTarget, 3, 'the floor is fought at the lobby\'s length');
+});
+
+test('changing the lobby mode discards the run, so the next entry starts a new ladder', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  const view = await started(app);
+  await fight(app);
+  await climbTo(app, 1);
+  assert.strictEqual(saved(app).floor, 1, 'the run is one floor up');
+
+  await app.tap('#ladder-leave');
+  await app.settle();
+  assert.strictEqual(showing(view.lobby), true, 'back in the lobby');
+  selectLength(app, 1);
+
+  await fight(app);
+  assert.strictEqual(saved(app).floor, 0, 'the run was discarded, so the next one starts fresh');
+  assert.strictEqual(askedFor(app).roundsTarget, 1, 'and it is fought at the newly chosen length');
 });
 
 test('a drawn floor leaves the run where it was', async () => {
@@ -453,7 +496,6 @@ test('a drawn floor leaves the run where it was', async () => {
   app.fire('result', { outcome: 'draw', mode: 'cpu', roundsTarget: 1, seriesOver: true });
 
   assert.strictEqual(saved(app).floor, 1, 'the floor is neither cleared nor lost');
-  assert.strictEqual(saved(app).best, 1, 'and the earlier floor still counts');
   assert.strictEqual(ladderLabel(app), 'Retry This Floor', 'and offers the same floor again');
 
   // The wire half, on the request that started this floor: the server would not
@@ -473,7 +515,6 @@ test('clearing the mirror completes the ladder, and the next request draws a new
   app.fire('result', series(true, 'win'));
 
   assert.strictEqual(saved(app).cleared, true, 'the run says it is complete');
-  assert.strictEqual(saved(app).best, ROSTER.length, 'with every floor counted');
   assert.strictEqual(ladderLabel(app), 'New Arcade Mode');
 
   // A cleared run must still be startable -- the player has just beaten the whole
@@ -482,17 +523,16 @@ test('clearing the mirror completes the ladder, and the next request draws a new
   // in the completed-ladder test above (they share the same cleared-run request);
   // a single comparison here would be the same one-time-in-six coincidence that
   // test's twelve draws exist to rule out. What belongs to this test is the
-  // entry: an un-cleared run, from the bottom, keeping the high-water mark.
+  // entry: an un-cleared run, from the bottom.
   await nextFloor(app);
   const fresh = saved(app);
   assert.strictEqual(fresh.cleared, false, 'and starts un-cleared');
   assert.strictEqual(fresh.floor, 0, 'from the bottom');
-  assert.strictEqual(fresh.best, ROSTER.length, 'keeping the high-water mark');
   assert.strictEqual(askedFor(app).opponentCharacter, fresh.order[0],
     'the new ladder is fought at its first floor');
 });
 
-test('a cleared arcade says so in the lobby, and the entry shows it before its restart', async () => {
+test('a cleared ladder enters completed, and the entry offers a new run', async () => {
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
   await started(app);
   await climbTo(app, ROSTER.length - 1);
@@ -501,7 +541,6 @@ test('a cleared arcade says so in the lobby, and the entry shows it before its r
 
   // Back to the lobby the only way a player can: the Change mode button.
   await app.tap('#btn-mode');
-  assert.match(text(app, '#ladder-info'), /Arcade complete/, 'the lobby reports the completed run');
   assert.strictEqual(app.el('#btn-ladder').textContent, 'New Arcade Mode', 'and the entry says what it does');
 
   await app.tap('#btn-ladder');
@@ -541,24 +580,22 @@ test('a plain CPU match is still offered as the same match again', async () => {
     'and it opens no tower -- there is no run to draw one of');
 });
 
-test('the next floor repeats the length just fought', async () => {
-  // The pin from the other side: a player who chose one round on the lobby and
-  // changed it mid-ladder must keep fighting one-round floors, or the pips and the
-  // rules would disagree.
+test('a later floor repeats the run\'s length and rule', async () => {
+  // The run's length is captured once, when the mode is entered, and every floor
+  // repeats it. A real change of the lobby's mode discards the run (pinned below),
+  // so the lobby cannot drift mid-run; this pins the other direction, that a floor
+  // does not read a fresh length after each result.
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
-  lengthToggle(app, 1);
-  await started(app);
+  await started(app, 1);
   await fight(app);
   app.fire('matched', { ...MATCHED, roundsTarget: 1, opponentCharacter: saved(app).order[0] });
   app.fire('result', { ...series(true, 'win'), roundsTarget: 1 });
 
-  // The lobby's selection moves to three while the result is on screen.
-  lengthToggle(app, 3);
   await nextFloor(app);
-  assert.strictEqual(askedFor(app).roundsTarget, 1, 'the next floor is the match that just finished');
+  assert.strictEqual(askedFor(app).roundsTarget, 1, 'the next floor is the run\'s length');
   // The floor's own rule rides the request too, and it is the ladder's, not the
   // lobby's: "1 round" on the lobby is 1-off, but a floor is never 1-off -- a
-  // drawn round must not decide it, whatever the toggle is showing.
+  // drawn round must not decide it.
   const fought = app.posts.filter((p) => String(p.url).endsWith('/cpu')).pop();
   assert.strictEqual(JSON.parse(fought.body).drawEnds, false, 'one round on the lobby is still never 1-off on the floor');
 });
@@ -662,9 +699,11 @@ test('winning a floor climbs the player up the tower', async () => {
     'and everything behind them is a floor that was beaten');
 });
 
-test('losing drops the player to the bottom, and the tower shows the drop', async () => {
-  // The other direction, which the same code path could get wrong silently: a
-  // restart that animated as a climb would tell the player they went up.
+test('losing ends the run, and the tower opens on a fresh one at the bottom', async () => {
+  // A loss discards the run rather than dropping the player back onto the same
+  // ladder, so the tower the result opens is a new run: floor one, nothing behind.
+  // The pop a lost floor must NOT play is the point -- the run it would drop
+  // through no longer exists.
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
   await started(app);
   await climbTo(app, 3);
@@ -672,10 +711,10 @@ test('losing drops the player to the bottom, and the tower shows the drop', asyn
 
   const rows = towerRows(app);
   const stood = rows.find((r) => r.here);
-  assert.strictEqual(stood.floor, 0, 'back on the first floor');
-  assert.strictEqual(stood.hop, 'climb-down', 'arriving from above');
+  assert.strictEqual(stood.floor, 0, 'on the first floor of a new run');
+  assert.strictEqual(stood.hop, '', 'arriving there, not falling to it');
   assert.deepStrictEqual(rows.filter((r) => r.cleared), [],
-    'a lost floor is not a cleared one, so nothing above the player is behind them');
+    'a new ladder has nothing behind the player');
 });
 
 test('a completed ladder stands at the top, and its fight draws the next one', async () => {
@@ -781,5 +820,10 @@ test('a player can leave the tower without fighting the floor they were on', asy
   assert.strictEqual(showing(view.lobby), true, 'back in the lobby');
   assert.strictEqual(showing(view.ladder), false);
   assert.strictEqual(cpuRequests(app), before, 'and no match was started on the way out');
-  assert.match(text(app, '#ladder-info'), /Floor 2 of 4/, 'which resumes the floor the tower showed');
+  // Re-entering resumes the floor the tower showed: entering the mode opens the
+  // run itself, so the same floor is on screen again.
+  await app.tap('#btn-ladder');
+  await app.tap('#btn-start');
+  await app.settle();
+  assert.strictEqual(text(app, '#ladder-title'), 'Floor 2 of 4', 'which resumes the floor the tower showed');
 });

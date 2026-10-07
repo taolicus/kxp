@@ -134,7 +134,9 @@ a store left by the old three-segment control — which carried first-to-1 — h
 no button to light and falls back to the first option, as a hand-edited value
 would. A store without the rule key predates the split, so it restores on length
 alone (1 → "1 round", 3 → "First to 3"), the one reading that keeps an old
-length's meaning unchanged.
+length's meaning unchanged. Changing the mode discards any saved arcade run,
+because a floor is fought at the length its run started at, and a control the run
+no longer matches would offer a ladder the player cannot fight at what it shows.
 
 **A match the client asked to end on a draw is over whatever that round was.** A
 draw is worth nothing to either side and replays — but replaying it means playing
@@ -227,11 +229,14 @@ Because the order is random, progress is a position *in that order*, so the orde
 is persisted alongside the floor (`kxp-arcade` in `localStorage`). Three decisions
 follow from that, and each has an alternative that was rejected:
 
-- **A loss does not redraw.** Climbing the same ladder again is the arcade
-  original's behaviour, and redrawing would make "which floor was that"
-  unanswerable. The high-water mark is stored as a *count* of floors cleared
-  rather than an index, because a count is the only figure that means the same
-  thing across two different orders.
+- **A loss ends the run.** A decided loss discards the ladder, and the next entry
+  draws a fresh one. The arcade original climbs the same ladder again; that is not
+  kept, because a run the player has been beaten out of is one they are no longer
+  on, and holding onto it only leaves stale progress to resume.
+- **Changing the lobby's mode ends the run.** The run is fought at the length it
+  was started at, so picking a different mode discards it rather than carrying a
+  floor into a control that no longer matches it. A re-tap of the mode already
+  showing is not a change of mind and leaves the run alone.
 - **A saved order is repaired against the current roster, not trusted and not
   discarded.** Stored fighters still on the roster keep their positions, roster
   fighters the run never mentioned are appended ahead of the mirror, removed ones
@@ -249,27 +254,24 @@ not a usable order draws a fresh ladder.
 
 Progress moves on the match's **final** result only — `seriesOver` — never on a
 mid-series round, which is the whole reason the series fields exist. A win climbs
-one floor; a loss puts the player back on the first, as in the arcade original,
-without redrawing. A drawn floor is neither: every floor's request says its
-drawers replay (`drawEnds: false`), so a draw replays instead of reaching a
-result — and were one to arrive anyway, the run would stay where it was rather
-than misreading a round that decided nothing as one it lost. `best` is only
-raised by a win: a lost floor is not a cleared floor, and a mark that rose as the
-player lost would be the opposite of a high-water mark.
+one floor; a loss ends the run and discards the ladder. A drawn floor is neither:
+every floor's request says its drawers replay (`drawEnds: false`), so a draw
+replays instead of reaching a result — and were one to arrive anyway, the run would
+stay where it was rather than misreading a round that decided nothing as one it
+lost.
 
 Clearing the mirror is a **state**, not a position. The run records `cleared`
 rather than leaving the floor wrapping to zero, because a run sitting on floor one
-is a run in progress, and the lobby would invite the player to resume a ladder they
-had already beaten. A cleared run draws a new order on the next request — the one
-redraw in the code, shared by the result screen's "New Arcade Mode" and the lobby's
-entry, so neither can leave a player with nothing to do. The high-water mark
-survives it, being a count.
+is a run in progress, and the entry would invite the player to resume a ladder they
+had already beaten. A cleared run draws a new order on the next request, the way a
+discarded one does — the redraw is shared by the result screen's "New Arcade Mode"
+and the lobby's entry, so neither can leave a player with nothing to do.
 
 The result button stops being "Play Again" for a ladder match, because it is not
-the same match: it is a different fighter. It says which of the three things comes
-next — the next floor, the first floor again, or a new ladder — and it repeats the
-series length just fought rather than the lobby's current selection, so a player who
-changed the length mid-ladder keeps fighting the length they are looking at.
+the same match: it is a different fighter. It says which of the two things comes
+next — the next floor, or a new ladder after a loss or a completion — and it fights
+the run's own length, captured when the mode was entered rather than re-read from
+the lobby, so a floor is always the length its run was started at.
 
 Server-side persistence is deferred to
 [player identity](../issues/player-identity.md); a per-tab localStorage ladder
@@ -301,7 +303,7 @@ that:
   next few floors is a list. How far is left is the thing a climb is for.
 
 A cleared run stands at the **top** of the tower. Its floor is reset to zero so the
-lobby would not offer a beaten ladder as a run in progress, and the tower is the one
+entry treats it as a completed run rather than one to resume, and the tower is the one
 place that reset is not what happened — drawing it as "back at the bottom" would end
 the run the player just won by dumping them at its first floor.
 
@@ -321,8 +323,8 @@ lobby like everywhere else, and why the machine gives `ladder` no `stateIdle` ed
 to take: honouring it would put a player standing on their own ladder back in the
 menu with the climb half played. All of it is pinned in `app.arcade.test.cjs` — the
 entry drawing and saving the run it shows, the rows in ladder order, the climb up
-after a win, the drop back down after a loss, the completed run at the top, a
-second visit finding its button armed, and the leave that returns to a lobby
+after a win, a new run opening at the bottom after a loss, the completed run at the
+top, a second visit finding its button armed, and the leave that returns to a lobby
 resuming the same floor.
 
 ## Matchmaking
