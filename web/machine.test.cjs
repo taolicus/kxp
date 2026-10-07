@@ -124,3 +124,28 @@ test('invalid absolute moves are unreachable', () => {
   assert.strictEqual(next('locked', 'shoot'), null);
   assert.strictEqual(next('waiting', 'again'), null);
 });
+test('the match history opens from the lobby and is left the way the tower is', () => {
+  // The lobby's own screen, opened by its button and closed by `mode` -- the
+  // same edge the tower's leave button takes, so leaving it runs the lobby's
+  // entry rather than swapping views behind the player's back.
+  assert.strictEqual(next('lobby', 'history'), 'history');
+  assert.strictEqual(next('history', 'mode'), 'lobby');
+  // It yields to a live match the way the lobby does: a frame saying this
+  // client is queued or paired wins over the screen it interrupts, and dropping
+  // it would leave the player reading a record while a match runs without them.
+  assert.strictEqual(next('history', 'waiting'), 'waiting');
+  assert.strictEqual(next('history', 'matched'), 'matched');
+  // Nowhere else: a round arriving on a record would be a frame out of order,
+  // and the record is reachable only from the lobby.
+  assert.strictEqual(next('countdown', 'history'), null);
+  assert.strictEqual(next('result', 'history'), null);
+  assert.strictEqual(next('ladder', 'history'), null);
+  assert.strictEqual(next('history', 'countdown'), null);
+  // No `stateIdle`, for the reason `result` and `ladder` have none: nothing of
+  // a match is live behind it, so a trailing teardown frame has nothing to
+  // reconcile, and routing it to the lobby would walk the player out of the
+  // record they opened. A reconnect snapshot does cross it, for the reason the
+  // two edges above do.
+  assert.strictEqual(next('history', 'stateIdle'), null);
+  assert.strictEqual(next('history', 'snapshot:matched'), 'matched');
+});

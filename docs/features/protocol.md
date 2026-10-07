@@ -403,7 +403,8 @@ that are purely client-generated are marked with `*`.
 
 | from | event → to |
 | --- | --- |
-| `lobby` | `queue*`→`waiting`, `waiting`→`waiting`, `matched`→`matched`, `climb*`→`ladder` |
+| `lobby` | `queue*`→`waiting`, `waiting`→`waiting`, `matched`→`matched`, `climb*`→`ladder`, `history*`→`history` |
+| `history` | `mode*`→`lobby`, `waiting`→`waiting`, `matched`→`matched` |
 | `waiting` | `cancel*`→`lobby`, `matched`→`matched`, `waiting`→`waiting`, `stateIdle`→`lobby` |
 | `matched` | `cancel*`→`lobby`, `matched`→`matched`, `countdown`→`countdown`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
 | `countdown` | `countdown`→`countdown`, `matched`→`countdown`, `shoot`→`shoot`, `result`→`result`, `opponentLeft`→`result`, `stateIdle`→`lobby` |
@@ -447,6 +448,16 @@ Notes:
   with each round would read as the score having been thrown away.
   A reconnect mid-series does not restore the tally — `snapshot:countdown` is a
   schedule, and the score returns with that round's `result`.
+- `history` is the [match history](architecture.md#match-history)'s record view:
+  this browser's own list of the matches it finished, so nothing about it is on
+  the wire either — no event, no field, no server-side state. It is left by
+  `mode`, the tower's leave, so the lobby's entry runs. It yields to `waiting`
+  and `matched` for the reason `lobby` does: those frames say this client is
+  queued or paired, and dropping one would leave the player reading a record
+  while a match runs without them. There is no `stateIdle` here for the reason
+  there is none in `result` or `ladder` — nothing of a match is live behind the
+  record, and routing the frame to the lobby would walk the player out of the
+  screen they opened.
 - `ladder` is the [arcade ladder](../tasks/closed/arcade-ladder.md)'s tower, the
   run's own screen: the result screen's "next floor" after a decided floor, and the
   lobby's mode entry, both hand over to it. It draws the stored order, and its

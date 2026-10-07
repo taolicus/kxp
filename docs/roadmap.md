@@ -95,6 +95,7 @@ Features that depend on identity, persistence, or ranking.
 - [Random fight backgrounds](tasks/closed/random-fight-backgrounds.md)
 - [Arcade entry opens on the tower](tasks/closed/arcade-tower-entry.md)
 - [Arcade run lifecycle](tasks/closed/arcade-run-lifecycle.md)
+- [Match history](tasks/closed/match-history.md)
 
 The rest of this phase is unstarted, and it is deliberately the last phase:
 most of it waits on an identity primitive that has not been chosen yet
@@ -102,7 +103,7 @@ most of it waits on an identity primitive that has not been chosen yet
 mean scheduling work whose first step is still an open question — which tasks
 those are lives in that issue's blast radius and in each file's `gated-on`.
 The rest do not wait on it, and say why in their own files: a solo campaign
-and a match history persist to `localStorage` like the arcade ladder, and a
-challenge link identifies a match rather than a player. They are specified, so
+persists to `localStorage` like the arcade ladder, and a challenge link
+identifies a match rather than a player. They are specified, so
 they are tasks rather than issues, and unscheduled rather than low-priority:
 they sit in [tasks/open/](tasks/open/) carrying `phase: 4`.

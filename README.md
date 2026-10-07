@@ -27,6 +27,10 @@ original terminal game.
   its Fight button: the whole order drawn bottom-up with your fighter standing on
   the floor you have reached, beside the one you are about to fight — after a win,
   climbing into place.
+- **Match History** — every match this browser finished, one row per match and
+  expandable to the rounds inside it: the two fighters, the score, the stage and
+  how long ago it was. The record is kept in this browser (`localStorage`), capped
+  at fifty and cleared with the site — a record of what you played, not a ranking.
 - **Timing rules** — picks outside the shoot window are rejected with `400`
   (a second pick with `409`); no pick in time is a timeout loss.
 - Server-sent events (SSE) for push, plain `POST` for player actions — no

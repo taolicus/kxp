@@ -119,15 +119,20 @@ function applyBg(bg) {
 }
 
 function setBg(d) {
-  bgReady = applyBg(bgNameFor(d));
-  return bgReady;
+  const bg = bgNameFor(d);
+  bgReady = applyBg(bg);
+  // The name that was applied, for a caller that has to record which stage a
+  // match was fought on. Every other caller ignores it.
+  return bg;
 }
 
 // showGame defers showing the game view until the current bg is loaded. Guarded
-// so a late load never paints the game screen after the player already left.
+// so a late load never paints the game screen after the player already left --
+// which includes leaving into the match history: a stage still resolving while
+// the record is open would otherwise replace it with a match that is over.
 function showGame() {
   bgReady.then(() => {
-    if (state !== 'lobby' && state !== 'waiting') show('game');
+    if (state !== 'lobby' && state !== 'waiting' && state !== 'history') show('game');
   });
 }
 
@@ -439,6 +444,189 @@ function showTower() {
   // else would put it back.
   btn.disabled = false;
   show('ladder');
+}
+
+// The match history: this browser's own record of the matches it finished, one
+// entry per match, newest first, capped like any other local store. The server
+// keeps no history -- nothing in this repo could -- so this is the client's own,
+// and it is read the way the arcade ladder's run is: whatever is in localStorage
+// is writable by hand and outlives the code that wrote it, so the shape is
+// checked rather than assumed.
+//
+// It is not a leaderboard, deliberately. Ranking needs something a per-browser
+// array cannot give, which is why the ladder is gated on player identity and
+// this is not: a record of what this device finished is honest about being
+// exactly that.
+const HISTORY_KEY = 'kxp-history';
+const HISTORY_CAP = 50;
+
+const OUTCOMES = ['win', 'loss', 'draw', 'void'];
+const OUTCOME_LABELS = { win: 'Win', loss: 'Loss', draw: 'Draw', void: 'No contest' };
+
+// What the record of the match in progress is filed under -- the opponent, the
+// length, the stage, all read from `matched` -- and the rounds of that match as
+// they resolve. The record spans a whole match; every frame that feeds it
+// describes one round, and the two are kept together for the same reason the
+// opponent slot is: what a frame says about its round is only a row of
+// something bigger.
+//
+// The context earns its place on what a deciding frame does not carry. An
+// opponent's departure never carries the stage, the plain form of one (a
+// departure before anything was scored) carries no series fields at all, and
+// the identity pair rides that frame today only because the wire grew it later
+// -- a client that must also survive a server predating it reads the pair from
+// here first.
+let matchCtx = null;
+let pendingRounds = [];
+
+// readHistory returns the matches recorded here, newest first, capped on the
+// way in rather than trusted to have been capped on the way out.
+function readHistory() {
+  let list = null;
+  try { list = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (e) { list = null; }
+  if (!Array.isArray(list)) return [];
+  return list.filter(historyOK).slice(0, HISTORY_CAP);
+}
+
+function saveHistory(list) {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, HISTORY_CAP))); } catch (e) {}
+}
+
+// What a stored entry must have to be rendered. The fighters, the stage and the
+// tally read with honest fallbacks on the way out, so requiring them here would
+// drop an entry an older client wrote for a good reason; these are the fields
+// neither the summary nor the rounds can read without.
+function historyOK(e) {
+  if (!e || typeof e !== 'object' || Array.isArray(e)) return false;
+  if (!OUTCOMES.includes(e.outcome) || (e.mode !== 'online' && e.mode !== 'cpu')) return false;
+  if (!Number.isFinite(e.ts) || !Array.isArray(e.rounds)) return false;
+  return e.rounds.every((r) => r && typeof r === 'object'
+    && Number.isFinite(r.round) && OUTCOMES.includes(r.outcome));
+}
+
+// recordRound files what this frame says about the round onto the match in
+// progress. A frame that names no round is not a round anybody played, so it
+// becomes one only when nothing else is recorded: a departure the match opened
+// and closed on is still a row worth showing, while a forfeited series must not
+// grow a round nobody won.
+function recordRound(d) {
+  const n = Number(d.round);
+  // Round one starts a new record. The round number is the one thing on a frame
+  // that says which match it belongs to -- all a client has if its server was
+  // restarted under it, or it was reconnected into a match it was not playing.
+  if (n === 1) pendingRounds = [];
+  const unnamed = !Number.isFinite(n);
+  if (unnamed && pendingRounds.length) return;
+  pendingRounds.push({
+    round: unnamed ? pendingRounds.length + 1 : n,
+    you: d.you || '',
+    opponent: d.opponent || '',
+    yourNote: d.yourNote || '',
+    opponentNote: d.opponentNote || '',
+    // What this client measured about its own click beats the round trip when it
+    // reported one, exactly as the result panel reads them; a side that cannot
+    // say is left blank rather than given a number it did not produce.
+    youMs: d.youClientMs ?? d.youTimingMs ?? null,
+    opponentMs: d.opponentClientMs ?? d.opponentTimingMs ?? null,
+    outcome: d.outcome,
+    // Only a departure writes this: the sentence the banner shows for one. It is
+    // what a row falls back to when there are no moves to show.
+    note: d.note || '',
+    ts: Number(d.ts) || Date.now(),
+  });
+}
+
+// commitMatch files the match whose deciding frame has just arrived, and clears
+// what was waiting to be filed with it. `seriesOver !== false` is the arcade
+// ladder's rule and the Play Again button's, so history, the ladder and the
+// result screen agree on what "decided" means -- and a server predating the
+// field records rather than leaving the match unrecorded.
+function commitMatch(d) {
+  const ctx = matchCtx || {};
+  saveHistory([{
+    outcome: d.outcome,
+    // The wire's closed set, collapsed to it: an unrecognised mode would be
+    // dropped on the next read, which would lose a real match to a stray value.
+    mode: d.mode === 'cpu' ? 'cpu' : 'online',
+    youCharacter: d.youCharacter || loadCharacter() || null,
+    opponentCharacter: d.opponentCharacter || ctx.opponentCharacter || null,
+    opponentName: d.opponentName || ctx.opponentName || null,
+    roundsTarget: Number(d.roundsTarget) || ctx.roundsTarget || 0,
+    youRoundWins: d.youRoundWins != null ? Number(d.youRoundWins) : null,
+    oppRoundWins: d.oppRoundWins != null ? Number(d.oppRoundWins) : null,
+    background: ctx.background || null,
+    rounds: pendingRounds.slice(),
+    ts: Number(d.ts) || Date.now(),
+  }, ...readHistory()]);
+  matchCtx = null;
+  pendingRounds = [];
+}
+
+// historyFighter names a fighter the way the slots do -- emoji and name -- from
+// what the record holds. Deliberately not characterByID, which falls back to the
+// roster's first fighter and would draw somebody else's name for a fighter that
+// has since left the roster: a stored id the roster no longer knows still reads
+// as the fighter that was fought, and only nothing at all reads as a dash.
+function historyFighter(id, fallback) {
+  const c = id && CHARACTERS.find((f) => f.id === id);
+  if (c) return `${c.emoji} ${c.name}`;
+  return id || fallback || '\u2014';
+}
+
+// One line per match: what it was, who fought it, how it stood, and when.
+function historySummary(e) {
+  const bits = [
+    OUTCOME_LABELS[e.outcome] || '\u2014',
+    e.mode === 'cpu' ? 'CPU' : 'Online',
+    `${historyFighter(e.youCharacter, 'You')} vs ${historyFighter(e.opponentCharacter, e.opponentName)}`,
+  ];
+  // Only a series has a score worth showing beside the outcome: at a target of
+  // one the tally would just say the outcome again, and an entry from before the
+  // tally existed has nothing to draw.
+  if (e.roundsTarget > 1 && Number.isFinite(e.youRoundWins) && Number.isFinite(e.oppRoundWins)) {
+    bits.push(`${e.youRoundWins}\u2013${e.oppRoundWins}`);
+  }
+  bits.push(KXP.whenLabel(e.ts, Date.now()));
+  return bits.join(' \u00b7 ');
+}
+
+// One round inside it. The moves go up as both sides' picks when there are any,
+// and the departure's sentence when there are not -- a row that showed a dash
+// against a dash would say less than the frame it came from.
+function historyRound(r) {
+  const bits = [`<span class="hist-rn">R${r.round}</span>`];
+  if (r.note) bits.push(r.note);
+  else if (r.you || r.opponent) bits.push(`${KXP.aliases[r.you] || '\u2014'} vs ${KXP.aliases[r.opponent] || '\u2014'}`);
+  bits.push(`<span class="hist-outcome hist-${r.outcome}">${OUTCOME_LABELS[r.outcome] || '\u2014'}</span>`);
+  // The round's own notes -- timed out, early, late -- mine first and theirs
+  // second, the order the timings below are in.
+  const notes = [r.yourNote, r.opponentNote].filter(Boolean);
+  if (notes.length) bits.push(`<span class="hist-note">${notes.join('/')}</span>`);
+  if (r.youMs != null || r.opponentMs != null) {
+    bits.push(`<span class="hist-ms">${r.youMs ?? '\u2014'}/${r.opponentMs ?? '\u2014'}ms</span>`);
+  }
+  return `<li class="hist-round">${bits.join(' \u00b7 ')}</li>`;
+}
+
+function historyHTML(e) {
+  const stage = e.background
+    ? `<p class="hist-stage">${e.background[0].toUpperCase()}${e.background.slice(1)}</p>` : '';
+  return `<details class="hist-match hist-${e.outcome}">`
+    + `<summary>${historySummary(e)}</summary>`
+    + `<div class="hist-body">${stage}<ol class="hist-rounds">${e.rounds.map(historyRound).join('')}</ol></div>`
+    + `</details>`;
+}
+
+// renderHistory draws the record when it is opened, rather than keeping it in
+// step as it grows: it is this browser's own, and reading it here is what makes
+// a match committed a moment ago -- or by another tab -- visible without a
+// reload. Stored strings go into the markup the way every other render in this
+// file puts them, as the roster and the server supply them on the way in.
+function renderHistory() {
+  const list = readHistory();
+  $('#history-list').innerHTML = list.length
+    ? list.map(historyHTML).join('')
+    : '<p class="hist-empty">No matches yet.</p>';
 }
 
 function setStats() {
@@ -757,6 +945,12 @@ const enter = {
     // belonged to is too, and the next one starts from empty pips.
     seriesTally = null;
     paintPips();
+    // ...and so is what was being recorded of it. An unfinished match is not a
+    // record of anything, so a match abandoned mid-series leaves nothing behind
+    // and the next one starts a record of its own rather than inheriting the
+    // rounds of a match that never finished.
+    matchCtx = null;
+    pendingRounds = [];
     show('lobby');
     setNotice(d && d.reason);
   },
@@ -774,9 +968,22 @@ const enter = {
     stopReadyLoop();
     clearTimeout(stallTimer);
     setNotice(null);
-    setBg(d);
+    const stage = setBg(d);
     showGame();
     resetGame();
+    // What this match's record is filed under. A reconnect re-admits into the
+    // match already in progress, so a context that is set is kept and only
+    // filled in from what the frame adds -- a snapshot names the opponent but
+    // not the length -- while the rounds already filed for it go with it. A
+    // match this client was not in starts a record of its own.
+    if (!matchCtx) pendingRounds = [];
+    const seen = matchCtx || {};
+    matchCtx = {
+      opponentName: d.opponentName || seen.opponentName || null,
+      opponentCharacter: d.opponentCharacter || seen.opponentCharacter || null,
+      roundsTarget: Number(d.roundsTarget) || seen.roundsTarget || 0,
+      background: stage,
+    };
     // The target arrives with the match, not with its first result, so the pips
     // go up empty and are there for every round of the series instead of
     // appearing partway into it. Whatever the previous match left on screen goes
@@ -893,6 +1100,12 @@ const enter = {
     const wasFloor = ladderFloor;
     if (wasFloor >= 0 && d.seriesOver !== false) ladderNext = advanceLadder(d.outcome);
     else if (wasFloor >= 0) ladderNext = null;
+    // The record this browser keeps, on the same rule the ladder just used: every
+    // round is filed as it resolves, and the match itself on the frame that
+    // decides it -- a mid-series round is a row of a match still to be decided,
+    // and this is where that match gets decided or not at all.
+    recordRound(d);
+    if (d.seriesOver !== false) commitMatch(d);
     renderResult(d);
     // The between-rounds gate. An online series pauses after every non-final
     // round with the same readiness handshake open again, and the next
@@ -923,6 +1136,17 @@ const enter = {
     // the Fight button draw a different ladder under the player.
     saveArcade(a);
     showTower();
+  },
+
+  // The record, read when it is asked for rather than kept in step with it: it
+  // is this browser's own, and rendering on entry is what makes a match
+  // committed a moment ago -- or by another tab -- visible without a reload.
+  // Reached from the lobby and left by the same `mode` edge the tower's leave
+  // button takes, so leaving runs the lobby's entry rather than swapping views
+  // behind its back.
+  history() {
+    renderHistory();
+    show('history');
   },
 };
 
@@ -1012,6 +1236,12 @@ function connect() {
       // to is the *previous* match's teardown. Routing it to the lobby would walk
       // the player off the ladder they were about to climb.
       if (state === 'result' || state === 'ladder') return;
+      // The record is the lobby's own screen: nothing of a match is live behind
+      // it, so this teardown has nothing to reconcile, and routing it to the
+      // lobby would walk the player out of the record they opened. The one
+      // exception is a `requeued` frame, which is the server saying the queue is
+      // live -- its view has to win over the screen it interrupts.
+      if (state === 'history' && !d.requeued) return;
       // A cancelled handshake arrives here too, carrying the server's reason.
       // `requeued` means the server put us back on the online queue, so going
       // to the lobby would be a lie: the player would sit in a lobby that looks
@@ -1165,6 +1395,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     transition('cancel');
     post('/cancel');
   });
+
+  // The record, from the lobby that holds it. The back button is the tower's
+  // leave button one screen over: `mode` puts the lobby back the way it was,
+  // which is what a player who opened a list expects to return to.
+  $('#btn-history').addEventListener('click', () => transition('history'));
+  $('#btn-history-back').addEventListener('click', () => transition('mode'));
 
   $('#btn-again').addEventListener('click', () => {
     if (ladderNext) {

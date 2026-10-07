@@ -187,5 +187,19 @@
     return { pass: true, key };
   }
 
-  return { aliases, shootWindow, planRound, countdownSlot, countdownPainter, applyResult, resultLines, rejectLabel, beaconGate };
+  // whenLabel is the "when" a match-history row shows: how long ago, in the
+  // units a reader of a match list thinks in, and the date once days-ago stops
+  // being useful. `now` is the caller's own reading of the clock, so nothing
+  // here reads one -- the record it formats is display-only, and a clock this
+  // file did not own would be one more to disagree with.
+  function whenLabel(ts, now) {
+    if (!Number.isFinite(ts)) return '';
+    const ago = now - ts;
+    if (ago < 60000) return 'just now';
+    if (ago < 3600000) return `${Math.floor(ago / 60000)}m ago`;
+    if (ago < 86400000) return `${Math.floor(ago / 3600000)}h ago`;
+    return new Date(ts).toISOString().slice(0, 10);
+  }
+
+  return { aliases, shootWindow, planRound, countdownSlot, countdownPainter, applyResult, resultLines, rejectLabel, beaconGate, whenLabel };
 }));

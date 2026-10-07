@@ -338,3 +338,19 @@ test('beaconGate: identical kind+state only re-sent after 60s', () => {
   assert.equal(KXP.beaconGate('sse-error', 'shoot', last, 1000 + 59999).pass, false);
   assert.equal(KXP.beaconGate('sse-error', 'shoot', last, 1000 + 60000).pass, true);
 });
+test('whenLabel: how long ago, in the units a list reader thinks in', () => {
+  const now = 1700000000000;
+  assert.equal(KXP.whenLabel(now, now), 'just now');
+  assert.equal(KXP.whenLabel(now - 59999, now), 'just now');
+  assert.equal(KXP.whenLabel(now - 60000, now), '1m ago');
+  assert.equal(KXP.whenLabel(now - 5 * 60000, now), '5m ago');
+  assert.equal(KXP.whenLabel(now - 3 * 3600000, now), '3h ago');
+  assert.equal(KXP.whenLabel(now - 23 * 3600000, now), '23h ago');
+  // Past a day, the date: "47h ago" is a question a reader has to answer, and
+  // a date is not.
+  assert.equal(KXP.whenLabel(now - 25 * 3600000, now), '2023-11-13');
+  assert.equal(KXP.whenLabel(now - 3 * 86400000, now), '2023-11-11');
+  // A frame stamped ahead of the reader's clock is still "now", not a countdown.
+  assert.equal(KXP.whenLabel(now + 500, now), 'just now');
+  assert.equal(KXP.whenLabel('nope', now), '');
+});

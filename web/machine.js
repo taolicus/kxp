@@ -4,7 +4,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const STATES = ['lobby', 'waiting', 'matched', 'countdown', 'shoot', 'locked', 'result', 'ladder'];
+  const STATES = ['lobby', 'waiting', 'matched', 'countdown', 'shoot', 'locked', 'result', 'ladder', 'history'];
 
   const EVENTS = [
     'queue', 'cancel',
@@ -14,11 +14,11 @@
     'stateIdle',
     'snapshot:idle', 'snapshot:waiting', 'snapshot:matched', 'snapshot:countdown', 'snapshot:shoot',
     'rematch:online', 'mode',
-    'climb',
+    'climb', 'history',
   ];
 
   const transitions = {
-    lobby: { queue: 'waiting', waiting: 'waiting', matched: 'matched', climb: 'ladder' },
+    lobby: { queue: 'waiting', waiting: 'waiting', matched: 'matched', climb: 'ladder', history: 'history' },
     waiting: { cancel: 'lobby', matched: 'matched', waiting: 'waiting', stateIdle: 'lobby' },
     matched: { cancel: 'lobby', matched: 'matched', countdown: 'countdown', result: 'result', opponentLeft: 'result', stateIdle: 'lobby', waiting: 'waiting' },
     countdown: { countdown: 'countdown', matched: 'countdown', shoot: 'shoot', result: 'result', opponentLeft: 'result', stateIdle: 'lobby' },
@@ -44,6 +44,18 @@
     // not started, so a teardown frame has nothing to reconcile from either way in,
     // and routing it to the lobby would walk the player off the tower.
     ladder: { matched: 'matched', mode: 'lobby' },
+    // The match history: the lobby's own screen, opened by `history` and closed
+    // by `mode` -- the same edge the tower's leave button takes, so leaving runs
+    // the lobby's entry rather than swapping views behind its back. It yields to
+    // a live match the way the lobby does: `waiting` and `matched` are frames
+    // saying the server has this client queued or paired, and dropping either
+    // would leave the player reading a record while a match they are in runs
+    // without them. No `stateIdle`, for the reason `result` and `ladder` have
+    // none: nothing of a match is live behind it, so a trailing teardown frame
+    // has nothing to reconcile, and routing it to the lobby would walk the
+    // player out of the record they opened. A reconnect snapshot crosses it for
+    // the same reason the two edges above do.
+    history: { mode: 'lobby', waiting: 'waiting', matched: 'matched' },
   };
 
   STATES.forEach((s) => {

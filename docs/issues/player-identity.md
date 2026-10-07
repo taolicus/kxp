@@ -44,5 +44,5 @@ The rest of Phase 4 does not wait on it, and each says why in its own file:
 the arcade ladder and will be retrofitted onto whatever is chosen here,
 [send-challenge](../tasks/open/send-challenge.md) needs no identity because a
 link identifies a match rather than a player, and
-[match-history](../tasks/open/match-history.md) is a local record that carries no
+[match-history](../tasks/closed/match-history.md) is a local record that carries no
 rank.

@@ -48,6 +48,10 @@
       <button id="btn-online" class="primary" disabled>Play Online</button>
       <button id="btn-cpu">Play vs CPU</button>
       <button id="btn-ladder">Arcade Mode</button>
+      <!-- The record of the matches this browser finished, behind its own button
+           rather than a fourth mode: it opens something that already exists, and
+           it has no request of its own to post. -->
+      <button id="btn-history">Match History</button>
     </div>
   </section>
 
@@ -106,6 +110,18 @@
     <div class="ladder-actions">
       <button id="ladder-fight" class="primary">Fight</button>
       <button id="ladder-leave">Change mode</button>
+    </div>
+  </section>
+  <!-- The match history: one <details> per match, in the order they finished,
+       with the rounds of a match inside its own row. Collapsed rows keep a full
+       record readable on one screen; the rounds are one tap away rather than a
+       list of lists left open. app.js fills it from what this browser has
+       recorded -- the server keeps none. -->
+  <section id="history" class="view hidden">
+    <h2>Match History</h2>
+    <div id="history-list" class="hist-list" aria-label="Match history"></div>
+    <div class="buttons">
+      <button id="btn-history-back">Back</button>
     </div>
   </section>
 

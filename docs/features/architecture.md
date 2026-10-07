@@ -327,6 +327,79 @@ after a win, a new run opening at the bottom after a loss, the completed run at 
 top, a second visit finding its button armed, and the leave that returns to a lobby
 resuming the same floor.
 
+## Match history
+
+The lobby's "Match History" opens a `#history` view: one `<details>` per match
+this browser finished, newest first, expandable to the rounds it was made of. The
+record is the client's own — `kxp-history` in `localStorage`, beside `kxp-stats`
+and `kxp-arcade`, capped at 50 — and it is display-only: nothing is judged from
+it, and clearing the site clears it.
+
+That limit is deliberate rather than a first step. The server keeps no history and
+has no key to keep one under: no persistence surface in this repo and no identity
+to key one to, so a server-side record would be a per-tab copy of the same thing
+with a round trip attached. It is therefore not a leaderboard and is not shaped
+like one — ranking is what [leaderboard](../tasks/open/leaderboard.md) stays gated
+on [player identity](../issues/player-identity.md) for, and this record needs
+neither, which is why it ships ungated. Its own standing is written beside it: a
+per-browser record means two browsers each keep theirs.
+
+Four things make it an honest record of what it saw:
+
+- **A match is filed when it is decided, not when a round is.** Rounds are
+  appended to a pending list as they resolve, and the match is committed by the
+  frame that ends the series — `seriesOver !== false`, the same rule the
+  [arcade ladder](#the-arcade-ladder) advances on and the result screen draws its
+  button from, so history, the ladder and the button agree on what "decided"
+  means, and a server predating the field records rather than leaving the match
+  unrecorded. The tally on the entry is the frame's own scoreboard read, after
+  the round that frame reports (see
+  [A match is a series of rounds](#a-match-is-a-series-of-rounds)), so the
+  summary line never has to add one up.
+- **A tab closed mid-series leaves an uncommitted pending list**, which is an
+  unfinished match — not part of a record of finished ones, and not a loss
+  either. Nothing claims the match went the other way.
+- **`matchCtx` is what a deciding frame does not carry.** Captured on `matched`,
+  it holds the opponent, the length and the stage. An opponent's departure never
+  carries the stage at all; the plain form of one — a departure before anything
+  was scored — carries no series fields either (only identity, which the wire
+  grew later); and a forfeited series carries its tally but no round. The context
+  fills those gaps and makes the record independent of which of the two departure
+  shapes arrived, while the frame's own fields win wherever they exist.
+- **`localStorage` is untrusted input**, for the reason the ladder treats it that
+  way: it is writable by hand and outlives the code that wrote it, so every entry
+  is shape-checked on the way in — not an object, an unknown outcome or mode, a
+  missing timestamp or rounds array, and a round that names neither a number nor
+  an outcome is dropped rather than drawn. The check runs on read and the cap
+  runs on the way in as well as the way out, because what is stored cannot be
+  trusted to have been capped when it was written.
+
+A frame that names no round — the two departure forms — is a row only when nothing
+else is recorded: a match that opened and closed on a departure is still a match
+worth showing, while a forfeited series must not grow a round nobody won. Round
+one is what starts a new pending list, since it is the one thing on a frame that
+says *which* match it belongs to for a client whose server restarted underneath it.
+
+The view is reached by two edges — `lobby + history → history` and
+`history + mode → lobby`, the same shape as the tower's own pair — plus `waiting`
+and `matched`, because a frame saying this client is queued or paired is a live
+match and wins over the screen it interrupts, exactly as it does from the lobby.
+There is no `stateIdle` edge for the reason `result` and `ladder` have none: the
+tower subsection above argues it, and it applies here for the same two reasons —
+nothing of a match is live behind the screen, and honouring the frame would walk
+the player out of the record they opened. A reconnect snapshot does cross it, for
+the reason `waiting` and `matched` do. There is no wire change: no new event type,
+no field, so a tab open across the deploy that has never seen the button is
+unaffected.
+
+It is pinned in `web/app.history.test.cjs`, which drives the real `app.js`
+against a stubbed context: a final result files a match, a mid-series round does
+not, a departure files the match it was made with and a forfeit adds no round to
+it, malformed storage is dropped rather than rendered, and the cap holds at
+fifty. Rendering itself — the rows, the expansion, the styling — has no coverage
+on this host, and the probe suite observes frames rather than client storage, so
+`t1`–`t8` see none of it either.
+
 ## Matchmaking
 
 A single global FIFO queue pairs players under the hub mutex, and it pairs only
