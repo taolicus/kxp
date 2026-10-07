@@ -654,7 +654,11 @@ function renderFighters() {
 
 function openChoose(mode) {
   pendingMode = mode;
-  $('#btn-start').textContent = mode === 'online' ? 'Search for Opponent' : 'Fight!';
+  if (mode === 'challenge') {
+    $('#btn-start').textContent = 'Create Challenge';
+  } else {
+    $('#btn-start').textContent = mode === 'online' ? 'Search for Opponent' : 'Fight!';
+  }
   $('#btn-start').disabled = false;
   if (CHARACTERS.length && !localStorage.getItem('kxp-character')) {
     saveCharacter(CHARACTERS[0].id);
@@ -959,6 +963,10 @@ const enter = {
     stopReadyLoop();
     clearTimeout(stallTimer);
     show('queue');
+    if (typeof document !== 'undefined' && document.getElementById) {
+      const cl = document.getElementById('challenge-link');
+      if (cl && cl.classList) cl.classList.add('hidden');
+    }
     // A plain /queue has no reason, so this clears any notice left over from an
     // earlier cancelled handshake rather than stranding it above the spinner.
     setNotice(d && d.reason);
@@ -1165,6 +1173,25 @@ function connect() {
     setOnline(d.online);
     if (d.now) clockSkew = d.now - Date.now();
     post('/character', { character: loadCharacter() });
+    try {
+      const params = new URLSearchParams(location.search);
+      const token = params.get('challenge');
+      if (token && d.state === 'idle') {
+        // claimant: post join after connected; guard by lobby/idle only? also run once
+        if (!window.__challengeJoined) {
+          window.__challengeJoined = true;
+          post('/join', { id, token }).then((res) => {
+            if (!res.ok) {
+              try { history.replaceState({}, '', location.pathname); } catch (e) {}
+              setNotice('Challenge expired or already in play');
+            }
+          });
+        }
+      } else {
+        window.__challengeJoined = false;
+      }
+    } catch (e) {}
+
     if (d.state === 'waiting') transition('snapshot:waiting', d);
     else if (d.state === 'ingame') {
       if ((d.phase === 'preparing' || d.phase === 'countdown' || d.phase === 'done') && d.pending) {
@@ -1279,25 +1306,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-cpu').addEventListener('click', () => openChoose('cpu'));
   $('#btn-ladder').addEventListener('click', () => openChoose('ladder'));
   $('#btn-start').addEventListener('click', () => {
-    // Re-entry guard, mirroring #btn-again. Without it a double-tap fires two
-    // /cpu posts in one tick; the server now rejects the second with 409, but
-    // the guard is what keeps a tap-tap on a phone from asking for a match the
-    // player already has. Re-armed on failure so a rejected tap is not a dead
-    // button, and pendingMode is consumed so a later failure cannot restore a
-    // mode the player has already left.
     const btn = $('#btn-start');
     if (btn.disabled) return;
     const mode = pendingMode;
     pendingMode = '';
     btn.disabled = true;
+    if (mode === 'challenge') {
+      const p = post('/challenge', { id });
+      Promise.resolve(p).then((res) => {
+        if (res && res.ok) {
+          res.json().then((d) => {
+            const token = d.token;
+            const url = location.origin + '/?challenge=' + encodeURIComponent(token);
+            const inp = document.getElementById('challenge-url');
+            if (inp) inp.value = url;
+            const link = document.getElementById('challenge-link');
+            if (link) link.classList.remove('hidden');
+            transition('queue');
+          }).catch(() => {
+            transition('queue');
+          });
+          return;
+        }
+        btn.disabled = false;
+        pendingMode = mode;
+        if (res && res.status === 409) setNotice('You are already in a match.');
+      });
+      return;
+    }
     if (mode === 'online') transition('queue');
     if (mode === 'ladder') {
-      // The mode's first screen is the tower: the run it would resume is already
-      // rendered there, and its Fight button starts the floor. No request is made
-      // from the picker, so nothing is re-armed on success -- the view is left
-      // behind -- but a refused route must not deaden the button. The run's length
-      // is captured here, from the selection the lobby is showing, so a floor is
-      // fought at the lobby's mode rather than at whatever match ended last.
       ladderTarget = cpuTarget;
       if (!transition('climb')) {
         btn.disabled = false;
@@ -1305,11 +1343,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       return;
     }
-    // The length rides the same control the CPU path posts: one server-side
-    // closed set serves both, so the choice is read off the button the player
-    // was shown rather than restated here. Absent would mean one round on the
-    // wire, but the client sends its explicit choice so the match asked for is
-    // the match the control is showing.
     const p = mode === 'online' ? post('/queue', { roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }) : postCPU(mode);
     Promise.resolve(p).then((res) => {
       if (res && res.ok) return;
@@ -1395,10 +1428,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     transition('cancel');
     post('/cancel');
   });
+  $('#btn-copy').addEventListener('click', () => {
+    const inp = document.getElementById('challenge-url');
+    if (inp) {
+      inp.select();
+      try { document.execCommand('copy'); } catch (e) {}
+    }
+  });
+
 
   // The record, from the lobby that holds it. The back button is the tower's
   // leave button one screen over: `mode` puts the lobby back the way it was,
   // which is what a player who opened a list expects to return to.
+  $('#btn-challenge').addEventListener('click', () => openChoose('challenge'));
   $('#btn-history').addEventListener('click', () => transition('history'));
   $('#btn-history-back').addEventListener('click', () => transition('mode'));
 
