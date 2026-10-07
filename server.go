@@ -183,27 +183,37 @@ type queueEntry struct {
 	drawEnds     bool
 }
 
+type challengeEntry struct {
+	token   string
+	creator *Client
+	match   *match // set when paired
+}
+
 type Hub struct {
-	mu      sync.Mutex
-	clients map[string]*Client
-	queue   []queueEntry
-	active  atomic.Int32
-	down    context.Context
-	stop    context.CancelFunc
-	limiter *rateLimiter
-	metrics *HubMetrics
-	started time.Time
+	mu         sync.Mutex
+	clients    map[string]*Client
+	queue      []queueEntry
+	active     atomic.Int32
+	down       context.Context
+	stop       context.CancelFunc
+	limiter    *rateLimiter
+	metrics    *HubMetrics
+	started    time.Time
+	challenges map[string]*challengeEntry // token -> challenge
+	challenge  map[string]*challengeEntry // creator id -> challenge (open)
 }
 
 func NewHub() *Hub {
 	down, stop := context.WithCancel(context.Background())
 	return &Hub{
-		clients: make(map[string]*Client),
-		down:    down,
-		stop:    stop,
-		limiter: newRateLimiter(rlCapacity, rlRefillPerSec, rlMaxEntries, nil),
-		metrics: newHubMetrics(),
-		started: time.Now(),
+		clients:    make(map[string]*Client),
+		challenges: make(map[string]*challengeEntry),
+		challenge:  make(map[string]*challengeEntry),
+		down:       down,
+		stop:       stop,
+		limiter:    newRateLimiter(rlCapacity, rlRefillPerSec, rlMaxEntries, nil),
+		metrics:    newHubMetrics(),
+		started:    time.Now(),
 	}
 }
 
@@ -231,6 +241,8 @@ func (h *Hub) routes() *http.ServeMux {
 	mux.HandleFunc("GET /events", h.handleEvents)
 	mux.HandleFunc("POST /queue", h.rateLimit(h.handleQueue))
 	mux.HandleFunc("POST /cancel", h.rateLimit(h.handleCancel))
+	mux.HandleFunc("POST /challenge", h.rateLimit(h.handleChallenge))
+	mux.HandleFunc("POST /join", h.rateLimit(h.handleJoin))
 	mux.HandleFunc("POST /cpu", h.rateLimit(h.handleCPU))
 	mux.HandleFunc("POST /ready", h.rateLimit(h.handleReady))
 	mux.HandleFunc("POST /move", h.rateLimit(h.handleMove))
@@ -497,6 +509,13 @@ func (h *Hub) removeClient(c *Client) {
 		h.dequeueLocked(c)
 		c.queueing = false
 	}
+	// Drop any open challenge created by this client
+	if ch, ok := h.challenge[c.id]; ok {
+		delete(h.challenge, c.id)
+		if ch.token != "" {
+			delete(h.challenges, ch.token)
+		}
+	}
 	c.match = nil
 	n := len(h.clients)
 	h.mu.Unlock()
@@ -742,6 +761,22 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 		if s.client != nil && s.client.match == m {
 			s.client.match = nil
 			teardown[i] = true
+			// Consume any open challenge involving this side (match produced)
+			if ch, ok := h.challenge[s.client.id]; ok {
+				delete(h.challenge, s.client.id)
+				if ch.token != "" {
+					delete(h.challenges, ch.token)
+				}
+			}
+		}
+	}
+	// Also consume challenges that reference this match
+	for tok, ch := range h.challenges {
+		if ch.match == m {
+			delete(h.challenges, tok)
+			if ch.creator != nil {
+				delete(h.challenge, ch.creator.id)
+			}
 		}
 	}
 	h.mu.Unlock()
@@ -826,6 +861,12 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 	// mode the seat is waiting for, so a player who changes their length in the
 	// lobby changes what they will be paired with instead of acquiring a
 	// second place in the queue.
+	// A client with an open challenge cannot be silently queue-killed; challenge takes precedence in intent.
+	if _, ok := h.challenge[c.id]; ok {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusConflict, "challenge already open")
+		return
+	}
 	if i := h.indexOfQueuedLocked(c); i >= 0 {
 		h.queue[i].roundsTarget = target
 		h.queue[i].drawEnds = drawEnds
@@ -858,6 +899,13 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 		cancelled = true
 	}
 	h.mu.Unlock()
+	// Drop any open challenge created by this client
+	if ch, ok := h.challenge[c.id]; ok {
+		delete(h.challenge, c.id)
+		if ch.token != "" {
+			delete(h.challenges, ch.token)
+		}
+	}
 	if cancelled {
 		c.sendEv(evt("state", map[string]any{"state": "idle"}))
 	}
@@ -1017,6 +1065,13 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	if c.queueing {
 		h.dequeueLocked(c)
 		c.queueing = false
+	}
+	// If client has an open challenge, drop it (they chose CPU mode)
+	if ch, ok := h.challenge[c.id]; ok {
+		delete(h.challenge, c.id)
+		if ch.token != "" {
+			delete(h.challenges, ch.token)
+		}
 	}
 	m := h.makeMatch(newID(4), target, side{client: c}, side{bot: true, character: opponent})
 	// The engine's default is the 1-off inference; the wire has spoken, so the
@@ -1198,5 +1253,106 @@ func (h *Hub) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 	h.metrics.incBeacon(kind)
 	log.Printf("kxp: beacon id=%s kind=%s state=%s detail=%q ts=%d", clip(req.ID, 64), kind, clip(req.State, 48), clip(req.Detail, 256), req.TS)
+	w.Write([]byte("{}"))
+}
+func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
+	var req struct{ ID string }
+	if err := h.decode(w, r, &req); err != nil {
+		return
+	}
+	c := h.client(req.ID)
+	if c == nil {
+		h.handlerError(w, http.StatusBadRequest, "not connected")
+		return
+	}
+	h.mu.Lock()
+	if c.match != nil {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusConflict, "already in a match")
+		return
+	}
+	if ch, ok := h.challenge[c.id]; ok {
+		tok := ch.token
+		h.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"token":%q}`, tok)
+		return
+	}
+	if c.queueing {
+		h.dequeueLocked(c)
+		c.queueing = false
+	}
+	if len(h.challenges) >= maxQueue {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusServiceUnavailable, "queue full")
+		return
+	}
+	tok := newID(8)
+	ch := &challengeEntry{token: tok, creator: c}
+	h.challenges[tok] = ch
+	h.challenge[c.id] = ch
+	h.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"token":%q}`, tok)
+}
+
+func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID    string
+		Token string
+	}
+	if err := h.decode(w, r, &req); err != nil {
+		return
+	}
+	c := h.client(req.ID)
+	if c == nil {
+		h.handlerError(w, http.StatusBadRequest, "not connected")
+		return
+	}
+	h.mu.Lock()
+	if c.match != nil {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusConflict, "already in a match")
+		return
+	}
+	ch, ok := h.challenges[req.Token]
+	if !ok || ch == nil || ch.creator == nil {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusNotFound, "challenge gone")
+		return
+	}
+	creator := ch.creator
+	if creator.match != nil {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusConflict, "challenge in play")
+		return
+	}
+	if creator.alive.Err() != nil {
+		// consume and return gone
+		delete(h.challenges, req.Token)
+		delete(h.challenge, creator.id)
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusNotFound, "challenge gone")
+		return
+	}
+	if c == creator {
+		// shouldn't happen but treat as in play/conflict? idempotent already handled; otherwise not found
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusConflict, "challenge in play")
+		return
+	}
+	// dequeue claimant if queueing
+	if c.queueing {
+		h.dequeueLocked(c)
+		c.queueing = false
+	}
+	// consume token
+	delete(h.challenges, req.Token)
+	delete(h.challenge, creator.id)
+	m := h.makeMatch(newID(4), 1, side{client: creator}, side{client: c})
+	m.drawEnds = true
+	ch.match = m
+	h.startMatchLocked(m)
+	h.mu.Unlock()
 	w.Write([]byte("{}"))
 }
