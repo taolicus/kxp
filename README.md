@@ -114,6 +114,7 @@ two players share. See [architecture](docs/features/architecture.md) for the int
 npm run links     # internal doc paths resolve, and each #fragment names a heading
 go test ./...     # Go suite
 npm run unit      # web/*.test.cjs + tools/lib/*.test.mjs
+npm run e2e       # browser suite — needs an origin and Chromium, so the laptop only
 ```
 
 `npm run unit` is the way to run the client and harness tests; the files it
@@ -139,10 +140,12 @@ BASE_URL=https://your-server.example npm run tall
 
 See [tools/README.md](tools/README.md) for what each probe proves and why the
 origin is required rather than defaulted. The flows create real (short-lived)
-matches by design. Rendering, CSS and in-browser console errors have no
-automated coverage — see the host limits in [AGENTS.md](AGENTS.md). What each
-gate does and does not cover is in
-[docs/development/verification.md](docs/development/verification.md).
+matches by design. `npm run e2e` adds a Playwright suite that renders the lobby
+in a real Chromium against the same origin — laptop only, because the phone
+cannot install Chromium. Styling and layout are asserted nowhere on either
+host. What each gate does and does not cover is in
+[docs/development/verification.md](docs/development/verification.md), and the
+host limits are in [AGENTS.md](AGENTS.md).
 
 ## Status
 

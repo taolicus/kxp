@@ -148,6 +148,7 @@ go vet ./...
 go test ./...       # the one gate the phone cannot time: ALONE, generous timeout (below)
 npm run unit        # web/*.test.cjs + tools/lib/*.test.mjs
 npm run tall        # probes t1–t8 — requires an origin (see below), creates real matches
+npm run e2e         # browser suite — needs origin + Chromium, so the laptop only (see below)
 ```
 
 `npm run unit` is the catch-all for client and harness tests (the README's
@@ -185,7 +186,10 @@ is a property of the phone alone; run the slice on the laptop and it goes away:
    pointer states directly instead of racing two goroutines. The laptop runs
    `-race` normally, so prefer that device for concurrency work
    ([device-aware-workflow.md](docs/development/device-aware-workflow.md)).
-2. **Rendering / CSS / console errors** — No automated coverage on either host.
+2. **Rendering / console errors** — `npm run e2e` covers the lobby's render and
+   in-browser errors, but only on a host with Chromium — the laptop, never the
+   phone. On the phone a rendering claim is hand-checked and says so. Styling
+   and layout are asserted nowhere on either host.
 3. **Deployment** — a local build is not the deployed binary, and "it works
    here" is never evidence a change is live. `GET /health` reports `build.sha`;
    probe `t1` asserts it against local `HEAD` and fails loudly on a stale build.
@@ -201,6 +205,7 @@ echo 'https://your-host' > tools/.base-url   # gitignored, required, never commi
 BASE_URL=https://your-host npm run tall
 npm run tall -- t5 t6                       # subset
 QUICK=1 npm run tall                        # creates no matches
+npm run e2e                                 # browser suite, laptop only: `-- -g lobby` runs a subset
 ```
 
 `npm run t1` first, always: it measures the link, so every later number can be

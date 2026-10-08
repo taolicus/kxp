@@ -24,8 +24,11 @@ The split is clear:
   because it is the third thing that can be checked mechanically, and the
   failure it catches (a renamed file leaving twenty documents pointing at
   nothing) is invisible in review and to every other gate.
-- **Rendering, CSS and in-browser console errors** have no automated coverage
-  here; see the host limits in [AGENTS.md](../AGENTS.md) for what is unverified.
+- **Rendering and in-browser console errors** get covered by `npm run e2e` (the
+  Playwright lobby suite), which drives a real Chromium at the same origin but
+  only on a host that has one — the laptop, not the phone. Styling and layout
+  have no automated coverage anywhere; see the host limits in
+  [AGENTS.md](../AGENTS.md) for what remains unverified.
 
 ## Proving you tested what you think you tested
 

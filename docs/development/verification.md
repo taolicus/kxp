@@ -21,6 +21,7 @@ them a given task belongs on, see
 | `go test ./...` | server internals, engine, handlers, and the invariants `AGENTS.md` lists | client behaviour, the deployed binary |
 | `npm run unit` | client state machine, countdown arming, snapshot reconciliation, probe harness | rendering, CSS, console errors |
 | `npm run tall` | the deployed server over real SSE and HTTP | anything this machine cannot observe |
+| `npm run e2e` | the client rendered in a real browser: what the lobby paints, the POST that leaves the tab, console and page errors | styling and layout, the wire format (the probes own that); needs Chromium, so the laptop only |
 
 `npm run unit` is the catch-all for client and harness tests, and the gate column
 above mirrors the run list in `AGENTS.md` ("Verify") — adding a gate means adding
@@ -72,12 +73,20 @@ test file is a second copy that drifts, which is the failure the docs registers
 were reorganised to remove. If you touch client logic, add a client-behaviour test
 — the probe suite will not catch it for you.
 
-Rendering, CSS, and in-browser console errors have **no** automated coverage
-anywhere in this repo. The Playwright e2e suite that would have covered them was
-withdrawn; the reasoning and what a browser-level suite would require are in
-[automated-test-workflow.md](../tasks/closed/automated-test-workflow.md). This
-is a known, recorded gap, not an oversight — treat a rendering claim as
-hand-checked and say so.
+`npm run e2e` closes the part of that gap a browser can close: three specs in
+`e2e/` drive a real Chromium at the deployed origin, so a render that never
+lands, a control that ships unlit, a POST that carries the wrong rule, or an
+error thrown while the client paints all fail a test that neither `go test` nor
+a probe can see. It runs where Chromium installs — the laptop, never the phone
+([environment.md](environment.md)) — so on the phone the gap above still holds
+and a rendering claim is hand-checked and says so.
+
+What is still unreached is stated rather than implied: styling and layout are
+asserted nowhere, and the specs cover the lobby rather than every view. The
+coverage claim is per host for a reason — a suite withdrawn once for being
+unrunnable
+([core-gameplay-e2e-withdrawn.md](../tasks/closed/core-gameplay-e2e-withdrawn.md))
+is what happens when a repo-wide claim has no host that can honour it.
 
 ## Why there is no `tests/` directory
 
@@ -108,9 +117,9 @@ and the bodies are not read as a sweep. It has never been a reason to move them.
 ## Why browser-free probes
 
 The integration path is `t1`–`t8` in `tools/`: Node scripts that speak the real
-protocol against a deployed origin. No browser, no DOM, no Playwright — which is
-what makes the suite runnable on the machine in
-[environment.md](environment.md) at all. Landed in `6a154fc`.
+protocol against a deployed origin. No browser and no DOM — which is what makes
+the suite runnable on the phone at all, where `npm run e2e` cannot run. Landed
+in `6a154fc`.
 
 The design constraint that matters more than the absence of a browser is the
 verdict taxonomy: **PASS / FAIL / INCONCLUSIVE**, where an inconclusive verdict
