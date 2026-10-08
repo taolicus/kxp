@@ -34,8 +34,8 @@ contract.
 | `handlers.go` | `statusWriter`/`accessLog`, `handlerError`, `decode`, the eleven `handle*` route handlers, `clip` |
 
 Two calls are judgement, not mechanics. `snapshot` and `broadcastOnline` are hub
-state reporting rather than matchmaking, and could sit in either; pick one and say
-why in the commit body. `maxBodyBytes` is a request limit, not an SSE detail, so it
+state reporting rather than matchmaking, and could sit in either; pick one and
+say why here. `maxBodyBytes` is a request limit, not an SSE detail, so it
 does not belong to `sse.go` on the strength of where it happens to sit.
 
 ## Constraints

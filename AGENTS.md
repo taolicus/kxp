@@ -134,10 +134,10 @@ and it does not depend on how the context window behaves.
 - Add or extend a test **in the same commit** as the change. A behaviour change
   with no test is not finished.
 - **Check the new test fails against the pre-change code** before you believe
-  it. This repo does this and says so in the commit body ("Verified to fail
-  against the old handler", "checked to *fail* against the old wall-only form,
-  so it cannot silently rot"). A test that passes both before and after pins
-  nothing.
+  it. Record that you did, where the slice's detail lives — the task file
+  ("Verified to fail against the old handler", "checked to *fail* against the
+  old wall-only form, so it cannot silently rot"). A test that passes both
+  before and after pins nothing.
 - Also pin the **negative direction** when you fix a bug, so an over-correction
   is caught: `finish_test.go` asserts both "the re-paired side gets no frame"
   and "the normal path still tells both sides to go idle".
@@ -186,9 +186,9 @@ more often than a hang is, and a genuinely stuck test still gets killed by Go
 itself. Batch Go edits and run the full suite once at the end;
 `go test -run <Name> ./...` covers a slice in the meantime.
 
-**What no gate here covers** — state these limits in the commit body and in any
-report, rather than implying coverage that does not exist. The first is a
-property of the phone alone; run the slice on the laptop and it goes away:
+**What no gate here covers** — state these limits in any report and in the
+slice's task file, rather than implying coverage that does not exist. The first
+is a property of the phone alone; run the slice on the laptop and it goes away:
 
 1. **Race detector** — `go test -race` refuses on the phone: `race is not
    supported on android/arm64`. Not configurable there, and no other gate
@@ -327,8 +327,13 @@ These are load-bearing. Breaking one is a bug even if the tests pass.
 One slice = one commit = one push. **A finished task is pushed when it is
 finished** — not batched with the next one, not held for the end of the session.
 Push each slice as soon as it is green; never accumulate a stack of slices to
-push at the end, and never mix an unrelated change into a slice already in
-flight.
+push at the end.
+
+A commit is the unit of work a task in [docs/tasks/open/](docs/tasks/open/)
+describes: a meaningful completed increment, not an arbitrary step through an
+implementation. Never combine unrelated work into one commit to reduce the
+number of commits — one concern per commit, so a reader, a revert, or a
+`git bisect` lands on exactly one thing.
 
 The reason is that a push is the only durable copy of the work, and it is what
 makes every other rule in this file hold. A pushed slice is independently
@@ -343,15 +348,25 @@ when it comes: three unpushed slices that all need the same fix is one
 ```
 Area: imperative one-line summary
 
-What changed and why, in prose. The mechanism if a bug was involved. What you
-considered and rejected, if it stops a future reader re-litigating it. How it
-was verified — including the negative cases (which test fails against the old
-code) and, explicitly, what could NOT be verified on this host.
+What changed and why, in prose: the intent, the mechanism if a bug was
+involved, and what you considered and rejected where that stops a future reader
+re-litigating it. Keep it short — a line and a paragraph; more only when the
+mechanism genuinely needs it.
 ```
 
-Areas in use: `Fix`, `Protocol`, `Testing`, `Observability`, `Probes`, `Docs`, `Client`, `Countdown`, `Characters`/`Roster`, `Game screen`.
- Bodies are
-real prose — a message whose body only restates the diff is a missed chance.
+The **detail stays out of the message.** Implementation notes, validation
+results (which gates ran, what failed, what a host could not verify) and task
+history belong in the task file: in `docs/tasks/open/` while the work is
+scheduled and in `docs/tasks/closed/` once it lands, which is where a reader
+looks for them anyway. A message that quotes test counts or narrates the edit is
+a second copy of that file, and a second copy is the one thing in this tree that
+can silently drift. What you verified is reported in
+[Reporting back](#reporting-back).
+
+Areas in use: `Fix`, `Protocol`, `Testing`, `Observability`, `Probes`, `Docs`,
+`Client`, `Countdown`, `Characters`/`Roster`, `Game screen`.
+Bodies are real prose — a message whose body only restates the diff is a missed
+chance.
 
 Before each commit and push:
 

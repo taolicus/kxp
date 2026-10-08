@@ -69,6 +69,7 @@ than assume it — and the `locked` case is where the evidence comes from.
 - No new harness is needed. `web/appHarness.cjs` already supplies the clock, the
   hand-fired timer queue and the `EventSource` stub, which is the whole reason this
   slice is cheap enough to take next.
-- Unverifiable on this host, and worth saying in the commit body: whether a
+- Unverifiable on this host, and worth recording here when the slice lands
+  (along with the report, not the commit message): whether a
   round-resolve frame is actually lost on a real radio. Criterion 3 settles the
   code question, not the radio one.
