@@ -55,7 +55,7 @@ await script('t5 · CPU match end-to-end', async () => {
   // still gated on our /ready ack, sent below. The cursor is taken first: the
   // matched frame can land before wait() is called, and a "now" cursor would
   // hide it.
-  const cursor = sse.mark();
+  let cursor = sse.mark();
   const start = await post('/cpu', { id });
   rep.eq('POST /cpu accepted', start.status, 200, errMsg(start));
   if (start.status !== 200) { sse.drop(); return rep.print({ id, skew: `${skew}ms` }); }
@@ -129,7 +129,7 @@ await script('t5 · CPU match end-to-end', async () => {
   // The frame order is asserted for round one only: in a series the next
   // round's countdown can already be on the wire by the time the result is read,
   // so a whole-match filter would race the server rather than measure it.
-  const round1 = sse.since(0).slice(0, sse.marked(result)).map((f) => f.type);
+  const round1 = sse.since(cursor).slice(0, sse.marked(result) - cursor).map((f) => f.type);
   const order = ['matched', 'countdown', 'countdown', 'countdown', 'shoot', 'result'];
   rep.eq('frame order matched → countdown ×3 → shoot → result', round1, order, round1.join(' → '));
 
@@ -160,12 +160,16 @@ await script('t5 · CPU match end-to-end', async () => {
   // The tally is checked as a running sum, the same invariant the Go integration
   // tests assert, because "the numbers move" and "the numbers are right" are
   // different failures and only one of them is obvious on a phone.
+  // A drawn round replays without counting, so the run to 3 wins has a heavy
+  // tail: against a random stub a series lasts more than eight rounds 13.5% of
+  // the time. Sixteen is the cap where that tail is ~0.015% (bd499f4) — a guard
+  // against a hung server, not a contract about how long a fair series takes.
   let rounds = 1;
   let last = result;
   cursor = sse.marked(result);
   let you = r.youRoundWins;
   let opp = r.oppRoundWins;
-  while (r.seriesOver !== true && rounds <= 9) {
+  while (r.seriesOver !== true && rounds <= 16) {
     console.log(`  note: round ${r.round} scored ${you}-${opp}, series continues`);
     const nextShoot = await sse.wait('shoot', { timeout: BOUNDS.countdown, from: cursor, where: `round ${r.round + 1}` });
     const { res: nextMove } = await submitMove(id, ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)]);

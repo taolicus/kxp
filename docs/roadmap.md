@@ -82,6 +82,7 @@ Make the system testable and debuggable in production.
 - [Browser-level lobby e2e](tasks/closed/browser-lobby-e2e.md)
 - [Browser e2e: CPU match plays end to end](tasks/closed/browser-cpu-match-e2e.md)
 - [Browser e2e: CPU first-to-3 series and rematch](tasks/closed/browser-cpu-series-e2e.md)
+- [t5 cannot pass, and never could since the series build](tasks/closed/t5-cannot-pass.md)
 
 ## Phase 3 — Architecture & features
 

@@ -178,6 +178,15 @@ verdict was `GATE`, so a real expiry still reported as a contract break. The uni
 tests passed anyway; the live re-check caught it. Worth remembering when a
 classification looks obviously right.
 
+**The probe's own body is the other source of a lying verdict.** `t5` passed
+every frame-level check and then threw `Assignment to constant variable` from the
+series loop added when a CPU match became a first-to-3: a `const` cursor
+reassigned inside the loop. That is FAIL against a server that behaved
+correctly, and it went unnoticed from that build until the loop was read. When a
+probe changes, watch the checks it actually reaches, not only its final verdict —
+a verdict that never corresponds to the wire is one you learn to ignore, the same
+failure the withheld-evidence work set out to end.
+
 ## The traces that make live diagnosis possible
 
 A probe can only assert what it observes, so what the server records matters as
