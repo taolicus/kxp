@@ -729,3 +729,54 @@ func TestSecondMatchRefusedForLiveClient(t *testing.T) {
 	}
 	st.readEventTyp(t, "matched", 5*time.Second)
 }
+
+func TestChallengeCreatesMatch(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+
+	st1, id1 := connectSSE(t, srv, "")
+	defer st1.close()
+	st2, id2 := connectSSE(t, srv, "")
+	defer st2.close()
+
+	code, body := postJSON(t, srv.URL+"/challenge", map[string]any{"id": id1})
+	if code != http.StatusOK {
+		t.Fatalf("/challenge status: %d", code)
+	}
+	tok, ok := body["token"].(string)
+	if !ok || tok == "" {
+		t.Fatalf("/challenge token missing: %+v", body)
+	}
+
+	code, body = postJSON(t, srv.URL+"/join", map[string]any{"id": id2, "token": tok})
+	if code != http.StatusOK {
+		t.Fatalf("/join status: %d (body %+v)", code, body)
+	}
+	st1.readEventTyp(t, "matched", 5*time.Second)
+	st2.readEventTyp(t, "matched", 5*time.Second)
+}
+
+func TestChallengeJoinReturns404WhenGone(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+
+	st1, id1 := connectSSE(t, srv, "")
+	defer st1.close()
+	st2, id2 := connectSSE(t, srv, "")
+	defer st2.close()
+
+	code, body := postJSON(t, srv.URL+"/challenge", map[string]any{"id": id1})
+	if code != http.StatusOK {
+		t.Fatalf("/challenge status: %d", code)
+	}
+	tok, _ := body["token"].(string)
+
+	st1.close()
+
+	code, body = postJSON(t, srv.URL+"/join", map[string]any{"id": id2, "token": tok})
+	if code != http.StatusNotFound {
+		t.Fatalf("/join after creator left: %d (body %+v)", code, body)
+	}
+}
