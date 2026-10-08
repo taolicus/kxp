@@ -1,60 +1,90 @@
 # Browser e2e: a CPU match plays end to end in one real tab
 
-The first browser slice over the core game protocol
-([the slices that follow it](../open/browser-cpu-series-e2e.md) and friends): a
-real tab starts a 1-off CPU match and plays it to a rendered
-result. Where the harness tests prove `app.js` can paint beats against a stubbed
-clock and the probes prove the server runs the wire loop, this proves the two
-meet — a real SSE stream drives the real DOM, the ready ack actually fires, and
-a move click lands inside a real PUN window.
+The first browser slice over the core game protocol. A real tab starts a 1-off
+CPU match and plays it to a rendered result, with every phase painted and zero
+console errors.
 
-Landed as `e2e/cpu-match.spec.js`; with [browser-lobby-e2e](browser-lobby-e2e.md)
-the suite is now four specs.
+## Required context
 
-## What each assertion is guarding
+- [protocol.md](../../features/protocol.md) — the match lifecycle
+  (`idle → preparing → countdown → shoot → done`), the ready handshake, the 2 s
+  PUN window.
+- [architecture.md](../../features/architecture.md) § Game state machine and
+  § Matchmaking — the `matched` frame, the rAF-gated ready ack
+  (`web/app.js:182-201`), `planFromCountdown` owning the count paint.
+- The wire-level version this ports: `tools/t5-cpu-match.mjs` asserts the same
+  loop on the wire; `web/app.countdown.test.cjs` and
+  `web/app.ready.test.cjs` pin the paint and the ack against a stubbed clock and
+  context. What this slice adds is the actual browser: real SSE frames driving
+  the real DOM, the auto-ack actually firing, and a move click landing inside a
+  real PUN window.
+- Spec conventions to follow: `e2e/lobby.spec.js` (`watchErrors`, `gotoLobby`,
+  `nextPost`).
 
-- `(cpu)` in the opponent slot and the `.move` buttons locked — the `matched`
-  frame painted the game view, and moves stay disabled until PUN.
-- The beats READY → PUN! painting **without any test input** — the readiness
-  handshake proof. The client acks `/ready` only after a painted frame, so a
-  headless Chromium that never ran `requestAnimationFrame` would hang in
-  "MATCH FOUND" until the server's 8 s handshake timeout. **The open unknown in
-  the task file is resolved:** Playwright's headless Chromium does fire rAF, the
-  auto-ack opened the countdown, and no headed fallback was needed.
-- `#banner` / `#timing` / `#btn-again` rendered by the result frame — the
-  outcome panel a player actually reads, outcome-agnostic (win/loss/draw all
-  pass).
-- The tab **still on the game screen** 2.5 s after the result — the `state idle`
-  teardown must not bounce a reader back to the lobby.
-- The whole run with zero console or uncaught-page errors.
+## Scope
 
-Not asserted: beat spacing (~1 s), which stays pinned deterministically by
-`web/app.countdown.test.cjs` and `tools/t5` — a wall-clock assert against a
-production link can only flake.
+`e2e/cpu-match.spec.js`, one test: lobby → `#btn-cpu` → `#btn-start` → the
+`matched` frame paints `#count` "MATCH FOUND" and the opponent slot → **without
+any test input**, the countdown begins (the proof the rAF gate acked and POSTed
+`/ready`) → `#count` shows READY/KA/CHI → PUN unlocks `.move` buttons → a click
+locks them (`picked`) and a `POST /move` leaves the tab → the result panel
+renders (banner + `#game-stats` + `#btn-again`) → the `state idle` teardown does
+**not** bounce the client off the result screen. Every phase asserted as painted,
+and any console/page error fails the test.
 
-## Verified on the laptop, 2026-10-08, against https://kxp.tao.cl
+Beat *spacing* (~1 s) is deliberately not re-asserted here: it is pinned
+deterministically by `web/app.countdown.test.cjs` and `t5`, and a wall-clock
+assertion in a browser test against a production link can only flake.
 
-- `npm run e2e -- -g "1-off"` → **1 passed (8.8s)**, then again after the
+## What is not known (resolve first, on the laptop)
+
+Whether Playwright's headless Chromium fires `requestAnimationFrame`. The ready
+ack waits for a painted frame (`web/app.js:195`), so if rAF never runs the match
+sits in "MATCH FOUND" and dies at the server's 8 s handshake timeout. That is a
+real finding, not a test failure to paper over; the fallback being considered is
+a headed run (`npx playwright test --headed`). Record which was needed in the
+closed task file.
+
+## Verify
+
+`npm run e2e -- -g "CPU"` on the laptop, against the deployed origin. Then prove
+the test bites: run once with one expectation deliberately wrong (e.g. assert
+the result never renders) and require it to fail loudly. Confirmed negative must
+be recorded where the slice's detail lives.
+
+Also confirm the server let the match go after the run: `/health` →
+`activeMatches: 0`.
+
+Device: laptop only — the phone has no Chromium
+([device-aware-workflow.md](../../development/device-aware-workflow.md)).
+
+## Landed
+
+Landed as `e2e/cpu-match.spec.js`; with
+[browser-lobby-e2e](browser-lobby-e2e.md) the suite is now four specs.
+
+The open unknown is resolved: Playwright's headless Chromium **does** fire
+`requestAnimationFrame`. The ready ack opened the countdown without any test
+input and without the considered headed fallback (`--headed`), so the
+rAF-gated handshake runs in the browser the suite uses.
+
+Verified on the laptop, 2026-10-08, against https://kxp.tao.cl:
+
+- `npm run e2e -- -g "1-off"` → **1 passed (8.8s)**, repeated after the
   teardown-settle re-assert (9.5s). `npm run e2e` full suite → **4/4 passed
   (16.7s)**.
-- **Negative runs failed loudly** on two first drafts, which is how the slice
-  earned its current shape rather than masking flake:
-  - first draft asserted `#count` reached "MATCH FOUND" — a fast link already
-    paints READY/KA/CHI/PUN! when the locator looks, so that assert was the
-    flake and it became the beat-poll instead;
-  - `#opp-slot` "Opponent" was wrong twice over — a CPU match paints the CPU's
-    name and `(cpu)` role tag — and the assertion now reads the real role
-    marker.
-  - a deliberately flipped `#btn-again` expectation **failed loudly** at
-    `e2e/cpu-match.spec.js:115`, so the teardown-persist assert reads the real
-    screen rather than passing vacuously.
+- Negative runs failed loudly on two first drafts, which is how the spec earned
+  its shape rather than masking flake: the "MATCH FOUND" hold was too brief for
+  a locator on a fast link (the count was already READY), so it became the
+  beat-poll through PUN!; and the opponent slot paints the CPU's name + `(cpu)`
+  role tag, not "Opponent". A deliberately flipped `#btn-again` expectation
+  then failed loudly at the flipped line, so the teardown-persist assert reads
+  the real screen rather than passing vacuously.
 - `/health` → `{"activeMatches":0,...}` after the runs: the matches the tests
   started were let go by the server, not stranded.
 
-## What it does not cover
-
-Beat *timing* (above), the CSS the panel renders with, and the phone: this
-suite still needs Chromium, so it is laptop-only
-([device-aware-workflow.md](../../development/device-aware-workflow.md)). The
-series, PvP, reload, and timeout-path slices are named and scheduled in
+Not covered: beat spacing (pinned instead by `web/app.countdown.test.cjs` and
+`tools/t5`), styling and layout (asserted nowhere on either host), and the
+phone (this suite needs Chromium, so it is laptop-only). The series, PvP,
+reload, and timeout-path slices that follow this one are scheduled in
 [docs/tasks/open/](../open/).
