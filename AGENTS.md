@@ -109,25 +109,15 @@ termination") — write the reasoning there, leave the code alone.
 
 ### Keep the session small too
 
-Slice size is not only a review concern. A slice small enough to finish, test,
-document, commit, and push is what keeps a long working session from losing its own
-thread.
-
-There is deliberately nothing here about when to compact. That guidance used to
-assert that a mid-slice summary is lossy "exactly where a slice cannot afford", and
-that a keybind belongs here — and the assertion was wrong by measurement, since
-several sessions hit the context limit repeatedly with no meaningful loss. Keeping
-a confident rule about a tool's behaviour that the repo cannot verify is the same
-mistake as keeping a stale claim in a comment: it ages into a rule nobody can
-re-derive and nobody dares contradict. A keybind is worse still, being wrong for
-every agent that does not run that tool.
-
-What is left is the part that is not about tooling: **finish the slice — verified,
-documented, committed, pushed — before starting the next one.** At that point there
-is nothing to lose, because the state that matters lives in git rather than in the
-conversation, so a new session starts from a clean tree and a pushed commit and
-only the intent needs carrying forward. That was the real argument for a boundary,
-and it does not depend on how the context window behaves.
+Slice size is not only a review concern: a slice small enough to finish, test,
+document, commit, and push is what keeps a long working session from losing its
+own thread. There is deliberately no rule here about when to compact — no rule
+about a tool's behaviour can be verified on this repo, and one nobody can
+re-derive is worse than none. What is left is not about tooling: **finish the
+slice — verified, documented, committed, pushed — before starting the next
+one.** Then the state that matters lives in git rather than in the
+conversation, and a new session starts from a clean tree, a pushed commit, and
+only the intent to carry forward.
 
 ### Test first, and prove the test bites
 
@@ -162,29 +152,24 @@ npm run tall        # probes t1–t8 — requires an origin (see below), creates
 
 `npm run unit` is the catch-all for client and harness tests (the README's
 shorter `node --test web/kxp.test.cjs web/machine.test.cjs` misses
-`web/app.countdown.test.cjs`). `npm run links` is first because it is the only
-gate that costs nothing and catches a rename immediately: the documentation is
-the largest surface in this repo and nothing else here would notice a link left
-pointing at nothing. It checks that internal paths resolve and that each
-`#fragment` names a heading that exists — not that what a document says is still
-true, which needs a reader. What each gate does and does not cover, and why
-the integration path is a browser-free probe suite, is in
+`web/app.countdown.test.cjs`). `npm run links` is first because it costs
+nothing and catches a rename, which nothing else here would notice. What each
+gate does and does not cover, and why the integration path is a browser-free
+probe suite, is in
 [docs/development/verification.md](docs/development/verification.md) — read it
 when adding a test or deciding whether something is verifiable here.
 
-`go test ./...` is the gate the phone cannot put a number on. There it is a
-phone under variable load — thermal, other apps, FUSE shared storage, and a
-moving network ([environment.md](docs/development/environment.md)) — so its wall
-time drifts from a minute to many even warm, run to run; any figure added here
-would be measured one day and a lie the next. Run it as its own step with a
-generous tool timeout, never chained behind `&&` with another gate, and never
-piped through a pager: a buffered pipe turns a working-but-slow run into an
-apparent hang, and a killed run restarts the compile while the machine is
-already loaded. If it looks hung, wait out Go's own per-package `-timeout` (10
-minutes by default) before believing it — on the phone, slow is the explanation
-more often than a hang is, and a genuinely stuck test still gets killed by Go
-itself. Batch Go edits and run the full suite once at the end;
-`go test -run <Name> ./...` covers a slice in the meantime.
+Run `go test ./...` as its own step with a generous tool timeout: never chained
+behind `&&` with another gate, never piped through a pager — a buffered pipe
+turns a working-but-slow run into an apparent hang, and a killed run restarts
+the compile while the machine is already loaded. If it looks hung, wait out Go's
+own per-package `-timeout` (10 minutes by default) before believing it: on the
+phone, slow is the usual explanation, and a genuinely stuck test still gets
+killed by Go itself. Batch Go edits and run the full suite once at the end;
+`go test -run <Name> ./...` covers a slice in the meantime. Why the phone
+cannot put a number on that wall time, and how the gates are shaped around it,
+is in
+[docs/development/verification.md](docs/development/verification.md).
 
 **What no gate here covers** — state these limits in any report and in the
 slice's task file, rather than implying coverage that does not exist. The first
@@ -228,7 +213,7 @@ INCONCLUSIVE into a FAIL.
 
 - **Wire format / events / state table** → [docs/features/protocol.md](docs/features/protocol.md).
 - **Internals, invariants, mechanisms** → [docs/features/architecture.md](docs/features/architecture.md).
-- **How a shipped feature works, or how to add one to it** → [docs/features/](docs/features/), one file per subject. Durable knowledge about the system as it stands; per [docs/register.md](docs/register.md) it is never moved in from a task.
+- **How a shipped feature works, or how to add one to it** → [docs/features/](docs/features/), one file per subject. Durable knowledge about the system as it stands.
 - **A work item's status** — its own file in [docs/tasks/open/](docs/tasks/open/)
   if the next action is a specified build, [docs/issues/](docs/issues/) if the
   next action is to find out or decide, and [docs/tasks/closed/](docs/tasks/closed/)
@@ -253,8 +238,8 @@ where the decision lives.
 file in `docs/issues/` means the cause is not confirmed, a file in
 `docs/tasks/closed/` means it landed. Nothing is recorded in two of the three,
 and no item carries a status word anywhere else — no checkbox, no "done", no
-"planned". That is the invariant, and the stale-copy incident below is what it
-protects against.
+"planned". That is the invariant; [docs/register.md](docs/register.md) holds
+the rules behind it and the incident that produced them.
 
 **Which register is it?** The test is whether you could hand the file to someone
 with no further conversation and have them start. If you would have to ask a
@@ -266,30 +251,10 @@ nobody knows what to build. And durable knowledge about the system as it now
 stands is none of these: it belongs in `docs/features/`, and per
 [docs/register.md](docs/register.md) it is never moved in from a task.
 
-Two consequences worth stating because they look like exceptions and are not. A
-landed item's *reasoning* is **in** the feature file rather than beside it —
-that is the same **file** as the invariant, not a second copy of anything, and
-the closed task file keeps the pointer so the copy a reader hits first is still
-the only copy of the status. (It was a separate `docs/decisions/` register until
-it was folded in: every decision there was cited by exactly one file — its own
-closed task — so the reasoning was reachable from the plan and invisible from the
-system docs that encode the constraint.) And a
-there is no third directory for scheduling, because a task is not "unimportant"
-because it has not landed yet — it stays in `open/` until it does. The README tracks no status at all — it points at the registers and
-at [docs/register.md](docs/register.md), which is where their rules live.
-`docs/roadmap.md` is not one of them: it is a table of contents by
-phase and carries no status word, which is why it can be read without being able
-to contradict a file.
-
-The reason is not tidiness: when the same slice was tracked in three places, they
-disagreed about whether the bounded SSE connection lifetime had landed, and the
-copy a reader hit first was the stale one. Four separate copies have since been
-caught — `review.md` against the roadmap, `review.md` against `protocol.md`,
-"Leaderboard identity" recorded twice at different levels of progress, and
-`tools/README.md` still calling the stale-teardown fix "Phase 1, unchecked" long
-after it landed. To land something, `git mv` its task file to
-`docs/tasks/closed/`; to schedule something, create the task file; to park
-something, create the issue file. Never restate a status somewhere else.
+To land something, `git mv` its task file to
+[docs/tasks/closed/](docs/tasks/closed/); to schedule something, create the task
+file; to park something, create the issue file. Never restate a status
+somewhere else.
 
 ## Invariants to know before you edit
 

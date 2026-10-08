@@ -14,12 +14,22 @@ reading a plan as a description of the system.
 
 [docs/roadmap.md](roadmap.md) is not a sixth register. It holds the phase
 structure and one link per landed item, and no status of its own, which is why it
-can be read without being able to contradict a file.
+can be read without being able to contradict a file. The README tracks no status
+either: it points at the registers and at this file, which is where their rules
+live.
 
 **The directory is the status.** There is no checkbox to tick anywhere in this
 tree, and nothing per-entry restates its own state — a reader must never be able
 to find two copies of a status and choose between them. To record that something
 landed, move it; do not annotate it as done.
+
+The reason is not tidiness: when the same slice was tracked in three places, they
+disagreed about whether the bounded SSE connection lifetime had landed, and the
+copy a reader hit first was the stale one. Four separate copies have since been
+caught — `review.md` against the roadmap, `review.md` against `protocol.md`,
+"Leaderboard identity" recorded twice at different levels of progress, and
+`tools/README.md` still calling the stale-teardown fix "Phase 1, unchecked" long
+after it landed.
 
 ## Telling them apart
 
