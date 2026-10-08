@@ -72,7 +72,7 @@ async function assertResult(page) {
 test('a CPU first-to-3 series runs its rounds, ends at seriesOver, and rematches', async ({ page }) => {
   // A drawn round replays without counting, so the dist to 3 wins is a heavy
   // tail; give the loop room rather than assuming a lucky short series.
-  test.setTimeout(240000);
+  test.setTimeout(300000);
   const errors = watchErrors(page);
   await gotoLobby(page);
 
@@ -96,9 +96,14 @@ test('a CPU first-to-3 series runs its rounds, ends at seriesOver, and rematches
   await expect(page.locator('.move[data-move="rock"]')).toBeDisabled();
 
   // Play until the server says the series is over. Round one can never decide
-  // a first-to-3, so the first result must leave Play Again hidden.
+  // a first-to-3, so the first result must leave Play Again hidden. A drawn
+  // round replays without counting, so the run to a decision has a heavy tail:
+  // against a random stub, a series lasts more than eight rounds 13.5% of the
+  // time (both sides still on ≤ 2 wins, everything else draws). Sixteen is the
+  // cap where that tail is 0.015% — a guard against a hung server, not a
+  // contract about how long a fair series takes.
   let final = false;
-  for (let round = 1; round <= 8 && !final; round++) {
+  for (let round = 1; round <= 16 && !final; round++) {
     await playRound(page);
     const over = await assertResult(page);
     if (round === 1) expect(over).toBe(false);
