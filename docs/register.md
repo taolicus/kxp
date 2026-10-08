@@ -137,10 +137,20 @@ timer.
 ## Moving a task
 
 When an issue's cause is confirmed, `git mv` the file to
-[tasks/open/](tasks/open/) and add the frontmatter. When a task lands, `git mv` it to [tasks/closed/](tasks/closed/) and
-drop the frontmatter. Both are the same move — the content travels with it, so the
-context recorded when the task was scheduled is still there when someone asks why
-it was done that way.
+[tasks/open/](tasks/open/) and add the frontmatter. When a task lands, `git mv`
+it to [tasks/closed/](tasks/closed/) and drop the frontmatter. Both are the same
+move — the content travels with it, so the context recorded when the task was
+scheduled is still there when someone asks why it was done that way.
+
+Landing is additive, not a rewrite. The moved file keeps its own text — the plan
+and its acceptance criteria exactly as they were scheduled — and the outcome is
+**appended** as a `Landed` record (what was verified and how, and the negative
+proof). The record never names the landing commit's hash, and cannot: that hash
+is the digest of the very content the record sits in, so it does not exist when
+the record is written — `git log --follow` on the moved file answers "which
+commit landed this?". A `Landed in \`…\`` line is only ever added once the cited
+commit exists. A closed file rewritten into a report after the fact has lost the
+plan it was written to hand on.
 
 **Do not park a bug in `issues/` whose mechanism you traced.** That is a fix, not
 a symptom, and the register is specifically for symptoms. The stale-teardown race

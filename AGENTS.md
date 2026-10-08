@@ -74,9 +74,14 @@ cannot be validated here either.
 ```
 
 Steps 3–5 belong to the same commit as the code. Docs are not a follow-up
-commit; a documented-later change is a change nobody can verify. Step 7 happens
-before the next task starts, not at the end of the session — see
-[Commit and push](#commit-and-push).
+commit; a documented-later change is a change nobody can verify. The one thing
+that commit cannot carry is its own commit hash — a hash is the digest of the
+very content that would contain it — so a close-out record never names the
+landing commit inside the landing commit; `git log --follow` on the moved task
+file answers "which commit landed this?". Where a "Landed in `…`" line earns its
+place, it is written once the cited commit exists — a later docs slice, or a
+reference to an already-pushed commit. Step 7 happens before the next task
+starts, not at the end of the session — see [Commit and push](#commit-and-push).
 
 Three rules govern what you pick up and how far you take it:
 
@@ -224,10 +229,11 @@ INCONCLUSIVE into a FAIL.
   next action is to find out or decide, and [docs/tasks/closed/](docs/tasks/closed/)
   once it has landed. The directory *is* the status; see "One home per work item"
   below.
-- **A landed item** → [docs/tasks/closed/](docs/tasks/closed/), one file per item.
-  The file keeps the phase it ran in by its position under
-  [docs/roadmap.md](docs/roadmap.md), which holds the phase structure and a link
-  per item and no status of its own.
+- **A landed item** → [docs/tasks/closed/](docs/tasks/closed/), one file per item —
+  the moved task file with a `Landed` record appended, never a rewrite of its own
+  text (see [Commit and push](#commit-and-push)). The file keeps the phase it ran
+  in by its position under [docs/roadmap.md](docs/roadmap.md), which holds the
+  phase structure and a link per item and no status of its own.
 - **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → the section of the owning file in [docs/features/](docs/features/) (or [docs/development/](docs/development/)) that documents the invariant the decision constrains, written as present-tense prose and closed with the landing commit. The closed task file links to that section, so a reader who starts at the work item is routed to the reasoning.
 - **A symptom whose cause you cannot confirm** → [docs/issues/](docs/issues/): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
 - **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
@@ -297,7 +303,23 @@ These are load-bearing. Breaking one is a bug even if the tests pass.
 One slice = one commit = one push. **A finished task is pushed when it is
 finished** — not batched with the next one, not held for the end of the session.
 Push each slice as soon as it is green; never accumulate a stack of slices to
-push at the end.
+push at the end. The code, the test that pins it, the register move, and the
+roadmap link all belong in that one commit.
+
+**Register commits are additive.** A task file moves as it is: the plan, its
+required context and its acceptance criteria travel unchanged — only the
+frontmatter is dropped — and what changed when the work landed is **appended**
+as a `Landed` record (what was verified and how, and the negative proof), never
+woven back into the task's own text. Rewriting a once-open task into a report
+after the fact is how a plan stops being readable as the plan it was; the closed
+file is the plan plus its outcome, not a replacement for it.
+
+The `Landed` record names no commit hash, and cannot: the landing commit's own
+hash is the digest of the very content the record sits in, so it never exists at
+write time. Provenance is git's job — `git log --follow` on the moved file lands
+on exactly the landing commit. A "Landed in `…`" line in a features file is a
+different case: it cites a commit that already exists, and is written in a later
+docs slice or points at an already-pushed commit.
 
 A commit is the unit of work a task in [docs/tasks/open/](docs/tasks/open/)
 describes: a meaningful completed increment, not an arbitrary step through an
