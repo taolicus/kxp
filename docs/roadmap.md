@@ -80,6 +80,7 @@ Make the system testable and debuggable in production.
 - [Protocol-level production probes (browser-free)](tasks/closed/browser-free-probes.md)
 - [Automated test workflow](tasks/closed/automated-test-workflow.md)
 - [Browser-level lobby e2e](tasks/closed/browser-lobby-e2e.md)
+- [Browser e2e: CPU match plays end to end](tasks/closed/browser-cpu-match-e2e.md)
 
 ## Phase 3 — Architecture & features
 

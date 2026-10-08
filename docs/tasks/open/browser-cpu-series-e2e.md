@@ -19,7 +19,7 @@ ends the match, and Play Again starts a fresh match.
   hides Play Again (`seriesOver !== false`), the pips row
   (`#you-pips`/`#opp-pips`, `roundsTarget` wide) persists across the reset when
   the next countdown repaints.
-- Land after [browser-cpu-match-e2e](browser-cpu-match-e2e.md) so the shared
+- Land after [browser-cpu-match-e2e](../closed/browser-cpu-match-e2e.md) so the shared
   helpers (start-CPU-match, wait-for-result, the error watcher) are extracted at
   their third use rather than duplicated a second time.
 

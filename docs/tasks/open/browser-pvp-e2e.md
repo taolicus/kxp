@@ -23,7 +23,7 @@ and both render results that mirror each other without either tab stranding.
   the structural ancestor; carry over its acceptance of a stranger grabbing a
   queue slot (degrade to completion invariants rather than failing on pairing
   luck).
-- Land after [browser-cpu-match-e2e](browser-cpu-match-e2e.md) so helpers are
+- Land after [browser-cpu-match-e2e](../closed/browser-cpu-match-e2e.md) so helpers are
   shared, not copied.
 
 ## Scope
