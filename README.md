@@ -87,12 +87,16 @@ two players share. See [architecture](docs/features/architecture.md) for the int
   [characters](docs/features/characters.md) (who is playable, and what happens to
   a selection or a saved ladder when the list changes),
   [backgrounds](docs/features/backgrounds.md) (asset pipeline).
-- [development/](docs/development/) — how this repo is built and verified on
-  this host: [environment.md](docs/development/environment.md) (the measured
-  Android/Termux host, its toolchain, and how to re-measure both) and
+- [development/](docs/development/) — how this repo is built and verified, and
+  which device a task belongs on:
+  [environment.md](docs/development/environment.md) (the two measured hosts —
+  the Android/Termux phone and the MacBook Pro — their toolchains, and how to
+  re-measure both),
+  [device-aware-workflow.md](docs/development/device-aware-workflow.md) (match
+  the work to the device, and record a deferral where it belongs) and
   [verification.md](docs/development/verification.md) (what each gate does and
   does not cover, the browser-free probe suite, and the verdicts it reports).
-  What the host can and cannot verify, and the working loop, live in
+  What each host can and cannot verify, and the working loop, live in
   [AGENTS.md](AGENTS.md).
 - [register.md](docs/register.md) — what each of the directories below is for,
   and the rules that keep them separate.

@@ -11,9 +11,11 @@ and Node's streaming `fetch` drives that directly.
 
 The split is clear:
 
-- **This suite** proves the *server* works from a phone: the full match loop
-  over a real network, the timing of the 2s PUN window, and what happens when
-  the link drops mid-round.
+- **This suite** proves the *server* works over a real network: the full match
+  loop, the timing of the 2s PUN window, and what happens when the link drops
+  mid-round. The vantage is whichever device fires it, so run it from the phone
+  when the question is whether it works from a phone
+  ([device-aware-workflow.md](../docs/development/device-aware-workflow.md)).
 - **`npm run unit` / `npm run go`** cover the client state machine and the
   server internals offline, with no network at all.
 - **`npm run links`** checks the documentation's internal link graph: every

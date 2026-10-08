@@ -43,8 +43,9 @@ does not belong to `sse.go` on the strength of where it happens to sit.
 - **Pure move.** Same package, so no visibility changes are needed or wanted: the
   declarations are package-private and stay that way. No renames, no signature
   changes, no logic edits, no comment rewrites beyond what a move requires.
-- **`-race` cannot run on this host** (`environment.md`), so verification of a
-  move is `go build`, `go test ./...`, `go vet` and `gofmt` — which catch every
+- **`-race` cannot run on the phone** (`environment.md`); the laptop can, so a
+  run there may add it. Either way, verification of a move is `go build`,
+  `go test ./...`, `go vet` and `gofmt` — which catch every
   identifier mistake, because a bad move does not compile. That is sufficient *for
   a pure move* and is the reason this task is safe at all: nothing about ordering
   changes. Anything that edits logic concurrently is out of scope here, and would

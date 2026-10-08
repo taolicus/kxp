@@ -1,13 +1,15 @@
-# Verification on this host
+# Verification on these hosts
 
-How a change gets checked here, and why the gates are shaped this way. The
-operational minimum — the commands to run, and the four things this host cannot
-verify — is in `AGENTS.md` ("Verify"), because it applies to every task. This
+How a change gets checked, and why the gates are shaped this way. The
+operational minimum — the commands to run, and what no gate here can verify —
+is in `AGENTS.md` ("Verify"), because it applies to every task. This
 page is the reference behind it, and earns a read when you are adding a test,
 changing what a gate covers, or deciding whether something can be verified here
 at all.
 
-For the machine itself, see [environment.md](environment.md).
+For the machines themselves, see [environment.md](environment.md); for which of
+them a given task belongs on, see
+[device-aware-workflow.md](device-aware-workflow.md).
 
 ## The gates
 
@@ -33,7 +35,7 @@ see: a path in prose is not a path.
 ## Run the gates the way a phone can finish them
 
 `go test ./...` carries no wall-clock estimate in `AGENTS.md` — deliberately.
-This host is a phone and it moves ([environment.md](environment.md)): thermal
+The phone is a phone and it moves ([environment.md](environment.md)): thermal
 throttling, other apps, FUSE shared storage, and the network load it differently
 from run to run, so a number would be true on the day it was measured and a lie
 the next. Measured on the day this section landed, the same warm suite finished
@@ -49,6 +51,10 @@ hung test is still bounded: each Go package invocation carries Go's own
 `-timeout` (10 minutes by default), so waiting until that fires is a decision,
 not a guess. Short slices keep the loop tight with `go test -run <Name> ./...`
 and run the full suite once, at the end.
+
+The habit is worth keeping on the laptop, where none of this pressure applies:
+the constraint there is availability rather than load
+([device-aware-workflow.md](device-aware-workflow.md)).
 
 ## The gap probes cannot close
 

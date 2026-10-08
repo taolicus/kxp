@@ -24,11 +24,16 @@ model, matchmaking, SSE lifecycle).
 
 **When the task reaches them:**
 
+- which device the work belongs on —
+  [docs/development/device-aware-workflow.md](docs/development/device-aware-workflow.md):
+  the phone is always to hand and the laptop is not, and some work (race
+  detection, long or IO-heavy builds) only fits one of them. Read it before
+  starting a task, not when one is already stuck halfway.
 - a claim about this host — [docs/development/](docs/development/): the
-  measured host, toolchain, and the commands to re-measure them. Read it when
-  the task touches the build, the toolchain, or a claim about what this machine
-  can do — not every task, because the per-task verification rules it used to
-  carry live in [Verify](#verify) below instead.
+  measured hosts, their toolchains, and the commands to re-measure them. Read it
+  when the task touches the build, the toolchain, or a claim about what a
+  machine here can do — not every task, because the per-task verification rules
+  it used to carry live in [Verify](#verify) below instead.
 - wire changes — [docs/features/protocol.md](docs/features/protocol.md): events,
   endpoints, the client state table, clock handling
 - the internals, or a feature that already ships —
@@ -56,7 +61,7 @@ and earns a read only when changing the probes or the verdict logic — then rea
 `tools/lib/harness.mjs` and the one probe involved. Test bodies (21
 `*_test.go`, plus `web/*.test.cjs` and `tools/lib/*.test.mjs`) are another ~27%,
 and the landing commit names the one that matters. `web/style.css` and
-`web/img/` have no coverage on this host (see "Verify" below), so reading them
+`web/img/` have no coverage on either host (see "Verify" below), so reading them
 cannot be validated here either.
 
 ## The loop
@@ -73,12 +78,17 @@ commit; a documented-later change is a change nobody can verify. Step 7 happens
 before the next task starts, not at the end of the session — see
 [Commit and push](#commit-and-push).
 
-Two rules govern what you pick up and how far you take it:
+Three rules govern what you pick up and how far you take it:
 
 - **Check [docs/tasks/open/](docs/tasks/open/) and the feature docs before
   implementing.** If the task is under-specified, investigate and update the task
   file rather than opening the code and assuming. An assumption made here is
   invisible to whoever picks it up next.
+- **Match the task to the device before starting it.** The phone cannot run
+  `go test -race` and is slow at long or IO-heavy work; if the slice needs the
+  device you are not on, defer it in the task file rather than opening it — see
+  [device-aware-workflow.md](docs/development/device-aware-workflow.md), which
+  is also where a deferral is recorded and why it is not an issue.
 - **An unrelated discovery becomes a new issue, not extra scope.** Record it in
   [docs/issues/](docs/issues/) — or the task file, if it is a named prerequisite —
   and leave the current slice alone. Quietly widening a slice is how one commit
@@ -145,7 +155,7 @@ and it does not depend on how the context window behaves.
 npm run links       # internal doc links and #fragments; sub-second, run it every time
 gofmt -l .          # must print nothing
 go vet ./...
-go test ./...       # the one gate this host cannot time: ALONE, generous timeout (below)
+go test ./...       # the one gate the phone cannot time: ALONE, generous timeout (below)
 npm run unit        # web/*.test.cjs + tools/lib/*.test.mjs
 npm run tall        # probes t1–t8 — requires an origin (see below), creates real matches
 ```
@@ -162,31 +172,35 @@ the integration path is a browser-free probe suite, is in
 [docs/development/verification.md](docs/development/verification.md) — read it
 when adding a test or deciding whether something is verifiable here.
 
-`go test ./...` is the gate this host cannot put a number on. It is a phone
-under variable load — thermal, other apps, FUSE shared storage, and a moving
-network ([environment.md](docs/development/environment.md)) — so its wall time
-drifts from a minute to many even warm, run to run; any figure added here would
-be measured one day and a lie the next. Run it as its own step with a generous
-tool timeout, never chained behind `&&` with another gate, and never piped
-through a pager: a buffered pipe turns a working-but-slow run into an apparent
-hang, and a killed run restarts the compile while the machine is already loaded.
-If it looks hung, wait out Go's own per-package `-timeout` (10 minutes by
-default) before believing it — on this host, slow is the explanation more often
-than a hang is, and a genuinely stuck test still gets killed by Go itself. Batch
-Go edits and run the full suite once at the end; `go test -run <Name> ./...`
-covers a slice in the meantime.
+`go test ./...` is the gate the phone cannot put a number on. There it is a
+phone under variable load — thermal, other apps, FUSE shared storage, and a
+moving network ([environment.md](docs/development/environment.md)) — so its wall
+time drifts from a minute to many even warm, run to run; any figure added here
+would be measured one day and a lie the next. Run it as its own step with a
+generous tool timeout, never chained behind `&&` with another gate, and never
+piped through a pager: a buffered pipe turns a working-but-slow run into an
+apparent hang, and a killed run restarts the compile while the machine is
+already loaded. If it looks hung, wait out Go's own per-package `-timeout` (10
+minutes by default) before believing it — on the phone, slow is the explanation
+more often than a hang is, and a genuinely stuck test still gets killed by Go
+itself. Batch Go edits and run the full suite once at the end;
+`go test -run <Name> ./...` covers a slice in the meantime.
 
-**This host cannot verify** — state these limits in the commit body and in any
-report, rather than implying coverage that does not exist:
+**What no gate here covers** — state these limits in the commit body and in any
+report, rather than implying coverage that does not exist. The first is a
+property of the phone alone; run the slice on the laptop and it goes away:
 
-1. **Race detector** — `go test -race` refuses: `race is not supported on
-   android/arm64`. Not configurable. Concurrency changes are hand-checked and
-   argued in a comment: when a change touches shared state (`h.mu`, `c.mu`, the
-   match phase atomics), name that state in the comment and say why the
-   ordering holds. `finishMatch`'s per-side teardown is the worked example — the
-   decision is taken under `h.mu` and pinned by `finish_test.go`, which drives
-   the pointer states directly instead of racing two goroutines.
-2. **Rendering / CSS / console errors** — No automated coverage on this host.
+1. **Race detector** — `go test -race` refuses on the phone: `race is not
+   supported on android/arm64`. Not configurable there, and no other gate
+   substitutes for it, so a concurrency change made on the phone is hand-checked
+   and argued in a comment: when it touches shared state (`h.mu`, `c.mu`, the
+   match phase atomics), name that state in the comment and say why the ordering
+   holds. `finishMatch`'s per-side teardown is the worked example — the decision
+   is taken under `h.mu` and pinned by `finish_test.go`, which drives the
+   pointer states directly instead of racing two goroutines. The laptop runs
+   `-race` normally, so prefer that device for concurrency work
+   ([device-aware-workflow.md](docs/development/device-aware-workflow.md)).
+2. **Rendering / CSS / console errors** — No automated coverage on either host.
 3. **Deployment** — a local build is not the deployed binary, and "it works
    here" is never evidence a change is live. `GET /health` reports `build.sha`;
    probe `t1` asserts it against local `HEAD` and fails loudly on a stale build.
@@ -359,8 +373,9 @@ git log --oneline -10          # match the area/summary style
 
 ## Reporting back
 
-Say what you verified, how, and what remains unverified on this host (the four
-limits above). Quote the actual counts (`go test ./...` ok, `npm run unit` 69/69)
+Say what you verified, how, and what remains unverified on the device you used
+(the limits above). Name the device — the two hosts do not have the same limits.
+Quote the actual counts (`go test ./...` ok, `npm run unit` 69/69)
 rather than "tests pass". If you parked or deferred something, say where you
 recorded it and why — a deferred decision with no written reasoning comes back
 as an argument three commits later.

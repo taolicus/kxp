@@ -7,7 +7,7 @@ reading a plan as a description of the system.
 | directory | holds | answered by |
 | --- | --- | --- |
 | [features/](features/) | durable knowledge about the implemented system, one file per subject | "how does this work?" |
-| [development/](development/) | the host, and how a change is verified on it | "how do I check this here?" |
+| [development/](development/) | the hosts, how a change is verified on each, and when to defer work to the other device | "how do I check this here — and is this the device to do it on?" |
 | [tasks/open/](tasks/open/) | specified builds that have not landed | "what is scheduled?" |
 | [tasks/closed/](tasks/closed/) | what has landed, kept for history | "was this done, and why?" |
 | [issues/](issues/) | symptoms and open questions with no confirmed cause | "what is wrong, and what would prove it?" |
