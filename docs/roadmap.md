@@ -81,6 +81,7 @@ Make the system testable and debuggable in production.
 - [Automated test workflow](tasks/closed/automated-test-workflow.md)
 - [Browser-level lobby e2e](tasks/closed/browser-lobby-e2e.md)
 - [Browser e2e: CPU match plays end to end](tasks/closed/browser-cpu-match-e2e.md)
+- [Browser e2e: CPU first-to-3 series and rematch](tasks/closed/browser-cpu-series-e2e.md)
 
 ## Phase 3 — Architecture & features
 
