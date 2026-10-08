@@ -2,11 +2,12 @@
   "name": "kxp-e2e",
   "private": true,
   "version": "0.0.0",
-  "description": "Browser-free probe and unit harness for KACHIPUN TOURNAMENT. Tests the deployed server over the internet; never boots the app locally. Requires BASE_URL to point at the production origin.",
+  "description": "Probe, unit and browser harness for KACHIPUN TOURNAMENT. Tests the deployed server over the internet; never boots the app locally. The origin comes from BASE_URL or tools/.base-url.",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
+    "e2e": "playwright test --config playwright.config.mjs",
     "unit": "node --test web/*.test.cjs tools/lib/*.test.mjs",
     "links": "node tools/check-links.mjs",
     "go": "go test ./...",
@@ -19,5 +20,8 @@
     "t7": "node tools/t7-move-matrix.mjs",
     "t8": "node tools/t8-pvp.mjs",
     "tall": "node tools/run-all.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0"
   }
 }

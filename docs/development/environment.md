@@ -12,8 +12,9 @@ more often than this page. What is below earns a read only when a task touches
 the build, the toolchain, or a claim about what a machine here can do.
 
 The design behind the commands is in [verification.md](verification.md): what
-each gate does and does not cover, and why the integration path is a
-browser-free probe suite against a deployed origin rather than an e2e run.
+each gate does and does not cover, and why the integration path has both a
+browser-free probe suite and a browser-driven suite against the same deployed
+origin.
 
 Facts here were measured on these hosts, not inferred from CI config — re-run
 the commands in "Verifying" to confirm them on a new machine. Which of the two
@@ -59,7 +60,7 @@ inferred:
 Unlike the phone, this host has local flash storage (no FUSE), so heavy IO is
 not the tax it is on the phone.
 
-Two capability differences matter more than the hardware does:
+Three capability differences matter more than the hardware does:
 
 - **`go test -race` runs here.** It refuses on the phone
   (`race is not supported on android/arm64`); on this host it compiles and runs,
@@ -68,6 +69,10 @@ Two capability differences matter more than the hardware does:
 - **`go test ./...` is timeable here.** The phone's wall time drifts for thermal
   and FUSE reasons; this host does not inherit that, so a duration measured on it
   is a fact about this host only and says nothing about the phone.
+- **The browser suite runs here.** `npm run e2e` drives a real Chromium, which
+  installs on this host (`npx playwright install chromium`, one time) and cannot
+  be installed under Termux. A rendering or in-browser claim is checkable here
+  and hand-checked on the phone.
 
 ## Toolchain
 
@@ -79,23 +84,30 @@ Two capability differences matter more than the hardware does:
 
 `go.mod` declares `go 1.26.5`, which both toolchains satisfy.
 
-`package.json` declares **no dependencies**, and nothing browser-based is
-installed: there is no Playwright and no Chromium. That is a decision, not an
-omission — the Playwright e2e suite was withdrawn, and the browser-free probe
-suite is the integration path on this host. The reasoning, and what a
-browser-level suite would require, is in
-[automated-test-workflow.md](../tasks/closed/automated-test-workflow.md).
+`package.json` declares one dependency: `@playwright/test`, the browser harness
+behind `npm run e2e`. It is JavaScript and installs on both hosts, but only this
+host can *run* it — running it needs Chromium, and Chromium cannot be installed
+under Termux on arm64 Android. That was the entire reasoning behind withdrawing
+the earlier suite (`31a0384`,
+[core-gameplay-e2e-withdrawn.md](../tasks/closed/core-gameplay-e2e-withdrawn.md)):
+one host, and it could not run the suite. There are two hosts now, so the
+harness is installed again; `npx playwright install chromium` is the one-time
+browser setup on a host that can do it. The probes in `tools/` stay
+browser-free, which is what keeps them runnable on the phone.
 
 ## Verifying
 
-Cheap re-checks of the facts on this page. The first four work on either host;
-the last two are phone-only (macOS has neither `nproc` nor `free`):
+Cheap re-checks of the facts on this page. The first four work on either host,
+the next two are phone-only (macOS has neither `nproc` nor `free`), and the last
+is Mac-only — the phone has no way to install Chromium, which is why the browser
+suite is a laptop gate:
 
 ```sh
 uname -a                      # kernel + arch
 go version && go env GOOS GOARCH CGO_ENABLED
 node -v && npm -v
-ls node_modules/@playwright 2>/dev/null || echo "no browser harness, as expected"
+npx playwright --version      # the harness package; installs on either host
 nproc && free -m | head -2    # phone only
 go test -race -run TestNothingZZZ ./...   # phone: "race is not supported on android/arm64"; Mac: "ok kxp"
+ls ~/Library/Caches/ms-playwright | grep chromium   # Mac only: the browser `npm run e2e` drives
 ```
