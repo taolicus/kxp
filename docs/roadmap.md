@@ -79,6 +79,7 @@ Make the system testable and debuggable in production.
 - [Core-gameplay e2e (withdrawn)](tasks/closed/core-gameplay-e2e-withdrawn.md)
 - [Protocol-level production probes (browser-free)](tasks/closed/browser-free-probes.md)
 - [Automated test workflow](tasks/closed/automated-test-workflow.md)
+- [Browser-level lobby e2e](tasks/closed/browser-lobby-e2e.md)
 
 ## Phase 3 — Architecture & features
 

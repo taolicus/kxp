@@ -14,3 +14,9 @@ now recorded as an explicit gap rather than an absent test.
 
 Withdrawn in `31a0384` — *Testing: withdraw the Playwright e2e suite, and say so
 instead of pretending*.
+
+Brought back in `3918ffd` (`f44b4a4` landed the first specs) once a second host
+could install Chromium; what the suite covers now is
+[browser-lobby-e2e.md](browser-lobby-e2e.md). This file stays as the record of
+the decision the reversal was tied to: one host, no browser, no suite worth
+keeping. On that host none of that has changed.
