@@ -349,9 +349,12 @@ resuming the same floor.
 ## Match history
 
 The lobby's "Match History" opens a `#history` view: one `<details>` per match
-this browser finished, newest first, expandable to the rounds it was made of. The
-record is the client's own — `kxp-history` in `localStorage`, beside `kxp-stats`
-and `kxp-arcade-runs`, capped at 50 — and it is display-only: nothing is judged from
+this browser finished, newest first, expandable to the rounds it was made of. A
+collapsed row shows when it was played, its mode, each fighter as its roster
+emoji, and the result; the roster names, the stage and the tally are not repeated
+there, because the row is a glance and the rounds are one tap away. The record is
+the client's own — `kxp-history` in `localStorage`, beside `kxp-stats` and
+`kxp-arcade-runs`, capped at 50 — and it is display-only: nothing is judged from
 it, and clearing the site clears it.
 
 That limit is deliberate rather than a first step. The server keeps no history and
@@ -373,8 +376,8 @@ Four things make it an honest record of what it saw:
   means, and a server predating the field records rather than leaving the match
   unrecorded. The tally on the entry is the frame's own scoreboard read, after
   the round that frame reports (see
-  [A match is a series of rounds](#a-match-is-a-series-of-rounds)), so the
-  summary line never has to add one up.
+  [A match is a series of rounds](#a-match-is-a-series-of-rounds)), kept rather
+  than recomputed from the rounds.
 - **A tab closed mid-series leaves an uncommitted pending list**, which is an
   unfinished match — not part of a record of finished ones, and not a loss
   either. Nothing claims the match went the other way.

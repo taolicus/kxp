@@ -272,11 +272,13 @@ test('the lobby opens the record, which draws what was recorded and when', async
   await app.tap('#btn-history');
   const html = app.html('#history-list');
   assert.strictEqual(draws(app), 1, 'one row for the match, not one per round');
-  assert.ok(html.includes('Win'), 'the outcome is on the row');
-  assert.ok(html.includes('CPU'), 'so is the mode');
-  assert.ok(html.includes('h Hielito vs d Dragon'), 'and who fought whom');
-  assert.ok(html.includes('2\u20131'), 'and how the series stood');
-  assert.ok(html.includes('just now'), 'and when it was played');
+  assert.ok(html.includes('just now'), 'the row shows when it was played');
+  assert.ok(html.includes('CPU'), 'and its mode');
+  assert.ok(html.includes('h vs d'), 'and who fought whom, as emojis only');
+  assert.ok(html.includes('Win'), 'and the result');
+  assert.ok(!html.includes('Hielito') && !html.includes('Dragon'),
+    'but not the fighter names, which the row shows by emoji alone');
+  assert.ok(!html.includes('2\u20131'), 'nor the series tally');
   assert.ok(html.includes('Pool'), 'the stage it was fought on');
   assert.strictEqual((html.match(/R[0-9]/g) || []).length, 3, 'with the three rounds inside it');
   assert.ok(html.includes(KXP.aliases.rock), 'drawn as the moves that were played');
@@ -346,7 +348,7 @@ test('a fighter that has left the roster still reads as the fighter that was fou
   await app.tap('#btn-history');
   const html = app.html('#history-list');
   assert.ok(html.includes('gone-from-roster'), 'the stored id reads as itself');
-  assert.ok(!html.includes('d Dragon'),
+  assert.ok(!html.includes('vs d'),
     'and never as the roster\'s first fighter, which is what characterByID falls back to');
 });
 

@@ -121,3 +121,22 @@ observes frames rather than client storage, so `t1`–`t8` see none of this.
 - **Clearing or editing the record from the UI.** The site's own storage controls
   are the only ones it has; a control that rewrites history would be a second
   writer to the same array.
+
+## Follow-up: the row shows emojis, not names, and drops the tally
+
+A later slice shortened the collapsed history row to the four things a glance
+needs: when it was played, the mode, each fighter as its roster emoji, and the
+result. The fighter names and the series tally are no longer in the summary; the
+stage and the round-by-round detail stay one tap away inside the row. The
+unknown-fighter fallback is unchanged in spirit — `historyEmoji` still reads a
+stored id the roster no longer knows as itself rather than substituting the
+roster's first fighter — only the rendered form moved from "emoji name" to
+"emoji".
+
+`web/app.history.test.cjs` now pins the row as `just now · CPU · h vs d · Win`
+and asserts the names (`Hielito`/`Dragon`) and the tally (`2–1`) are absent;
+`historySummary` is the only reader. Verified with `npm run unit` 211/211 and
+`npm run links` 0 broken. The row test fails against the pre-change `app.js`
+(it drew `h Hielito vs d Dragon` and `2–1`), so the new shape cannot rot back.
+Rendering is still hand-read, not observed: `npm run e2e` is laptop-only and
+this host is the phone.

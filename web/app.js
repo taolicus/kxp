@@ -684,31 +684,29 @@ function commitMatch(d) {
   pendingRounds = [];
 }
 
-// historyFighter names a fighter the way the slots do -- emoji and name -- from
-// what the record holds. Deliberately not characterByID, which falls back to the
-// roster's first fighter and would draw somebody else's name for a fighter that
-// has since left the roster: a stored id the roster no longer knows still reads
-// as the fighter that was fought, and only nothing at all reads as a dash.
-function historyFighter(id, fallback) {
+// historyEmoji names a fighter by its roster emoji alone, from what the record
+// holds. Deliberately not characterByID, which falls back to the roster's first
+// fighter and would draw somebody else's emoji for a fighter that has since left
+// the roster: a stored id the roster no longer knows still reads as itself, and
+// only nothing at all reads as a dash.
+function historyEmoji(id, fallback) {
   const c = id && CHARACTERS.find((f) => f.id === id);
-  if (c) return `${c.emoji} ${c.name}`;
+  if (c) return c.emoji;
   return id || fallback || '\u2014';
 }
 
-// One line per match: what it was, who fought it, how it stood, and when.
+// One line per match, and only what a glance needs: when it was played, whether
+// it was CPU or online, the two fighters as emojis, and the result. The full
+// names, the stage and the series tally are not repeated here -- the collapsed
+// row stays short, and what was actually played is one tap away in the row it
+// expands into.
 function historySummary(e) {
   const bits = [
-    OUTCOME_LABELS[e.outcome] || '\u2014',
+    KXP.whenLabel(e.ts, Date.now()),
     e.mode === 'cpu' ? 'CPU' : 'Online',
-    `${historyFighter(e.youCharacter, 'You')} vs ${historyFighter(e.opponentCharacter, e.opponentName)}`,
+    `${historyEmoji(e.youCharacter, 'You')} vs ${historyEmoji(e.opponentCharacter, e.opponentName)}`,
+    OUTCOME_LABELS[e.outcome] || '\u2014',
   ];
-  // Only a series has a score worth showing beside the outcome: at a target of
-  // one the tally would just say the outcome again, and an entry from before the
-  // tally existed has nothing to draw.
-  if (e.roundsTarget > 1 && Number.isFinite(e.youRoundWins) && Number.isFinite(e.oppRoundWins)) {
-    bits.push(`${e.youRoundWins}\u2013${e.oppRoundWins}`);
-  }
-  bits.push(KXP.whenLabel(e.ts, Date.now()));
   return bits.join(' \u00b7 ');
 }
 
