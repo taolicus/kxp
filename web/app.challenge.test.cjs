@@ -22,7 +22,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { runInContext } = require('node:vm');
 
-const { loadApp } = require('./appHarness.cjs');
+const { loadApp, stubElement } = require('./appHarness.cjs');
+const SM = require('./machine.js');
 
 // A fresh client sitting on `?challenge=<token>`, connected but not yet sent a
 // snapshot. `id` is set the way the server's first frame sets it, so the claim
@@ -36,6 +37,18 @@ function claimant(search) {
 }
 
 const joins = (app) => app.posted().filter((p) => p === '/join').length;
+
+// A client wired for the create path: the real state machine, so entering the
+// queue screen runs waiting() instead of being declined, and a roster so the
+// lobby has a fighter to draw and the start button is wired. `id` is set the way
+// the server's first frame sets it, so post() is not the null short-circuit.
+const ROSTER = [{ id: 'aaa', name: 'Aaa', emoji: 'x' }];
+async function creator() {
+  const app = loadApp({ next: (from, ev) => SM.next(from, ev), roster: ROSTER });
+  runInContext("id = 'c1'", app.ctx);
+  await app.boot();
+  return app;
+}
 
 test('an idle snapshot claims the token once', () => {
   const app = claimant('?challenge=tok');
@@ -79,4 +92,36 @@ test('a non-idle first snapshot does not claim, and an idle one later does', () 
   assert.equal(joins(app), 0, 'not lobby, not claimed');
   app.fire('connected', { id: 'c1', state: 'idle' });
   assert.equal(joins(app), 1, 'claimed once idle');
+});
+
+// The create side. It shares the queue screen with plain matchmaking, and the
+// first attempt showed the link and then entered the queue -- whose entry handler
+// hid every link it saw, including the one just created. The player saw a bare
+// spinner and a dead button. These two tests pin both directions: a created link
+// stays up, and a plain queue still clears a link left over from before.
+
+test('creating a challenge leaves its link visible on the queue screen', async () => {
+  const app = await creator();
+  app.tap('#btn-challenge');
+  app.tap('#btn-start');
+  await app.settle();
+  assert.equal(
+    app.el('#challenge-link').classList.contains('hidden'), false,
+    'the created link is on screen'
+  );
+  assert.match(app.el('#challenge-url').value, /challenge=tok/, 'the token reached the link');
+});
+
+test('a plain online queue hides a stale challenge link', async () => {
+  const app = await creator();
+  // A link left on screen by a previous challenge -- the state a fresh screen
+  // does not start in, so the assertion is against the hide, not the default.
+  app.seed('#challenge-link', stubElement());
+  app.tap('#btn-online');
+  app.tap('#btn-start');
+  await app.settle();
+  assert.equal(
+    app.el('#challenge-link').classList.contains('hidden'), true,
+    'matchmaking does not show a link'
+  );
 });

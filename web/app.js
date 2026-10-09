@@ -26,6 +26,11 @@ let ladderTarget = 0;
 // when the match that ended was not a ladder match.
 let ladderNext = null;
 let pendingMode = null; // online | cpu — mode picked on the lobby, awaiting fighter confirmation
+// Whether the queue screen is waiting on a challenge link rather than the
+// matchmaker. The link lives in the queue screen, and entering it always runs
+// waiting() -- so without this flag the create path's own transition would hide
+// the link it just filled in, and the screen would show only the spinner.
+let challengePending = false;
 let es = null;
 let shootTimer = null;
 let remainingWindowMs = 2000; // local portion of the PUN window still open
@@ -896,9 +901,12 @@ async function post(path, body = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...body }),
     });
-    let error = '';
-    try { error = (await resp.json()).error || ''; } catch (e) {}
-    return { ok: resp.ok, status: resp.status, error };
+    // Parse once and hand back both the verdict and the body: an endpoint's
+    // reply is a request's own data (a challenge's token), and a caller that
+    // wants it must not have to re-read a Response this helper already consumed.
+    let data = null;
+    try { data = await resp.json(); } catch (e) {}
+    return { ok: resp.ok, status: resp.status, error: (data && data.error) || '', data };
   } catch (e) {
     report('fetch-error', state);
     return null;
@@ -959,6 +967,9 @@ const enter = {
     // rounds of a match that never finished.
     matchCtx = null;
     pendingRounds = [];
+    // The wait is over -- cancelled, claimed, or its match finished -- so the
+    // next queue screen is a plain one unless a new link is created.
+    challengePending = false;
     show('lobby');
     setNotice(d && d.reason);
   },
@@ -967,9 +978,14 @@ const enter = {
     stopReadyLoop();
     clearTimeout(stallTimer);
     show('queue');
+    // The link is shown only for a challenge wait. Entering the queue is the
+    // single place this is decided, because both paths reach it: a plain /queue
+    // (challengePending false) clears any link left from an earlier challenge,
+    // and a created link (challengePending true) keeps it up across the
+    // transition that would otherwise hide it.
     if (typeof document !== 'undefined' && document.getElementById) {
       const cl = document.getElementById('challenge-link');
-      if (cl && cl.classList) cl.classList.add('hidden');
+      if (cl && cl.classList) cl.classList.toggle('hidden', !challengePending);
     }
     // A plain /queue has no reason, so this clears any notice left over from an
     // earlier cancelled handshake rather than stranding it above the spinner.
@@ -1325,17 +1341,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       const p = post('/challenge', { id });
       Promise.resolve(p).then((res) => {
         if (res && res.ok) {
-          res.json().then((d) => {
-            const token = d.token;
-            const url = location.origin + '/?challenge=' + encodeURIComponent(token);
-            const inp = document.getElementById('challenge-url');
-            if (inp) inp.value = url;
-            const link = document.getElementById('challenge-link');
-            if (link) link.classList.remove('hidden');
-            transition('queue');
-          }).catch(() => {
-            transition('queue');
-          });
+          const d = res.data || {};
+          const url = location.origin + '/?challenge=' + encodeURIComponent(d.token);
+          const inp = document.getElementById('challenge-url');
+          if (inp) inp.value = url;
+          // Mark the wait a challenge wait *before* the transition: waiting()
+          // is the one place the link is shown or hidden, and it reads this.
+          challengePending = true;
+          transition('queue');
           return;
         }
         btn.disabled = false;
