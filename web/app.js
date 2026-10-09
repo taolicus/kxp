@@ -1218,6 +1218,17 @@ function connect() {
       }
     } catch (e) {}
 
+    // A challenge waiter that reconnects -- or reloads -- arrives on a waiting
+    // snapshot carrying the link's token. The creator's own URL has no token the
+    // way a claimant's does, so this is the only thing that can rebuild the
+    // screen; without it the wait would drop to the lobby and the link with it.
+    // Rebuild it before the transition below, which is what shows the link.
+    if (d.challenge) {
+      const inp = document.getElementById('challenge-url');
+      if (inp) inp.value = location.origin + '/?challenge=' + encodeURIComponent(d.challenge);
+      challengePending = true;
+    }
+
     if (d.state === 'waiting') transition('snapshot:waiting', d);
     else if (d.state === 'ingame') {
       if ((d.phase === 'preparing' || d.phase === 'countdown' || d.phase === 'done') && d.pending) {

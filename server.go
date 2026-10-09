@@ -588,6 +588,16 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 		if (out["phase"] == "preparing" || m.betweenRounds.Load()) && !m.allHumanReady() {
 			out["pending"] = true
 		}
+	} else if ch, ok := h.challenge[c.id]; ok {
+		// A creator waiting on a link is waiting, and the snapshot is the only
+		// frame a reconnect gets. Without this branch it reads `idle`, the
+		// client's snapshot:idle edge walks the creator to the lobby, and the
+		// link it shared disappears from the screen even though the challenge is
+		// still open. The token rides back because the creator's *own* URL does
+		// not carry it -- only the claimant's does -- so this is the one way a
+		// reconnect (or a reload) can rebuild the link on screen.
+		out["state"] = "waiting"
+		out["challenge"] = ch.token
 	} else if c.queueing {
 		out["state"] = "waiting"
 	}

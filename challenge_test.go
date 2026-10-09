@@ -260,3 +260,42 @@ func TestChallengeCapRefusesPastTheLimit(t *testing.T) {
 		t.Fatalf("/challenge at the cap: %d, want 503", code)
 	}
 }
+
+// A creator waiting on a link is waiting: the reconnect snapshot must say so and
+// carry the token back, or a dropped radio walks the creator to the lobby and
+// the link it shared disappears with it.
+func TestChallengeWaitSurvivesReconnect(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	_, id := connect(t, srv)
+	tok := mint(t, srv, id)
+
+	snap := h.snapshot(h.client(id))
+	if snap["state"] != "waiting" {
+		t.Fatalf("challenge waiter snapshot state: %v, want waiting", snap["state"])
+	}
+	if snap["challenge"] != tok {
+		t.Fatalf("challenge waiter snapshot token: %v, want %q", snap["challenge"], tok)
+	}
+}
+
+// The other half: a client in the global queue is also `waiting`, but it has no
+// link, so the snapshot must not invent one.
+func TestQueueSnapshotCarriesNoChallenge(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	_, id := connect(t, srv)
+	if code, _ := postJSON(t, srv.URL+"/queue", map[string]any{"id": id}); code != http.StatusOK {
+		t.Fatalf("/queue: %d", code)
+	}
+
+	snap := h.snapshot(h.client(id))
+	if snap["state"] != "waiting" {
+		t.Fatalf("queued snapshot state: %v, want waiting", snap["state"])
+	}
+	if snap["challenge"] != nil {
+		t.Fatalf("queued snapshot carried a challenge: %v", snap["challenge"])
+	}
+}

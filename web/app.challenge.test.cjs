@@ -122,6 +122,30 @@ test('a plain online queue hides a stale challenge link', async () => {
   await app.settle();
   assert.equal(
     app.el('#challenge-link').classList.contains('hidden'), true,
-    'matchmaking does not show a link'
+    'the link is not on the queue screen'
+  );
+});
+
+// A reconnect (or reload) while waiting on a link. The creator's own URL carries
+// no token -- only a claimant's does -- so the waiting snapshot is the only
+// thing that can put the link back. Without it the client walks to the lobby and
+// the shared link vanishes while the challenge is still open.
+test('a reconnect carrying the link token rebuilds the queue screen', async () => {
+  const app = await creator();
+  app.fire('connected', { id: 'c1', state: 'waiting', challenge: 'tok' });
+  assert.equal(
+    app.el('#challenge-link').classList.contains('hidden'), false,
+    'the link is back'
+  );
+  assert.match(app.el('#challenge-url').value, /challenge=tok/, 'with its token');
+});
+
+test('a plain waiting snapshot shows no challenge link', async () => {
+  const app = await creator();
+  app.seed('#challenge-link', stubElement());
+  app.fire('connected', { id: 'c1', state: 'waiting' });
+  assert.ok(
+    app.el('#challenge-link').classList.contains('hidden'),
+    'no link without a token'
   );
 });

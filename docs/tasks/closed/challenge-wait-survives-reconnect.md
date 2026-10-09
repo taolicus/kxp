@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: []
-gated-on: []
----
-
 # A challenge wait survives reconnect
 
 A player who has created a challenge link holds no state the reconnect snapshot
@@ -46,3 +40,28 @@ not a player.
 
 No rendering coverage on this host, and the probes verify frames rather than the
 focus a reload restores — the client half rides the app-harness test.
+
+## Landed
+
+The snapshot now carries a challenge waiter's token: `snapshot` gained a branch
+beside `c.match` and `c.queueing` that reads `h.challenge[c.id]` under `h.mu`
+and emits `state: waiting` with `challenge: <token>`. The client rebuilds the
+link from that field before routing the snapshot, so a plain queue wait stays
+`waiting` with no `challenge`.
+
+This covers the reconnect that keeps the same client — `getOrCreate` returns the
+existing one, and the old stream's `endConn` no-ops once `beginConn` has moved
+the connection id on (server.go:494-503), so the challenge is still open when the
+new snapshot is taken. A true disconnect still spends the link (`removeClient`),
+and then the snapshot is `idle` and the lobby is the right place to land — the
+fix does not, and must not, resurrect a spent link.
+
+Verified: `TestChallengeWaitSurvivesReconnect` pins the state and token, and
+`TestQueueSnapshotCarriesNoChallenge` pins the negative (a queued client is
+`waiting` with no `challenge`). Both were checked against the pre-change code:
+the first read `idle` where it now reads `waiting`, and the second guards the new
+branch from over-reaching. On the client, "a reconnect carrying the link token
+rebuilds the queue screen" and "a plain waiting snapshot shows no challenge link"
+run the real `app.js`; the first was checked to fail with the pre-change source.
+`go test ./...` ok, `npm run unit` 198/198, `gofmt`/`vet` clean, `npm run links`
+0 broken. `protocol.md` documents the new `challenge?` field.
