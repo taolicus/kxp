@@ -56,10 +56,12 @@ function readLocal() {
   }
 }
 
-// A missing origin is a configuration mistake, not a test failure, and it is
-// hit at import time — before any script's own error handling exists. Marking
-// the error lets it be reported as plain guidance instead of a stack trace
-// through whatever module happened to trigger the resolution.
+// A missing origin is a configuration mistake, not a test failure. It surfaces
+// when the origin is first resolved, which a probe's script() does up front —
+// before any request and before the script's own error handling exists — and
+// the rejection of its top-level await arrives here as an uncaughtException.
+// Marking the error lets it be reported as plain guidance instead of a stack
+// trace through whatever module happened to trigger the resolution.
 export class ConfigError extends Error {
   constructor(message) {
     super(message);

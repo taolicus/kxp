@@ -21,7 +21,22 @@
 
 import { resolveBase } from './base.mjs';
 
-export const BASE = resolveBase();
+// The origin is resolved on first use, never at import. Importing this module
+// must cost nothing: tools/lib/verdict.test.mjs pulls makeReporter from here to
+// test the verdict logic, and `npm run unit` is a local gate that has to run
+// with no deployed origin behind it. A module-scope resolveBase() exited 3
+// before a single test body ran, so one of the four documented gates could not
+// be run at all on an origin-less host.
+//
+// A probe still fails loudly before its first fetch: every entry point calls
+// script(), which resolves the origin once, up front, and a ConfigError thrown
+// there reaches base.mjs's uncaughtException handler through the top-level
+// await — the same guidance and exit 3 as the module-scope form produced.
+let resolved;
+export function base() {
+  if (resolved === undefined) resolved = resolveBase();
+  return resolved;
+}
 
 // Bounds are sized for a bad link, not for a datacenter. The server's own
 // timing is matched+1s+1s+2s (see docs/features/protocol.md) and the client arms a 6s
@@ -74,7 +89,7 @@ async function request(method, path, body, { timeout = BOUNDS.http, signal } = {
       init.headers['content-type'] = 'application/json';
       init.body = JSON.stringify(body);
     }
-    const res = await fetch(BASE + path, init);
+    const res = await fetch(base() + path, init);
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); } catch { /* not all responses are JSON */ }
@@ -146,7 +161,7 @@ export class Sse {
     const started = Date.now();
     let res;
     try {
-      res = await fetch(BASE + this.path, {
+      res = await fetch(base() + this.path, {
         headers: { accept: 'text/event-stream' },
         signal: ac.signal,
       });
@@ -406,7 +421,7 @@ export function classifyThrow(kind, rep) {
 }
 
 export async function script(name, body) {
-  console.log(`\n${'='.repeat(60)}\n${name}  →  ${BASE}\n${'='.repeat(60)}`);
+  console.log(`\n${'='.repeat(60)}\n${name}  →  ${base()}\n${'='.repeat(60)}`);
   const started = Date.now();
   try {
     const passed = await body();

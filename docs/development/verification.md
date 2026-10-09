@@ -34,6 +34,15 @@ client-behaviour tests — the `web/app.*.test.cjs` files that run the real
 until this commit, which is the shape of drift a link checker cannot see: a path
 in prose is not a path.
 
+The gate is origin-free by construction, and pinned so it stays that way:
+`tools/lib/harness.mjs` resolves its origin through a lazy `base()` accessor
+rather than at import, because the one file here that imports the harness for
+its reporter — `tools/lib/verdict.test.mjs` — has to run where there is no
+server. A module-scope resolution had it die as a file ("pass 0, fail 1") behind
+`base.mjs`'s exit-3 guidance, so this gate could not be run at all on an
+origin-less host. A probe still fails loudly before its first fetch; only the
+import is free. `tools/lib/harness.test.mjs` pins both directions.
+
 ## Run the gates the way a phone can finish them
 
 `go test ./...` carries no wall-clock estimate in `AGENTS.md` — deliberately.

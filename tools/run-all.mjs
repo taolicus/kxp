@@ -21,8 +21,9 @@ import { resolveBase } from './lib/base.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// Resolved here rather than imported from the harness, so a missing origin is a
-// clean one-line message instead of a stack trace out of a module-level throw.
+// Resolved here, before a single probe is spawned, so a missing origin is a
+// clean one-line message rather than every child failing on its own the same
+// way. (The harness resolves lazily too, but only when a probe calls script().)
 let BASE;
 try {
   BASE = resolveBase();

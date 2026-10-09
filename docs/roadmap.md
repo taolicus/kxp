@@ -85,6 +85,7 @@ Make the system testable and debuggable in production.
 - [t5 cannot pass, and never could since the series build](tasks/closed/t5-cannot-pass.md)
 - [Pin the client stall watchdog](tasks/closed/stall-watchdog.md)
 - [Stop counting the harness-driven client tests in prose](tasks/closed/client-behaviour-test-list.md)
+- [`npm run unit` should not need a deployed origin](tasks/closed/unit-gate-needs-origin.md)
 
 ## Phase 3 — Architecture & features
 
