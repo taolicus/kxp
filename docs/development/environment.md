@@ -42,6 +42,14 @@ noticeably slower than it would be on internal storage, and other apps on the
 device can see the tree. Treat the built binary as a disposable local artifact —
 it is gitignored.
 
+Power management is the other host property that shapes how commands are run
+here. Android suspends the Termux process — Doze, screen off, or the foreground
+app losing focus — freezing it mid-command while wall time keeps running, and a
+long tool call can be killed for a freeze that looks like a hang.
+`termux-wake-lock` / `termux-wake-unlock` hold it awake; the Go gate is run
+inside one. See
+[verification.md](verification.md#run-the-gates-the-way-a-phone-can-finish-them).
+
 ## Host 2: the MacBook Pro
 
 An Intel MacBook Pro, added as a second development host. Measured, not

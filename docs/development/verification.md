@@ -53,6 +53,24 @@ the next. Measured on the day this section landed, the same warm suite finished
 one run and exceeded a fifteen-minute tool timeout on the run after — the
 variance is the fact.
 
+The dominant term in that variance is not load but **sleep**. Android suspends
+the Termux process — Doze, screen off, or the foreground app losing focus — and
+Go's monotonic clock pauses with it while the shell that armed the tool timeout
+keeps counting wall time. A run killed for exceeding its timeout therefore need
+not have been slow at all: one failed run's log holds a four-minute-forty wall
+gap around a test Go itself measured at 21.4s, which is a freeze, not a
+regression. Hold a wake lock for the whole run on the phone:
+
+```sh
+termux-wake-lock
+go test ./...       # standalone step, ample tool timeout
+termux-wake-unlock
+```
+
+The lock is per Termux session, so release it when the run ends. With it held,
+the same suite that had appeared to hang finished in 201.9s. `termux-wake-lock`
+is a phone tool and does not exist on the laptop, which has no suspend to fight.
+
 The rule that survives the variance is how the gate is *run*, not how fast it
 is. Standalone step with an ample tool timeout; never chained behind another
 gate with `&&`; never piped through a pager. A paged run hides progress, so

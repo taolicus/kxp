@@ -168,13 +168,15 @@ when adding a test or deciding whether something is verifiable here.
 Run `go test ./...` as its own step with a generous tool timeout: never chained
 behind `&&` with another gate, never piped through a pager — a buffered pipe
 turns a working-but-slow run into an apparent hang, and a killed run restarts
-the compile while the machine is already loaded. If it looks hung, wait out Go's
-own per-package `-timeout` (10 minutes by default) before believing it: on the
-phone, slow is the usual explanation, and a genuinely stuck test still gets
-killed by Go itself. Batch Go edits and run the full suite once at the end;
-`go test -run <Name> ./...` covers a slice in the meantime. Why the phone
-cannot put a number on that wall time, and how the gates are shaped around it,
-is in
+the compile while the machine is already loaded. On the phone, hold a wake lock
+around the run (`termux-wake-lock` before, `termux-wake-unlock` after); without
+it Android suspends Termux mid-run and the tool kills a process Go has barely
+started timing, so a freeze reads as a hang. Awake, a genuinely stuck test is
+still bounded by Go's own per-package `-timeout` (10 minutes by default) and
+killed by Go itself; slow is then the usual explanation. Batch Go edits and run
+the full suite once at the end; `go test -run <Name> ./...` covers a slice in
+the meantime. Why the phone cannot put a number on that wall time, and how the
+gates are shaped around it, is in
 [docs/development/verification.md](docs/development/verification.md).
 
 **What no gate here covers** — state these limits in any report and in the
