@@ -259,8 +259,8 @@ button.primary:hover {
 
 .seg-btn.selected {
   border-color: var(--accent);
-  background: var(--panel-3);
-  color: var(--text);
+  background: var(--accent);
+  color: var(--bg);
   font-weight: 700;
 }
 

@@ -20,7 +20,7 @@ label, not as a primary decision control; the lobby has vertical room to give.
    alignment with the "Mode:" label (`style.css:239-247`)?
 2. Does the whole `.seg` row become one larger tap strip (each button filling
    the row's height), and does that interact with the selected-state question
-   ([length-control-label](length-control-label.md))?
+   ([length-control-label](../tasks/closed/length-control-label.md))?
 3. Any change here is visually unassertable on either host — hand-checked,
    and stated as such.
 

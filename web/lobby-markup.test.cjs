@@ -68,3 +68,15 @@ test('Match History is still on the lobby, as its own control', () => {
   assert.ok(lobby.indexOf('id="btn-history"') > lobby.indexOf(stack) + stack.length,
     'and it sits after the stack ends, not inside it');
 });
+
+test('the length control is labelled for what it chooses', () => {
+  // "Mode:" answered to two controls at once — this one and the "Arcade Mode"
+  // button below it — while it actually chooses the match length (and the draw
+  // rule that rides with it). The label names the axis now. Pinned because the
+  // ambiguous word is a one-edit revert and nothing else in the tree would
+  // notice it come back.
+  const lobby = lobbySection();
+  const label = /<span class="seg-label">([^<]*)<\/span>/.exec(lobby);
+  assert.ok(label, 'the control carries a label');
+  assert.strictEqual(label[1], 'Length:', 'the control names the length, not a mode');
+});

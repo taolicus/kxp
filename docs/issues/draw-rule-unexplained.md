@@ -23,7 +23,7 @@ is; what a draw does at "1 round" is not — the button could equally read
    to 3, draws replay") — or fold the rule into the button labels themselves?
 2. Is the chant deliberately unexplained flavour, or worth a first-run tip?
 3. Does the line belong with the control's label question
-   ([length-control-label](length-control-label.md)) — the same few lines of
+   ([length-control-label](../tasks/closed/length-control-label.md)) — the same few lines of
    lobby copy, decided together?
 
 **Proves the cause** — a decision on what the lobby must teach on first
