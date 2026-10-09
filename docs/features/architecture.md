@@ -572,6 +572,15 @@ hub wires the engine's `finish`/`requeue` callbacks back to real clients when
 it builds a match, so the whole lifecycle, timing, and resolve logic is
 testable and reusable without a hub or a wire.
 
+Three injectable seams keep a CPU match deterministic in a test without a hub:
+`now` (the match clock, shared with the readiness lease), `pickMove` (the CPU
+opponent's choice, default `randomMove`), and `botThink` (its reaction delay).
+`newMatch` sets the shipped defaults and a nil hook falls back to them, so a
+struct-literal match still plays; the bot stamps its arrival from the match clock
+rather than `time.Now()`, so an injected clock and a zero think time make a round
+wholly reproducible. See
+[cpu-determinism-hooks](../tasks/closed/cpu-determinism-hooks.md).
+
 ## Testing
 
 - `go test ./...` runs the Go suite: HTTP/SSE integration

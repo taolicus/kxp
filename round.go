@@ -269,6 +269,14 @@ type match struct {
 	// by advancing it rather than by sleeping. Never nil after newMatch.
 	now func() time.Time
 
+	// pickMove chooses the CPU opponent's move, and botThink is how long it waits
+	// before doing so. Both are injectable so a CPU match's rounds are not decided
+	// by math/rand in a test: a test pins the move and removes the wait, and the
+	// arrival is stamped from now rather than the wall clock. newMatch sets the
+	// shipped defaults; a nil hook (a struct-literal match) falls back to them.
+	pickMove func() Move
+	botThink func() time.Duration
+
 	// requeue re-queues side i after a failed ready handshake. Hub-provided;
 	// nil in engine-only tests. Returns whether side i actually went back on
 	// the queue, which is false for a CPU match's human (it returns to the
@@ -307,6 +315,8 @@ func newMatch(id string, roundsTarget int) *match {
 		id:           id,
 		readyCh:      make(chan struct{}),
 		now:          time.Now,
+		pickMove:     randomMove,
+		botThink:     defaultBotThink,
 		roundsTarget: roundsTarget,
 		drawEnds:     roundsTarget <= 1,
 		round:        1,
@@ -953,16 +963,39 @@ func (m *match) waitUntil(t time.Time) bool {
 }
 
 func (m *match) botAction() {
-	delay := time.Duration(50+rand.IntN(300)) * time.Millisecond
+	delay := m.botThinkTime()
 	select {
 	case <-time.After(delay):
 	case <-m.leftCh(0):
 		return
 	}
 	select {
-	case m.botMove <- moveMsg{move: randomMove(), arrive: time.Now()}:
+	case m.botMove <- moveMsg{move: m.botMovePick(), arrive: m.clock()}:
 	default:
 	}
+}
+
+// defaultBotThink is the CPU opponent's shipped reaction delay: a jitter, so two
+// CPU matches do not fall into lockstep. Reached through match.botThink, which a
+// test replaces to make the bot act at once.
+func defaultBotThink() time.Duration {
+	return time.Duration(50+rand.IntN(300)) * time.Millisecond
+}
+
+// botMovePick is pickMove with the shipped fallback for a struct-literal match.
+func (m *match) botMovePick() Move {
+	if m.pickMove != nil {
+		return m.pickMove()
+	}
+	return randomMove()
+}
+
+// botThinkTime is botThink with the shipped fallback for a struct-literal match.
+func (m *match) botThinkTime() time.Duration {
+	if m.botThink != nil {
+		return m.botThink()
+	}
+	return defaultBotThink()
 }
 
 func (m *match) moveCh(i int) <-chan moveMsg {

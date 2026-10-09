@@ -16,7 +16,7 @@ already implemented, documented elsewhere, or tracked here.
 Decide flag vs env; keep today's values as the defaults; and keep the engine
 reading one authoritative value, since a second source of timing truth is the
 failure the monotonic deadline already had to be fixed for (see "Monotonic PUN
-deadline" in the Phase 2 rationale, and [cpu-determinism-hooks](../open/cpu-determinism-hooks.md)
+deadline" in the Phase 2 rationale, and [cpu-determinism-hooks](cpu-determinism-hooks.md)
 below).
 
 ## Why

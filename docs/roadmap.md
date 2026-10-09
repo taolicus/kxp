@@ -87,6 +87,7 @@ Make the system testable and debuggable in production.
 - [Pin the client stall watchdog](tasks/closed/stall-watchdog.md)
 - [Stop counting the harness-driven client tests in prose](tasks/closed/client-behaviour-test-list.md)
 - [`npm run unit` should not need a deployed origin](tasks/closed/unit-gate-needs-origin.md)
+- [CPU determinism hooks](tasks/closed/cpu-determinism-hooks.md)
 
 ## Phase 3 — Architecture & features
 
