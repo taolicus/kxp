@@ -460,6 +460,17 @@ few seconds, forces a reconnect so the `connected` snapshot reconciles it back
 out. Snapshots for a finished (`done`) or already-expired (`shoot`) match route
 straight to the lobby rather than a dead end.
 
+**The watchdog is governed by `GAME_STATES` on both sides.** It fires in
+`countdown`, `shoot` and `locked`, and disarms on the entries that leave a round
+(`lobby`, `waiting`, `matched`, `result`, `ladder`). `locked` is the load-bearing
+one: a round resolves locally into `locked` a couple of seconds into the PUN
+window and waits there for the result frame, so a lost result is a stall *in
+`locked`* — and a fire check that only knew `shoot` and `countdown` never fired
+for the case it exists to rescue. `countdown` is live too, because a
+`snapshot:countdown` can route an armed round back into it, so it no longer
+disarms. The result screen's disarm is the complementary half: it is what keeps
+a stale heartbeat from a previous round off the next one.
+
 **The reconciler is pinned by test, because nothing else can observe it.** The
 `connected` handler decides which of five states a reconnected client lands in,
 and it is the only place a stalled link is recovered from. `go test` does not run
@@ -546,13 +557,15 @@ testable and reusable without a hub or a wire.
   `web/*.test.cjs` and `tools/lib/*.test.mjs`: client pure logic (the PUN-window
   plan, stats, result lines), the client state machine, and the two files that
   run the real `app.js` against a stubbed context — the countdown paint path and
-  the snapshot reconciler that decides where a reconnecting client lands. Invoke
+  the snapshot reconciler that decides where a reconnecting client lands — and,
+  in the same file, the stall watchdog that decides whether it reconnects at all.
+  Invoke
   the script rather than the individual files — the set is a glob, and those two
   are the ones that close the gap probes cannot.
 - `web/appHarness.cjs` is shared by both client-behaviour tests rather than copied
   into each. It holds the stubbed clock, the hand-fired timer queue and the
   recording state machine — the seam that makes a second such test cost almost
-  nothing, since [stall-watchdog](../tasks/open/stall-watchdog.md) needs no new
+  nothing, since [stall-watchdog](../tasks/closed/stall-watchdog.md) needs no new
   infrastructure. A harness duplicated per test file is a second copy that drifts,
   which is the failure the registers in [docs/register.md](../register.md) were
   reorganised to remove. Sharing it also exposed that the countdown dedupe case had

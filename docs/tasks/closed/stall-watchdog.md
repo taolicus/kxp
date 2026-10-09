@@ -1,9 +1,3 @@
----
-phase: 2
-depends-on: []
-gated-on: []
----
-
 # Pin the client stall watchdog
 
 `web/app.reconnect.test.cjs` asserts where a reconnected client **lands**. Nothing
@@ -73,3 +67,41 @@ than assume it — and the `locked` case is where the evidence comes from.
   (along with the report, not the commit message): whether a
   round-resolve frame is actually lost on a real radio. Criterion 3 settles the
   code question, not the radio one.
+
+## Landed
+
+The `locked` gap was real, and it is the one the fix is for.
+
+**What changed.** `armStallWatchdog`'s fire check is now
+`!GAME_STATES.includes(state)` rather than the two-state
+`state !== 'shoot' && state !== 'countdown'`, and `enter.countdown` no longer
+clears the timer. `locked` is where a round actually sits when the result frame
+is lost, so the old check declined in exactly the case the watchdog exists for.
+`countdown` is live (`GAME_STATES`) and a `snapshot:countdown` can route an armed
+round back into it, so it must not disarm; the disarm set is now the entries
+that leave a round — `lobby`, `waiting`, `matched`, `result`, `ladder`.
+
+**How it was verified.** Six watchdog tests were added to
+`web/app.reconnect.test.cjs`, which already owns the reconciler's arrival and
+now pins its departure: the realistic `locked` path driven through `enter.shoot`
+and the local lock timer; the fire check in each of `countdown`, `shoot`,
+`locked`; the 6000 ms boundary from both sides; a re-arm resetting the single
+timer rather than stacking a second; the disarm set shown to leave no timer for
+a later round; and `countdown` kept armed across a `snapshot:countdown`.
+`web/*.test.cjs` 157/157 and `npm run unit` 186/186.
+
+**Negative proof.** Against the pre-change `app.js`, three of the new tests fail:
+`locked` on the fire check (twice, once each test) and countdown-survival on the
+`enter.countdown` disarm. Each criterion was then mutated on the fixed file and
+reverted byte-identical (sha256 `fba06144…`): removing the `enter.shoot`
+invocation fails two tests; re-adding `clearTimeout(stallTimer)` to
+`enter.countdown` fails countdown-survival; dropping it from `enter.result`
+fails the disarm test; changing the budget to 5000 fails the boundary test;
+reverting the fire check to the two-state form fails the `locked` and
+all-live-states tests.
+
+**Not verified here.** Whether a round-resolve frame is actually lost on a real
+radio is unmeasured — this slice settles the code question only. The host is the
+phone (arm64 Android): `go test -race` cannot run, but no Go and no shared server
+state is touched, so it does not apply; rendering and console errors have no
+coverage on either host and none is claimed.

@@ -53,7 +53,11 @@ let seriesTally = null;
 function armStallWatchdog() {
   clearTimeout(stallTimer);
   stallTimer = setTimeout(() => {
-    if (state !== 'shoot' && state !== 'countdown') return;
+    // Every live game state, not a shorter list re-derived here. `locked` is the
+    // one that matters: a round resolves locally into `locked` seconds after
+    // `shoot` and stays there until the result frame arrives, so a lost result is
+    // a stall *in `locked`* -- the state the old two-state check declined.
+    if (!GAME_STATES.includes(state)) return;
     if (DEBUG) console.warn('kxp: stalled in game state, re-syncing via reconnect');
     report('stalled', state);
     es.close();
@@ -1009,7 +1013,10 @@ const enter = {
   },
 
   countdown(d, from) {
-    clearTimeout(stallTimer);
+    // No clearTimeout(stallTimer) here: `countdown` is a live game state
+    // (GAME_STATES), and a snapshot can route an armed round back into it, so
+    // disarming on entry would drop the watchdog exactly when the round it was
+    // armed for is still running. The non-game entries are where it disarms.
     if (from === 'matched') {
       stopReadyLoop();
       showGame();

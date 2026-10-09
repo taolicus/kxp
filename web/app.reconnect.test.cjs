@@ -8,6 +8,15 @@
 // wire rather than what the browser does with them. The "stuck after a reconnect"
 // symptoms in docs/issues/ all live in exactly this function.
 //
+// The other half of the same path is here too: the stall watchdog that decides
+// *whether* a reconnect happens at all. The reconciler tests below pin where a
+// reconnected client lands; the watchdog tests at the bottom pin the departure
+// -- armed while a game view is live, disarmed when one is not, and above all
+// firing in `locked`, where a lost result frame actually strands the round.
+// Both live in this file because the watchdog is the reconciler's own trigger:
+// its callback closes the stream and calls connect(), whose `connected` handler
+// is everything above.
+
 // So the shape of the tests is: deliver a synthetic `connected` frame and assert
 // which transition the reconciler asked for. The harness records the attempt and
 // declines it, so no enter[] painting runs and the decision stands alone.
@@ -23,6 +32,7 @@ const assert = require('node:assert');
 const { runInContext } = require('node:vm');
 
 const { loadApp } = require('./appHarness.cjs');
+const SM = require('./machine.js');
 
 // The stubbed client clock. shootAt/windowMs below are relative to it, so a
 // window is "open" or "closed" by arithmetic the test controls outright.
@@ -145,4 +155,138 @@ test('a snapshot refreshes the online count without waiting for the next event',
   const empty = connected({ state: 'waiting', online: 0 });
   assert.match(empty.html('#online'), /dim/);
   assert.equal(empty.el('#btn-online').disabled, true, 'not joinable alone');
+});
+
+// The stall watchdog. `connected()` above records transitions and runs no enter
+// handlers, which is what the reconciler tests want; the watchdog lives in the
+// enter handlers and in a timer, so these tests drive the real state machine and
+// let the harness fire the timer by advancing the clock.
+//
+// The id is set on the connection so a trip can post its `stalled` beacon:
+// report() drops the beacon when there is no id, which is exactly the state a
+// client is in before the first `connected` frame, and a test against that
+// client could not tell a working watchdog from a broken one.
+function live() {
+  const app = loadApp({ next: SM.next });
+  runInContext('connect()', app.ctx);
+  runInContext("id = 'c1'", app.ctx);
+  return app;
+}
+
+// 6s after the watchdog is armed, per armStallWatchdog.
+const STALL_MS = 6000;
+
+test('the watchdog reconnects a round whose result frame never arrives', () => {
+  // The shape the fix exists for, driven the way a real round does it: enter.shoot
+  // arms the watchdog, and the local lock timer moves the client to `locked`
+  // ~2s later -- long before the 6s budget. A lost result frame leaves the client
+  // sitting in `locked`, so `locked` is where the watchdog has to fire. Before
+  // the fix the callback declined there and the timer that was meant to rescue
+  // the round did nothing.
+  const app = live();
+  runInContext("state = 'countdown'", app.ctx);
+  runInContext(`transition('shoot', { shootAt: ${C + 1000}, windowMs: 2000 })`, app.ctx);
+  assert.equal(app.sources.length, 1, 'sanity: one live stream');
+
+  // Past the budget. runUntil fires the lock timer first (to `locked`) and then
+  // the watchdog, so the state it sees is the one a stalled round really is in.
+  app.setClock(C + STALL_MS);
+  app.runUntil(C + STALL_MS + 1);
+
+  assert.equal(app.sources[0].closed, true, 'the stalled stream is dropped');
+  assert.equal(app.sources.length, 2, 'a fresh stream replaces it');
+  assert.ok(app.posted().includes('/report'), 'a stalled beacon is reported');
+});
+
+test('the watchdog fires in every live game state', () => {
+  // The polling set, one case per live state. `countdown` and `shoot` already
+  // fired before the fix; pinning all three stops the set from being re-derived
+  // as a second list that drifts from GAME_STATES.
+  for (const state of ['countdown', 'shoot', 'locked']) {
+    const app = live();
+    runInContext(`state = ${JSON.stringify(state)}; armStallWatchdog()`, app.ctx);
+    app.setClock(C + STALL_MS);
+    app.runUntil(C + STALL_MS + 1);
+    assert.equal(app.sources[0].closed, true, `${state}: stream dropped`);
+    assert.equal(app.sources.length, 2, `${state}: reconnected`);
+  }
+});
+
+test('the watchdog waits the full budget, not a millisecond less', () => {
+  // A watchdog that fires early throws a player out of a healthy match, which is
+  // worse than not firing at all -- so the boundary is pinned from both sides.
+  const app = live();
+  runInContext("state = 'shoot'; armStallWatchdog()", app.ctx);
+
+  app.setClock(C + STALL_MS - 1);
+  app.runUntil(C + STALL_MS); // fires only what is due strictly before the budget
+  assert.equal(app.sources.length, 1, 'one millisecond short is not a stall');
+
+  app.setClock(C + STALL_MS);
+  app.runUntil(C + STALL_MS + 1);
+  assert.equal(app.sources.length, 2, 'the budget expiring is');
+});
+
+test('re-arming resets the single timer rather than stacking a second', () => {
+  // The watchdog is a heartbeat, not a pile of timers: arming again has to move
+  // the one deadline out. If a second timer stacked, the first would fire at the
+  // original budget and trip a match that had just been re-armed.
+  const app = live();
+  runInContext("state = 'shoot'; armStallWatchdog()", app.ctx);
+  app.setClock(C + 3000);
+  runInContext('armStallWatchdog()', app.ctx);
+
+  app.setClock(C + STALL_MS);
+  app.runUntil(C + STALL_MS + 1);
+  assert.equal(app.sources.length, 1, 'the first timer did not survive the re-arm');
+
+  app.setClock(C + 3000 + STALL_MS);
+  app.runUntil(C + 3000 + STALL_MS + 1);
+  assert.equal(app.sources.length, 2, 'the re-armed timer still fires');
+});
+
+test('leaving a round cancels the watchdog, so a later round inherits no timer', () => {
+  // The disarm set. A series: round one arms the watchdog and the screen that
+  // ends the round clears it, then round two's countdown arrives. If the clear
+  // were dropped, round one's timer would still be pending and would force a
+  // spurious reconnect in the middle of round two -- a healthy match thrown out
+  // by a stale heartbeat.
+  for (const [state, ev] of [
+    ['lobby', 'stateIdle'],
+    ['waiting', 'snapshot:waiting'],
+    ['matched', 'snapshot:matched'],
+    ['result', 'result'],
+  ]) {
+    const app = live();
+    runInContext("state = 'shoot'; armStallWatchdog()", app.ctx);
+    runInContext(`transition(${JSON.stringify(ev)}, {})`, app.ctx);
+    // Round two's countdown: a live game state that arms nothing itself, so a
+    // surviving timer from round one is the only one that could fire.
+    runInContext("transition('snapshot:countdown', {})", app.ctx);
+
+    app.setClock(C + STALL_MS);
+    app.runUntil(C + STALL_MS + 1);
+    assert.equal(app.sources.length, 1, `${state}: no spurious reconnect`);
+    assert.ok(!app.posted().includes('/report'), `${state}: no stalled beacon`);
+  }
+});
+
+test('a watchdog armed in a round survives a snapshot that reroutes it to countdown', () => {
+  // `countdown` is a live game state, so a round whose watchdog is already armed
+  // must stay covered when the reconciler routes the client back into it -- a
+  // `snapshot:countdown` is exactly how a reconnecting client is put there.
+  // Disarming on entry instead would leave the one state the client can be
+  // bounced into as the one state the rescue does not cover.
+  const app = live();
+  runInContext("state = 'countdown'", app.ctx);
+  runInContext(`transition('shoot', { shootAt: ${C + 1000}, windowMs: 2000 })`, app.ctx);
+  // Let the local lock timer run, then have a snapshot reroute us to countdown.
+  app.setClock(C + 3000);
+  app.runUntil(C + 3001);
+  runInContext("transition('snapshot:countdown', {})", app.ctx);
+
+  app.setClock(C + STALL_MS);
+  app.runUntil(C + STALL_MS + 1);
+  assert.equal(app.sources[0].closed, true, 'the armed round is still covered');
+  assert.equal(app.sources.length, 2, 'reconnected');
 });
