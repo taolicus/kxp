@@ -273,6 +273,31 @@ button.primary:hover {
   font-size: 0.9rem;
 }
 
+/* Match History, styled out of the mode stack: the column above it reads as
+   ways to play, and this opens a record. Still a <button> — the wiring and
+   the keyboard both want one — so the base button chrome is what goes: no
+   panel, no border, muted until hovered. The padding keeps the tap target
+   honest while the text reads as a link. */
+.lobby-foot {
+  margin: var(--s2) 0 0;
+}
+
+.quiet {
+  padding: 0.6rem 1rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+.quiet:hover {
+  background: none;
+  border-color: transparent;
+  color: var(--text);
+}
+
 .fighters {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

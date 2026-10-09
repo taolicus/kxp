@@ -49,11 +49,15 @@
       <button id="btn-cpu">Play vs CPU</button>
       <button id="btn-ladder">Arcade Mode</button>
       <button id="btn-challenge">Challenge a Friend</button>
-      <!-- The record of the matches this browser finished, behind its own button
-           rather than a fourth mode: it opens something that already exists, and
-           it has no request of its own to post. -->
-      <button id="btn-history">Match History</button>
     </div>
+    <!-- The record of the matches this browser finished. Outside the mode
+         stack rather than a fifth entry in it: it opens something that already
+         exists and has no request of its own to post, and in the stack it read
+         as a way to play. Still a button — the wiring looks it up by id and
+         the keyboard wants one — just not wearing the stack's clothes. -->
+    <p class="lobby-foot">
+      <button id="btn-history" class="quiet">Match History</button>
+    </p>
   </section>
 
   <section id="choose" class="view hidden">

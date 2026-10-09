@@ -106,6 +106,7 @@ Features that depend on identity, persistence, or ranking.
 - [Arcade entry opens on the tower](tasks/closed/arcade-tower-entry.md)
 - [Arcade run lifecycle](tasks/closed/arcade-run-lifecycle.md)
 - [Match history](tasks/closed/match-history.md)
+- [Lobby: Match History out of the mode stack](tasks/closed/lobby-history-with-modes.md)
 - [Send challenge](tasks/closed/send-challenge.md)
 
 The rest of this phase is unstarted, and it is deliberately the last phase:
