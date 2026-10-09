@@ -54,10 +54,44 @@ func (f *challengeFixture) join(t *testing.T, id string) int {
 	return code
 }
 
-func (f *challengeFixture) queueLen() int {
-	f.h.mu.Lock()
-	defer f.h.mu.Unlock()
-	return len(f.h.queue)
+func (f *challengeFixture) queueLen() int { return queueLen(f.h) }
+
+// queueLen is the number of clients waiting in the global queue, read under h.mu.
+func queueLen(h *Hub) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.queue)
+}
+
+// mint posts /challenge for id and returns the token, failing loudly if the mint
+// itself did not succeed.
+func mint(t *testing.T, srv *httptest.Server, id string) string {
+	t.Helper()
+	code, body := postJSON(t, srv.URL+"/challenge", map[string]any{"id": id})
+	if code != http.StatusOK {
+		t.Fatalf("/challenge: %d", code)
+	}
+	tok, _ := body["token"].(string)
+	if tok == "" {
+		t.Fatalf("/challenge token missing: %+v", body)
+	}
+	return tok
+}
+
+// joinStatus posts /join for id and returns only the status code.
+func joinStatus(t *testing.T, srv *httptest.Server, id, tok string) int {
+	t.Helper()
+	code, _ := postJSON(t, srv.URL+"/join", map[string]any{"id": id, "token": tok})
+	return code
+}
+
+// connect opens an SSE stream and registers its teardown, so the test's own
+// httptest.Server.Close does not block on a handler that is still streaming.
+func connect(t *testing.T, srv *httptest.Server) (*sseStream, string) {
+	t.Helper()
+	st, id := connectSSE(t, srv, "")
+	t.Cleanup(st.close)
+	return st, id
 }
 
 // The token outlives the pairing: while the match is live a second opener is
@@ -128,5 +162,101 @@ func TestChallengeConsumedAtReadyAbandon(t *testing.T) {
 	}
 	if n := f.queueLen(); n != 0 {
 		t.Fatalf("challenge survivor queued after abandon: %d, want 0", n)
+	}
+}
+
+// Re-minting returns the open link rather than replacing it: a client that
+// retries POST /challenge must not be able to kill the link it already shared.
+func TestChallengeMintIsIdempotent(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	_, id := connect(t, srv)
+
+	first := mint(t, srv, id)
+	if again := mint(t, srv, id); again != first {
+		t.Fatalf("re-mint returned a new token: %q then %q", first, again)
+	}
+}
+
+// A link and the global queue are mutually exclusive, in both directions:
+// queueing behind a shared link must not kill it, and choosing to mint must
+// leave the queue rather than hold both waits.
+func TestChallengeAndQueueCannotBothBeOpen(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	_, id := connect(t, srv)
+
+	mint(t, srv, id)
+	if code, body := postJSON(t, srv.URL+"/queue", map[string]any{"id": id}); code != http.StatusConflict {
+		t.Fatalf("/queue with a link open: %d (body %+v), want 409", code, body)
+	}
+
+	_, id2 := connect(t, srv)
+	if code, _ := postJSON(t, srv.URL+"/queue", map[string]any{"id": id2}); code != http.StatusOK {
+		t.Fatalf("/queue: %d", code)
+	}
+	mint(t, srv, id2)
+	if n := queueLen(h); n != 0 {
+		t.Fatalf("creator still queued after minting: %d, want 0", n)
+	}
+}
+
+// Cancel is the waiting view's own button, so it spends the link the creator
+// was waiting on.
+func TestChallengeCancelSpendsTheLink(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	_, id1 := connect(t, srv)
+	_, id2 := connect(t, srv)
+	tok := mint(t, srv, id1)
+
+	if code, _ := postJSON(t, srv.URL+"/cancel", map[string]any{"id": id1}); code != http.StatusOK {
+		t.Fatalf("/cancel: %d", code)
+	}
+	if code := joinStatus(t, srv, id2, tok); code != http.StatusNotFound {
+		t.Fatalf("/join after cancel: %d, want 404", code)
+	}
+}
+
+// The waiting life of a link is bound to its creator: a disconnect drops it.
+func TestChallengeDisconnectSpendsTheLink(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	_, id1 := connect(t, srv)
+	_, id2 := connect(t, srv)
+	tok := mint(t, srv, id1)
+
+	c := h.client(id1)
+	if c == nil {
+		t.Fatal("creator already gone")
+	}
+	h.removeClient(c)
+	if code := joinStatus(t, srv, id2, tok); code != http.StatusNotFound {
+		t.Fatalf("/join after the creator disconnected: %d, want 404", code)
+	}
+}
+
+// The cap is a count of open links. Fill it directly rather than opening
+// maxQueue live streams: the count is what the endpoint checks, and 128
+// connections would test the socket more than the rule.
+func TestChallengeCapRefusesPastTheLimit(t *testing.T) {
+	h := NewHub()
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	_, id := connect(t, srv)
+
+	h.mu.Lock()
+	for i := 0; i < maxQueue; i++ {
+		tok := newID(8)
+		h.challenges[tok] = &challengeEntry{token: tok}
+	}
+	h.mu.Unlock()
+
+	if code, _ := postJSON(t, srv.URL+"/challenge", map[string]any{"id": id}); code != http.StatusServiceUnavailable {
+		t.Fatalf("/challenge at the cap: %d, want 503", code)
 	}
 }
