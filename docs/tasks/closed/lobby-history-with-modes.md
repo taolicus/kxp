@@ -61,3 +61,17 @@ was not run — this host is the phone, which has no Chromium. The browser lobby
 spec was *read* for text and order assertions before the move (it uses
 `#btn-cpu` and `#btn-start` only, so nothing there breaks), which is a read of
 the spec, not a run of it.
+
+## Follow-up: History moved above the mode selector, and the stack reordered
+
+A later slice changed the lobby's read order. `#btn-history` now sits above the
+length control rather than below the stack, so the mode choice is the last thing
+before the buttons it qualifies and the record stays above both as something to
+look at rather than a way to play. The `.buttons` column was reordered to
+Play Online, Challenge a Friend, Arcade Mode, Play vs CPU — online first, the
+social path next, then the two solo modes with arcade ahead of the plain CPU.
+
+`web/lobby-markup.test.cjs` now pins History before `#cpu-length` (still outside
+the stack) and the stack's exact order, so both are deliberate edits rather than
+silent moves. Verified with `npm run unit` 207/207 and `npm run links` 0 broken;
+styling still hand-read in the same browser gap as above.

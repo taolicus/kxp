@@ -25,6 +25,16 @@
     <h1 class="mkx-title">KACHIPUN TOURNAMENT</h1>
     <p id="online" class="online">&hellip;</p>
     <p id="stats" class="stats"></p>
+    <!-- The record of the matches this browser finished. Outside the mode
+         stack rather than a fifth entry in it: it opens something that already
+         exists and has no request of its own to post, and in the stack it read
+         as a way to play. It sits above the length control, which is the last
+         thing before the buttons it qualifies. Still a button — the wiring
+         looks it up by id and the keyboard wants one — just not wearing the
+         stack's clothes. -->
+    <p class="lobby-foot">
+      <button id="btn-history" class="quiet">Match History</button>
+    </p>
     <!-- The length and draw rule a match runs as, chosen before the button it
          qualifies. The numbers live in the markup because they are a choice the
          player reads here; app.js posts whatever is selected and the server
@@ -45,18 +55,10 @@
     </div>
     <div class="buttons">
       <button id="btn-online" class="primary" disabled>Play Online</button>
-      <button id="btn-cpu">Play vs CPU</button>
-      <button id="btn-ladder">Arcade Mode</button>
       <button id="btn-challenge">Challenge a Friend</button>
+      <button id="btn-ladder">Arcade Mode</button>
+      <button id="btn-cpu">Play vs CPU</button>
     </div>
-    <!-- The record of the matches this browser finished. Outside the mode
-         stack rather than a fifth entry in it: it opens something that already
-         exists and has no request of its own to post, and in the stack it read
-         as a way to play. Still a button — the wiring looks it up by id and
-         the keyboard wants one — just not wearing the stack's clothes. -->
-    <p class="lobby-foot">
-      <button id="btn-history" class="quiet">Match History</button>
-    </p>
   </section>
 
   <section id="choose" class="view hidden">

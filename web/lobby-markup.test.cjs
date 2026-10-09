@@ -58,15 +58,34 @@ test('the lobby stack holds the ways to start a match, and nothing else', () => 
     'Match History is not in the mode stack — it opens a record, not a match');
 });
 
-test('Match History is still on the lobby, as its own control', () => {
+test('Match History sits before the mode selector, outside the stack', () => {
   const lobby = lobbySection();
   // Outside the stack, but present: the wiring looks the control up by id
   // (`app.js:1517`), so a move that dropped it would leave a dead listener on
-  // nothing — and the stack test above would pass just as happily.
-  assert.ok(lobby.includes('id="btn-history"'), 'the lobby still carries the control');
+  // nothing — and the stack test above would pass just as happily. It now sits
+  // above the length control as well: the record is not a way to play, and the
+  // mode choice reads as the last thing before the buttons it qualifies.
+  const historyAt = lobby.indexOf('id="btn-history"');
+  assert.ok(historyAt >= 0, 'the lobby still carries the control');
+  assert.ok(historyAt < lobby.indexOf('id="cpu-length"'),
+    'and it sits before the length control');
   const stack = innerOf(lobby, '<div class="buttons">');
-  assert.ok(lobby.indexOf('id="btn-history"') > lobby.indexOf(stack) + stack.length,
-    'and it sits after the stack ends, not inside it');
+  assert.ok(historyAt < lobby.indexOf(stack), 'and outside the mode stack, above it');
+});
+
+test('the stack orders the ways to play: online, challenge, arcade, cpu', () => {
+  // The order is the lobby's own, so it is invisible to every other gate: the
+  // harness seeds controls by selector and the browser suite asserts flow. Named
+  // here in the sequence a player reads them, so a reorder is a deliberate edit
+  // rather than a silent one.
+  const lobby = lobbySection();
+  const stack = innerOf(lobby, '<div class="buttons">');
+  const ids = ['btn-online', 'btn-challenge', 'btn-ladder', 'btn-cpu'];
+  const at = ids.map((id) => stack.indexOf(`id="${id}"`));
+  ids.forEach((id, n) => assert.ok(at[n] >= 0, `${id} is in the mode stack`));
+  for (let n = 1; n < at.length; n++) {
+    assert.ok(at[n - 1] < at[n], `${ids[n - 1]} comes before ${ids[n]}`);
+  }
 });
 
 test('the length control relies on its buttons, not a visible label', () => {
