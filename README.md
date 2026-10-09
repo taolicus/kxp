@@ -49,6 +49,12 @@ prints it on startup. To bind a specific address (e.g. behind nginx):
 go run . -addr :8080
 ```
 
+Run `go run . -h` for the operational flags: `-shoot-window` and
+`-ready-timeout` (round timing), `-sse-write-deadline`, `-max-body-bytes`, and
+the `-rl-*` rate limits. Each defaults to the value the game ships with, so an
+install can pin them and be recorded rather than running whatever the build
+compiled in.
+
 Then open `http://localhost:<port>`.
 
 ## Play

@@ -64,6 +64,7 @@ Correctness and safety issues that affect reliability on a public server.
 - [Stale `state` teardown after a handshake re-pair](tasks/closed/stale-teardown-guard.md)
 - [Monotonic PUN deadline](tasks/closed/monotonic-pun-deadline.md)
 - [Both ends of the pick window are authoritative](tasks/closed/pick-window-both-ends.md)
+- [Externalised operational settings](tasks/closed/externalised-operational-settings.md)
 
 ## Phase 2 — Testing & observability
 

@@ -21,6 +21,7 @@ var webFS embed.FS
 
 func main() {
 	addr := flag.String("addr", "", "listen address (default: auto-pick from 8000–8999)")
+	operationalFlags(flag.CommandLine)
 	flag.Parse()
 
 	sub, err := fs.Sub(webFS, "web")
@@ -83,4 +84,20 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("server stopped")
+}
+
+// operationalFlags exposes the operating values the engine and hub read as
+// flags, so an install can be recorded and reproduced instead of being
+// "whatever this build compiled in". Each flag is bound to the package var the
+// code already reads and defaults to that var's shipped value, so the default
+// and the runtime value cannot drift into two sources of truth. main calls this
+// before flag.Parse(), before any goroutine or hub exists.
+func operationalFlags(fs *flag.FlagSet) {
+	fs.DurationVar(&shootWindow, "shoot-window", shootWindow, "how long after PUN a pick may arrive")
+	fs.DurationVar(&readyTimeout, "ready-timeout", readyTimeout, "how long a match waits for both sides to be ready")
+	fs.DurationVar(&sseWriteDeadline, "sse-write-deadline", sseWriteDeadline, "rolling per-write deadline on /events streams")
+	fs.IntVar(&maxBodyBytes, "max-body-bytes", maxBodyBytes, "largest accepted POST body in bytes")
+	fs.Float64Var(&rlCapacity, "rl-capacity", rlCapacity, "rate-limit burst tokens per IP")
+	fs.Float64Var(&rlRefillPerSec, "rl-refill-per-sec", rlRefillPerSec, "rate-limit sustained refill tokens per second")
+	fs.IntVar(&rlMaxEntries, "rl-max-entries", rlMaxEntries, "rate limiter map cap")
 }

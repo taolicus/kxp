@@ -13,7 +13,7 @@ Protocol rework Task A's schedule-driven run loop (`sleep-until` on an announced
 
 ## Notes
 
-- Depends on [externalised-operational-settings](externalised-operational-settings.md):
+- Depends on [externalised-operational-settings](../closed/externalised-operational-settings.md):
   an injected clock is only reachable if the timing values are already injectable
   rather than package constants.
 - `go test -race` cannot run on the phone (`race is not supported on

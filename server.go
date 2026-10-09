@@ -16,7 +16,11 @@ import (
 	"time"
 )
 
-const maxBodyBytes = 1 << 10
+// maxBodyBytes caps an accepted POST body. A var, not a const, so an operator
+// can set -max-body-bytes; the resource caps below stay compiled in, because
+// they bound the process's own memory rather than an operating value a
+// deployment tunes.
+var maxBodyBytes = 1 << 10
 
 // Resource caps. Deliberately conservative yet unreachable in normal play:
 // each live client holds a 64-slot send channel plus a goroutine on its
@@ -329,7 +333,7 @@ func (h *Hub) handlerError(w http.ResponseWriter, code int, msg string) {
 }
 
 func (h *Hub) decode(w http.ResponseWriter, r *http.Request, v any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBodyBytes))
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {

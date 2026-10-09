@@ -9,8 +9,10 @@ import (
 )
 
 // Default token-bucket limits. Tuned to never trip a legitimate session
-// (including best-of-5 and arcade-ladder bursts) while capping floods.
-const (
+// (including best-of-5 and arcade-ladder bursts) while capping floods. Vars so
+// an operator can retune them with -rl-* without a rebuild; NewHub reads them
+// once at startup.
+var (
 	rlCapacity     = 200.0 // burst tokens per IP
 	rlRefillPerSec = 2.0   // sustained ~120 requests/min
 	rlMaxEntries   = 4096  // bound the limiter's own map

@@ -159,7 +159,7 @@ across the deploy survives.
 - [`latency-profile-visibility.md`](../open/latency-profile-visibility.md) would size the
   margin from real players rather than from one report. It is gated on a `/ping`
   probe, so it cannot be waited on; a per-player margin is out of scope.
-- [`externalised-operational-settings.md`](../open/externalised-operational-settings.md)
+- [`externalised-operational-settings.md`](externalised-operational-settings.md)
   if the margin becomes a tuned constant rather than a literal.
 
 ## Required context

@@ -540,6 +540,30 @@ always re-admitted, so the caps only bound new growth, never legitimate
 reconnects. These sit beside the rate limiter: the limiter bounds request
 floods, the caps bound the resulting memory/goroutine footprint.
 
+## Operational settings
+
+Every operating value the engine and hub read is settable without a rebuild, so
+an install can be recorded and reproduced rather than interpreted against
+"whatever this build compiled in". `main.go` binds seven flags to the package
+vars themselves — `-shoot-window`, `-ready-timeout`, `-sse-write-deadline`,
+`-max-body-bytes`, `-rl-capacity`, `-rl-refill-per-sec`, `-rl-max-entries` —
+each defaulting to the shipped value; `-addr` and `-h` complete the set.
+
+A flag is not a second source of truth: it is bound to the same var the code
+reads (`flag.DurationVar(&shootWindow, "shoot-window", shootWindow, …)`), so the
+default and the runtime value cannot drift, and `main` sets them once before any
+goroutine or the hub exists. Environment variables were considered and rejected:
+a second input route needs precedence rules or reintroduces the duplicate-source
+problem, and this repo already exposes its one runtime choice, `-addr`, as a
+flag.
+
+Values that are part of the client contract rather than an operator's knob stay
+compiled in: `readyLease` and `readyRecheck` track the client's fixed 2s re-ack
+interval, `countStep`/`countdownSlots` are the countdown the client paints from
+`COUNTDOWN_SLOTS`, and `maxClients`/`maxQueue`/`maxMatches`/`frameJournalCap`
+bound the process's own memory and goroutines. Changing any of those server-side
+alone would desynchronise the two ends, or has no operational meaning.
+
 ## Pure game engine
 
 `round.go`'s `match` doesn't touch `Hub`, `Client`, or SSE. Each side is a

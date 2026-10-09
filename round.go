@@ -8,8 +8,7 @@ import (
 )
 
 const (
-	countStep   = time.Second
-	shootWindow = 2 * time.Second
+	countStep = time.Second
 
 	// countdownSlots is how many beats precede PUN, and is what the announced
 	// deadline is offset by: a three-beat countdown announces PUN three steps
@@ -21,6 +20,11 @@ const (
 	// mismatch would show the wrong beat.
 	countdownSlots = 3
 )
+
+// shootWindow is how long after PUN a pick may arrive before it is a timeout. A
+// var, not a const, so an operator can set -shoot-window; the engine reads this
+// one value, and the same value is announced to the client as windowMs.
+var shootWindow = 2 * time.Second
 
 // countdownBeats are the beats announced before PUN, in the order they run.
 var countdownBeats = [countdownSlots]string{"READY", "KA", "CHI"}
