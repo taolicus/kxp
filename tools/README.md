@@ -61,8 +61,8 @@ dirty tree is caught even when the commit matches.
 | `npm run t5` | one CPU match end to end, with timing | 1 |
 | `npm run t6` | drop the stream mid-match, reconnect, recover | 2 |
 | `npm run t7` | every documented rejection code | 1 |
-| `npm run t8` | PvP between two clients, plus the abandoned handshake | 2 |
-| `npm run tall` | all of the above, one summary | 6 |
+| `npm run t8` | PvP between two clients: the abandoned handshake and a challenge link | 3 |
+| `npm run tall` | all of the above, one summary | 7 |
 | `npm run tall -- t5 t6` | only the named ones | 3 |
 | `QUICK=1 npm run tall` | skip everything that creates a match | 0 |
 
@@ -135,6 +135,13 @@ result frames are used to *prove* the pairing (`A.opponentCharacter` must equal
 queued and took a slot, the invariant checks still run and the win/loss
 cross-check is skipped rather than reported as a failure against someone else's
 match — the reasoning in gameplay.spec.js:23-31.
+
+`t8` scenario C covers the other pairing path, the challenge link: `G` mints
+`POST /challenge`, `H` claims it with `POST /join`, and a third client `I` is
+refused with `409 challenge in play` while the match is live — proving the token
+is not consumed at claim time — then refused again with `404 challenge gone`
+after the match ends. That pair is the whole rule: a live match is never
+misreported as a dead link, and the link is spent only when its match ends.
 
 `scissors` beats `paper`. The suite keeps `BEATS` (what beats x) and `WINS`
 (what x beats) as separate maps in `t8-pvp.mjs` for exactly this reason:

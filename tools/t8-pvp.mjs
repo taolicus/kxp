@@ -21,6 +21,9 @@
 // Scenario B: one side never readies, so readyTimeout fires and both are
 //             re-queued. The survivor must be told, in bounded time, and must
 //             end up playable.
+// Scenario C: a challenge link pairs two clients by token, a second opener is
+//             refused while the match is live, and the token is spent when the
+//             match ends.
 //
 // Pairing is strict FIFO, so a stranger already queued could take a slot. Every
 // assertion here is therefore either an invariant that holds regardless of who
@@ -28,7 +31,7 @@
 // proven from the result frames. That mirrors the reasoning in
 // gameplay.spec.js:23-31.
 //
-// Consumes two real matches and ~14 rate-limit tokens.
+// Consumes three real matches and ~26 rate-limit tokens.
 //
 //   npm run t8
 
@@ -249,10 +252,66 @@ await script('t8 · PvP between two clients', async () => {
   rep.eq('D can leave the queue cleanly', cancel.status, 200, errMsg(cancel));
 
   back.drop(); drop(E);
+
+  // ---- Scenario C: a challenge link pairs by token, and is spent at the end.
+  // This is the one pairing path that does not go through the queue: the creator
+  // mints a link, the first opener claims it, and the token is consumed when the
+  // match it built terminates -- not when it is claimed. A second opener while
+  // the match is live is told it is in play; after the match, that it is gone.
+  const G = await peer('G', ca);
+  const H = await peer('H', cb);
+  const I = await peer('I', ca);
+  const curG = G.sse.mark();
+  const curH = H.sse.mark();
+
+  const mint = await post('/challenge', { id: G.id });
+  rep.eq('G mints a challenge link', mint.status, 200, errMsg(mint));
+  const token = mint.json?.token;
+  rep.truthy('the mint carries a token', typeof token === 'string' && token.length > 0, String(token));
+
+  // H claims it. Because /join builds the match itself, creator and claimant
+  // are matched at the same instant, unlike the FIFO queue.
+  const claim = await post('/join', { id: H.id, token });
+  rep.eq('H claims the challenge link', claim.status, 200, errMsg(claim));
+  const mG = await G.sse.wait('matched', { timeout: BOUNDS.countdown, from: curG, where: 'G challenge handshake' });
+  const mH = await H.sse.wait('matched', { timeout: BOUNDS.countdown, from: curH, where: 'H challenge handshake' });
+  rep.truthy('both sides of the link are matched', Boolean(mG.data && mH.data),
+    `${JSON.stringify(mG.data)} / ${JSON.stringify(mH.data)}`);
+
+  // The token outlives the pairing. While the match is live a second opener must
+  // be told it is in play (409); consuming at /join would make this a 404 and
+  // misreport a live link as dead. This is the assertion the whole scenario
+  // exists for.
+  const steal = await post('/join', { id: I.id, token });
+  rep.eq('a second opener is refused while the link is live', steal.status, 409, errMsg(steal));
+
+  expectReadyAck(rep, await post('/ready', { id: G.id }), 'G /ready accepted');
+  expectReadyAck(rep, await post('/ready', { id: H.id }), 'H /ready accepted');
+  const sG = await G.sse.wait('shoot', { timeout: BOUNDS.countdown, from: G.sse.marked(mG), where: 'G challenge shoot' });
+  const sH = await H.sse.wait('shoot', { timeout: BOUNDS.countdown, from: H.sse.marked(mH), where: 'H challenge shoot' });
+
+  // A challenge match is one round, so a decisive round ends it.
+  const moveG = MOVES[Math.floor(Math.random() * 3)];
+  await Promise.all([
+    post('/move', { id: G.id, move: moveG, sawPunAt: Date.now(), clickedAt: Date.now() }),
+    post('/move', { id: H.id, move: BEATS[moveG], sawPunAt: Date.now(), clickedAt: Date.now() }),
+  ]);
+  const resG = await G.sse.wait('result', { timeout: BOUNDS.match, from: G.sse.marked(sG), where: 'G challenge result' });
+  await H.sse.wait('result', { timeout: BOUNDS.match, from: H.sse.marked(sH), where: 'H challenge result' });
+  // The teardown `state` is sent after finishMatch has dropped the token, so
+  // waiting for it makes the 404 below a deterministic read rather than a race.
+  await G.sse.wait('state', { timeout: BOUNDS.teardown, from: G.sse.marked(resG), where: 'G challenge teardown' });
+
+  const gone = await post('/join', { id: I.id, token });
+  rep.eq('the link is spent when its match ends', gone.status, 404, errMsg(gone));
+
+  drop(G); drop(H); drop(I);
+
   return rep.print({
     selfPaired: String(selfPaired),
     matchWall: `${wallA}ms`,
     abandonedSilence: afterD.length === 0 ? 'silent' : afterD.join(','),
     recovered: `state=${d2.state}`,
+    challenge: gone.status === 404 ? 'consumed-at-end' : `join=${gone.status}`,
   });
 });

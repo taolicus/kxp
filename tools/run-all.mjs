@@ -40,7 +40,7 @@ const ALL = [
   { script: 't5-cpu-match.mjs', name: 't5', label: 'CPU match end-to-end', matches: true, why: 'one real match, the core loop' },
   { script: 't6-reconnect.mjs', name: 't6', label: 'reconnect and reconcile', matches: true, why: 'two real matches, the train case' },
   { script: 't7-move-matrix.mjs', name: 't7', label: 'rejection contract', matches: true, why: 'one real match, every error code' },
-  { script: 't8-pvp.mjs', name: 't8', label: 'PvP two clients', matches: true, why: 'two real matches, the asymmetric case' },
+  { script: 't8-pvp.mjs', name: 't8', label: 'PvP two clients', matches: true, why: 'three real matches, the asymmetric case and a challenge link' },
 ];
 
 const wanted = process.argv.slice(2);
