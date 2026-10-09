@@ -41,8 +41,8 @@ of a player.
 of them: the three above, plus [player-names](../tasks/open/player-names.md).
 The rest of Phase 4 does not wait on it, and each says why in its own file:
 [solo-campaign](../tasks/open/solo-campaign.md) persists to `localStorage` like
-the arcade ladder and will be retrofitted onto whatever is chosen here,
-[send-challenge](../tasks/open/send-challenge.md) needs no identity because a
-link identifies a match rather than a player, and
+the arcade ladder and will be retrofitted onto whatever is chosen here, and
 [match-history](../tasks/closed/match-history.md) is a local record that carries no
-rank.
+rank. [send-challenge](../tasks/closed/send-challenge.md) has already landed
+without one, for the same reason: a link identifies a match rather than a
+player.

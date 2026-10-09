@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: []
-gated-on: []
----
-
 # Send challenge
 
 A player creates a link that anyone can open to join that specific match
@@ -108,3 +102,37 @@ this is a lookup of a resource that no longer exists, not a malformed request.
 
 No rendering coverage on this host, and probes require an origin plus an ops
 deploy — `t1` fails on `build.sha` against a local build by design.
+
+## Landed
+
+Step 1 (server): the token map and both endpoints, with consumption moved to
+match termination rather than `/join`. A second opener while the link's match is
+live now gets `409 challenge in play`, and only a join after termination gets
+`404 challenge gone`; a challenge match's `requeue` returns false, so a
+cancelled handshake sends the survivor to the lobby rather than the queue.
+
+Step 2 (client): the creator/claimant flow and the claim-once latch the hazard
+note called for, pinned by `web/app.challenge.test.cjs`. That test needed the
+harness to supply `URLSearchParams`, which a vm context does not inherit —
+without it the claim path threw inside its own try/catch and no test could reach
+it at all.
+
+Step 3 (probe): `t8` scenario C mints, claims, asserts `409 challenge in play`
+while the match is live and `404 challenge gone` after it ends, so the suite
+keeps every doc that enumerates `t1`–`t8` true.
+
+Step 4 (docs): `protocol.md` endpoints, `README.md`, and the `architecture.md`
+matchmaking paragraph this file's rationale closes into.
+
+Verified: `challenge_test.go` covers second-opener-while-live and one test per
+termination means (a decided series, `readyTimeout`, `readyAbandon`), plus mint
+idempotence, the queue/challenge exclusion in both directions, cancel,
+disconnect, and the cap. The new tests were checked to *fail* against the
+pre-change handler — the second opener read `404` where it now reads `409`, and
+the abandon case left the survivor queued — so they pin the consumption rule,
+not just its happy path. `go test ./...` ok, `npm run unit` 194/194,
+`gofmt`/`vet` clean, `npm run links` 0 broken.
+
+Not verified here: the probe was validated against a local boot, not the
+deployed origin, so `npm run tall` cannot judge it until the ops deploy lands.
+
