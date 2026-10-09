@@ -30,6 +30,11 @@ discarded one.
 **Proves the cause** — a recorded decision: keep-the-run vs warn vs block,
 stated against the ladder's length invariant wherever the ladder is documented.
 
+**Direction filed** — the keep-the-run branch has its own entry:
+[arcade-runs-per-mode](arcade-runs-per-mode.md), which tracks one run per
+(length, rule) pair, each resumable separately. If that direction is accepted,
+questions 1 and 2 here are answered by it and this entry closes with it.
+
 **Prospective fix (not scheduled)** — whichever of the above wins, wired through
 the existing `#notice` path (`app.js:981`) or a per-run length stored with the
 order rather than read from the lobby at fight time.
