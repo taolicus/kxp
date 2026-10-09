@@ -41,6 +41,10 @@ let slotTimer = null; // re-checks which countdown beat is due
 let slotStep = null; // pure stepper for the round being counted down
 let plannedShootAt = 0; // announced deadline (epoch-ms) slotStep belongs to
 let punTimer = null; // local PUN entry scheduled from the announced round plan
+// Buttons whose click is waiting on a server frame, and the one failsafe that
+// re-arms them. See armPending.
+let pendingButtons = [];
+let pendingFailsafe = null;
 
 // The series tally as the last result reported it. A CPU match is a series, so
 // the score is the thing being played for and it has to outlive the round panel:
@@ -913,6 +917,36 @@ async function post(path, body = {}) {
   }
 }
 
+// A button whose click is awaiting a server frame. Play Online, Instant CPU and
+// the tower's fight post a request, but success is signalled by a later SSE
+// frame rather than by the reply: the button is disabled from the click until
+// that frame arrives. Left bare the wait reads as inert, and a frame that never
+// comes leaves the button dead with no way back. Marking it pending makes the
+// wait read as working, and one failsafe re-arms it if the reply never lands --
+// a dropped event costs the player a retry, not the screen.
+const PENDING_FAILSAFE_MS = 8000;
+function armPending(btn) {
+  if (!btn || pendingButtons.indexOf(btn) >= 0) return;
+  btn.disabled = true;
+  btn.classList.add('pending');
+  pendingButtons.push(btn);
+  clearTimeout(pendingFailsafe);
+  pendingFailsafe = setTimeout(clearPending, PENDING_FAILSAFE_MS);
+}
+
+// Every pending button, or the one named. Called when a frame moves the screen
+// on (the awaited reply arrived), when a request is refused (the player may try
+// again), and by the failsafe above.
+function clearPending() {
+  clearTimeout(pendingFailsafe);
+  pendingFailsafe = null;
+  for (const b of pendingButtons) {
+    b.classList.remove('pending');
+    b.disabled = false;
+  }
+  pendingButtons = [];
+}
+
 function transition(ev, data) {
   const to = SM.next(state, ev);
   if (!to) {
@@ -925,6 +959,9 @@ function transition(ev, data) {
   }
   const from = state;
   state = to;
+  // The awaited frame moved the screen on, so whatever button was waiting on it
+  // is done: re-arm it before the entry handler draws the screen it is leaving.
+  clearPending();
   if (enter[to]) enter[to](data || {}, from);
   return true;
 }
@@ -1347,7 +1384,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btn.disabled) return;
     const mode = pendingMode;
     pendingMode = '';
-    btn.disabled = true;
+    armPending(btn);
     if (mode === 'challenge') {
       const p = post('/challenge', { id });
       Promise.resolve(p).then((res) => {
@@ -1362,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           transition('queue');
           return;
         }
-        btn.disabled = false;
+        clearPending();
         pendingMode = mode;
         if (res && res.status === 409) setNotice('You are already in a match.');
       });
@@ -1372,7 +1409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (mode === 'ladder') {
       ladderTarget = cpuTarget;
       if (!transition('climb')) {
-        btn.disabled = false;
+        clearPending();
         pendingMode = mode;
       }
       return;
@@ -1380,7 +1417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const p = mode === 'online' ? post('/queue', { roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }) : postCPU(mode);
     Promise.resolve(p).then((res) => {
       if (res && res.ok) return;
-      btn.disabled = false;
+      clearPending();
       pendingMode = mode;
       if (res && res.status === 409) setNotice('You are already in a match.');
     });
@@ -1491,8 +1528,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       // and re-armed if the route is refused -- and it is the result screen's
       // button, not the tower's, which showTower arms.
       const btn = $('#btn-again');
-      btn.disabled = true;
-      if (!transition('climb')) btn.disabled = false;
+      armPending(btn);
+      if (!transition('climb')) clearPending();
       return;
     }
     // The match that just ended, not the lobby's current selection: "Play
@@ -1504,9 +1541,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const again = lastTarget || cpuTarget;
     const againEnds = lastDrawEnds ?? (again <= 1);
     if (lastMode === 'cpu') {
-      $('#btn-again').disabled = true;
+      armPending($('#btn-again'));
       post('/cpu', { roundsTarget: again, drawEnds: againEnds }).then((res) => {
-        if (!res || !res.ok) $('#btn-again').disabled = false;
+        if (!res || !res.ok) clearPending();
       });
     } else {
       transition('rematch:online');
@@ -1528,10 +1565,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#ladder-fight').addEventListener('click', () => {
     const btn = $('#ladder-fight');
     if (btn.disabled) return;
-    btn.disabled = true;
+    armPending(btn);
     const p = postCPU('ladder', { roundsTarget: ladderTarget || cpuTarget });
     Promise.resolve(p).then((res) => {
-      if (!res || !res.ok) btn.disabled = false;
+      if (!res || !res.ok) clearPending();
     });
   });
   // Leaving mid-run. The tower draws the whole run, so without this the one

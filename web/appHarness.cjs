@@ -109,8 +109,12 @@ function loadApp(opts = {}) {
       // token), so the stub answers it with a token rather than `{}`.
       const isRoster = /\/characters\/?$/.test(String(url));
       const isChallenge = /\/challenge\/?$/.test(String(url));
+      // A test that drives a refusal sets opts.postStatus. It applies to POSTs
+      // only, so the roster still loads and the client boots to a wired screen.
+      const isPost = !!(init && init.method === 'POST');
+      const status = isPost && opts.postStatus ? opts.postStatus : 200;
       return Promise.resolve({
-        ok: true, status: 200,
+        ok: status >= 200 && status < 300, status,
         json: () => Promise.resolve(isRoster ? (opts.roster || []) : isChallenge ? { token: 'tok' } : {}),
       });
     },
