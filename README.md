@@ -13,6 +13,10 @@ original terminal game.
   drawn round, while first to 3 replays it. A series keeps the score as pips
   under each fighter and re-opens the ready handshake between rounds. Synced
   countdown and a shared **PUN!** instant either way.
+- **Challenge a friend** — the lobby can mint a link to one specific match
+  instead of waiting in the global queue: whoever opens it is the other side, no
+  account or matching needed. The link is live while it waits and is spent when
+  its match ends, so it pairs exactly two players once.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay, in
   a series you pick in the lobby: one round (a draw is the result) or first to 3
   (a draw replays). One round is the default, and the lobby remembers the mode

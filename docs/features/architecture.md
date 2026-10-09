@@ -462,6 +462,14 @@ nobody to pair with — the same branch a CPU match takes. The endpoints landed 
 `8e59608`; consuming at termination, rather than at `/join`, is what keeps the
 live/in-play distinction and is pinned by `challenge_test.go`.
 
+The client side of the same rule is a latch: the claimant posts `/join` once per
+page load, because `connected` is an SSE reconnect event and a claim on each fire
+would post into a token its own match already spent. The latch must not clear
+when a snapshot stops being `idle` — that snapshot is the match the claim just
+built, and clearing it there re-claims a spent token on the reconnect after the
+match. Pinned by `web/app.challenge.test.cjs`; the claim path landed in
+`e5545fe`, the latch in `07c1d20`.
+
 ## SSE lifecycle
 
 Connections are guarded by a `connID` freshness check so a newer connection
