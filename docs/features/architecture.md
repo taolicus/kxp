@@ -447,6 +447,21 @@ is cancelled and re-queued after 8s, where before it could not happen. The 2s
 ack re-post plus the `pending` snapshot flag — which routes a reconnecting client
 back through `matched` and re-arms its acks — cover the realistic cases.
 
+**A challenge link is a scoped queue that lives until its match ends.**
+`POST /challenge` binds a token to its creator; `POST /join` pairs the first
+claimant through the same `makeMatch`/`startMatchLocked` path the queue uses,
+creator at slot 0 and claimant at slot 1. The token is consumed when the *match*
+ends, not when it is paired: while the match is live a second opener is told
+`409 challenge in play`, and only a join after termination finds `404 challenge
+gone`. `finishMatch` is the one hook, because every termination — a decided
+round, a `void`, an opponent-left, a ready timeout or abandon — reaches it
+through `m.finish`, and it drops the entry whose match is this one. A challenge
+match's `requeue` returns false, so the survivor of a cancelled handshake goes to
+the lobby rather than the global queue: the link named the opponent, and there is
+nobody to pair with — the same branch a CPU match takes. The endpoints landed in
+`8e59608`; consuming at termination, rather than at `/join`, is what keeps the
+live/in-play distinction and is pinned by `challenge_test.go`.
+
 ## SSE lifecycle
 
 Connections are guarded by a `connID` freshness check so a newer connection

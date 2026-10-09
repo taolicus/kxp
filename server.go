@@ -902,14 +902,17 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 		c.queueing = false
 		cancelled = true
 	}
-	h.mu.Unlock()
-	// Drop any open challenge created by this client
+	// Drop any open challenge created by this client. The waiting life of a
+	// token is bound to its creator, and removeClient is the other path that
+	// ends it; both maps are guarded by h.mu, so the drop must be inside the
+	// lock. Outside it, this read/write races every handler that touches them.
 	if ch, ok := h.challenge[c.id]; ok {
 		delete(h.challenge, c.id)
 		if ch.token != "" {
 			delete(h.challenges, ch.token)
 		}
 	}
+	h.mu.Unlock()
 	if cancelled {
 		c.sendEv(evt("state", map[string]any{"state": "idle"}))
 	}
@@ -1350,12 +1353,18 @@ func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request) {
 		h.dequeueLocked(c)
 		c.queueing = false
 	}
-	// consume token
-	delete(h.challenges, req.Token)
-	delete(h.challenge, creator.id)
 	m := h.makeMatch(newID(4), 1, side{client: creator}, side{client: c})
 	m.drawEnds = true
+	// The token is consumed when the *match* ends, not here. A second opener
+	// while the match is live must be told it is in play (409), and only a join
+	// after termination finds the token gone (404). finishMatch is the one hook:
+	// every termination reaches it through m.finish, and it drops the entry whose
+	// match is this one. ch.match records the pairing so that lookup can find it.
 	ch.match = m
+	// A challenge survivor goes to the lobby, not the global queue. The link
+	// named the opponent, so a cancelled handshake has nobody to pair with; this
+	// is the same branch a CPU match takes.
+	m.requeue = func(int) bool { return false }
 	h.startMatchLocked(m)
 	h.mu.Unlock()
 	w.Write([]byte("{}"))
