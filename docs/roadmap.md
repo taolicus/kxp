@@ -84,6 +84,7 @@ Make the system testable and debuggable in production.
 - [Browser e2e: CPU first-to-3 series and rematch](tasks/closed/browser-cpu-series-e2e.md)
 - [t5 cannot pass, and never could since the series build](tasks/closed/t5-cannot-pass.md)
 - [Pin the client stall watchdog](tasks/closed/stall-watchdog.md)
+- [Stop counting the harness-driven client tests in prose](tasks/closed/client-behaviour-test-list.md)
 
 ## Phase 3 — Architecture & features
 

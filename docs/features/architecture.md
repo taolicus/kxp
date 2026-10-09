@@ -555,14 +555,15 @@ testable and reusable without a hub or a wire.
   mid-match disconnects, and endpoint validation, alongside the unit tests.
 - Client and harness tests run under `npm run unit`, which globs
   `web/*.test.cjs` and `tools/lib/*.test.mjs`: client pure logic (the PUN-window
-  plan, stats, result lines), the client state machine, and the two files that
-  run the real `app.js` against a stubbed context — the countdown paint path and
-  the snapshot reconciler that decides where a reconnecting client lands — and,
-  in the same file, the stall watchdog that decides whether it reconnects at all.
-  Invoke
-  the script rather than the individual files — the set is a glob, and those two
-  are the ones that close the gap probes cannot.
-- `web/appHarness.cjs` is shared by both client-behaviour tests rather than copied
+  plan, stats, result lines), the client state machine, and every
+  `web/app.*.test.cjs` — the tests that load `web/appHarness.cjs` and drive the
+  real `app.js` against a stubbed context. The countdown paint path and the
+  snapshot reconciler that decides where a reconnecting client lands (with, in the
+  same file, the stall watchdog that decides whether it reconnects) are the
+  examples this description was written around, not the whole set. Invoke the
+  script rather than the individual files — the set is a glob, and these are the
+  ones that close the gap probes cannot.
+- `web/appHarness.cjs` is shared by all of them rather than copied
   into each. It holds the stubbed clock, the hand-fired timer queue and the
   recording state machine — the seam that makes a second such test cost almost
   nothing, since [stall-watchdog](../tasks/closed/stall-watchdog.md) needs no new

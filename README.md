@@ -118,10 +118,10 @@ npm run e2e       # browser suite — needs an origin and Chromium, so the lapto
 ```
 
 `npm run unit` is the way to run the client and harness tests; the files it
-globs are not a list to reproduce by hand, and two of them
-(`web/app.countdown.test.cjs`, `web/app.reconnect.test.cjs`) run the real
-`app.js` against a stubbed context, which nothing else covers. Pass a subset to
-check part of the doc tree: `npm run links -- AGENTS.md docs/features`.
+globs are not a list to reproduce by hand, and every `web/app.*.test.cjs`
+(`web/app.countdown.test.cjs` and `web/app.reconnect.test.cjs` among them) runs
+the real `app.js` against a stubbed context, which nothing else covers. Pass a
+subset to check part of the doc tree: `npm run links -- AGENTS.md docs/features`.
 
 (`go test -race` isn't supported on the arm64-Android dev device; see the
 [automated-test-workflow.md](docs/tasks/closed/automated-test-workflow.md)

@@ -1,9 +1,3 @@
----
-phase: 2
-depends-on: []
-gated-on: []
----
-
 # Stop counting the harness-driven client tests in prose
 
 Two documents count the client tests that drive the real `app.js`, and both say
@@ -48,3 +42,35 @@ for that.
 
 Verified while specifying, 2026-10-07: `grep -l appHarness web/*.test.cjs` lists
 the six above.
+
+## Landed
+
+The counts are gone; the set is named by the glob that actually defines it.
+
+**What changed.** [verification.md](../../development/verification.md) no longer
+calls `web/app.countdown.test.cjs` "the test that runs the real `app.js` source"
+— the gates note now points at "the client-behaviour tests — the
+`web/app.*.test.cjs` files" — and its gap section now says "every
+`web/app.*.test.cjs`", keeping countdown and reconnect as the examples the
+paragraph was written around, with "Both load" changed to "They all load".
+[architecture.md](../../features/architecture.md) § Testing likewise drops "the
+two files" for "every `web/app.*.test.cjs`", and "shared by both
+client-behaviour tests" is now "shared by all of them".
+
+**Why the glob is exact, not a guess.** `grep -l appHarness web/*.test.cjs` and
+`ls web/app.*.test.cjs` list the same six files (arcade, countdown, history,
+lobby, ready, reconnect), so the shorter form and the loader set coincide today;
+naming the loader is what keeps the sentence true if that ever stops being so.
+
+**One document more than the task named.** The task counted two documents saying
+"two" (verification and architecture); [README.md](../../../README.md) made the
+same count — "two of them ... run the real `app.js`" — and was fixed in the same
+slice, since the point is to stop stating the set as a count anywhere. AGENTS.md
+names `web/app.countdown.test.cjs` as an example rather than a count, and stays
+true, so it was left alone.
+
+**Verified.** `npm run links` — 101 documents, 350 links, 0 broken. Docs only: no
+code, so no gate's behaviour changed and `npm run unit` still runs the same 186
+tests. The watchdog tests that landed in `web/app.reconnect.test.cjs` extended an
+existing file, so the set this reword names is unchanged at six.
+

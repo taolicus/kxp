@@ -26,12 +26,13 @@ them a given task belongs on, see
 `npm run unit` is the catch-all for client and harness tests, and the gate column
 above mirrors the run list in `AGENTS.md` ("Verify") — adding a gate means adding
 it in both places. Name the script, not the files it globs: the shorter
-`node --test web/kxp.test.cjs web/machine.test.cjs` form misses
-`web/app.countdown.test.cjs`, which is the test that runs the real `app.js` source
-against a stubbed context — see [the gap probes cannot close](#the-gap-probes-cannot-close)
-below. Both `README.md` and `docs/features/architecture.md` prescribed that
-shorter form until this commit, which is the shape of drift a link checker cannot
-see: a path in prose is not a path.
+`node --test web/kxp.test.cjs web/machine.test.cjs` form misses the
+client-behaviour tests — the `web/app.*.test.cjs` files that run the real
+`app.js` source against a stubbed context — see
+[the gap probes cannot close](#the-gap-probes-cannot-close) below. Both
+`README.md` and `docs/features/architecture.md` prescribed that shorter form
+until this commit, which is the shape of drift a link checker cannot see: a path
+in prose is not a path.
 
 ## Run the gates the way a phone can finish them
 
@@ -64,14 +65,16 @@ re-arms a timer incorrectly, or paints a beat that is overwritten in the same
 tick, is invisible to both `go test` and `t1`–`t8`: the server sent the right
 frames, and the probe has no browser.
 
-That gap is why `web/app.countdown.test.cjs` and `web/app.reconnect.test.cjs`
-drive the real `app.js` source against a stubbed context instead of
-reimplementing client logic in the test. Reimplementing it would test the copy.
-Both load the same `web/appHarness.cjs`, which is where the stubbed clock, the
-hand-fired timer queue and the recording state machine live: a harness copied per
-test file is a second copy that drifts, which is the failure the docs registers
-were reorganised to remove. If you touch client logic, add a client-behaviour test
-— the probe suite will not catch it for you.
+That gap is why every `web/app.*.test.cjs` drives the real `app.js` source
+against a stubbed context instead of reimplementing client logic in the test.
+The countdown paint path and the snapshot reconciler that decides where a
+reconnecting client lands are the two the paragraph was written around, not the
+whole set. Reimplementing client logic would test the copy. They all load the
+same `web/appHarness.cjs`, which is where the stubbed clock, the hand-fired timer
+queue and the recording state machine live: a harness copied per test file is a
+second copy that drifts, which is the failure the docs registers were reorganised
+to remove. If you touch client logic, add a client-behaviour test — the probe
+suite will not catch it for you.
 
 `npm run e2e` closes the part of that gap a browser can close: three specs in
 `e2e/` drive a real Chromium at the deployed origin, so a render that never
