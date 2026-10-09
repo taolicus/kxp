@@ -278,6 +278,13 @@ const ARCADE_RUNS_KEY = 'kxp-arcade-runs';
 // (see adoptLegacyRun) and then removed, so it can never be read beside its
 // replacement.
 const ARCADE_KEY = 'kxp-arcade';
+// One retry is banked for every this many floors won. A retry is a continue: a
+// decided loss spends one to replay the floor rather than ending the run. It is
+// a client constant because the lobby has no difficulty control; a value per
+// difficulty is a later slice of the solo campaign. The bank is derived from
+// `floorsCleared` rather than counted down as the floors are won, so this rate
+// is the only place the number lives.
+const ARCADE_RETRY_FLOORS = 2;
 
 // Where the lobby remembers its chosen CPU series length, so a reload is not a
 // change of heart. It holds the number, not a button: a control that no longer
@@ -369,8 +376,18 @@ function readArcade(pair) {
   const floor = fresh ? 0
     : Math.min(Math.max(Number(s.floor) || 0, 0), order.length - 1);
   // Cleared is a fact about the run -- the mirror is down -- not a position in the
-  // order, so it survives a repair and does not survive a redraw.
-  return { order, floor, cleared: !fresh && !!s.cleared };
+  // order, so it survives a repair and does not survive a redraw. The retry
+  // bookkeeping is the same kind of fact: a run keeps the floors it has won and
+  // the retries it has spent across a repair, and a redraw is a new run that
+  // starts with none.
+  return {
+    order,
+    floor,
+    cleared: !fresh && !!s.cleared,
+    floorsCleared: fresh ? 0 : Math.max(0, Number(s.floorsCleared) || 0),
+    retriesSpent: fresh ? 0 : Math.max(0, Number(s.retriesSpent) || 0),
+    lostLast: !fresh && !!s.lostLast,
+  };
 }
 
 function saveArcade(pair, a) {
@@ -428,23 +445,34 @@ function shuffle(ids) {
   return a;
 }
 
+// The retries a run is holding: one banked per ARCADE_RETRY_FLOORS floors won,
+// minus the ones already spent. Derived rather than stored as a running count,
+// so a repair or a hand-edited store cannot leave the bank disagreeing with the
+// floors the run actually cleared.
+function retryBank(a) {
+  return Math.max(0, Math.floor(a.floorsCleared / ARCADE_RETRY_FLOORS) - a.retriesSpent);
+}
+
 // advanceLadder moves the run on after a ladder match has been decided and says
-// which floor is next. A win climbs one floor; a loss ends the run, and the next
-// entry draws a new ladder. A drawn floor is neither: the floor's
-// request always says its drawers replay (drawEnds: false), so a draw against an
-// honouring server replays and never reaches a result here -- the branch exists
-// as the client-side half of the same rule, that an outcome which cannot decide a
-// floor must not be able to reset one. It reads and writes the run with the same
-// repair on the way in, so a ladder that crossed a deploy which changed the
-// roster progresses on the repaired order rather than on one that is no longer
-// valid.
+// which floor is next. A win climbs one floor; a loss ends the run unless a
+// retry is banked, in which case it offers to replay the same floor. A drawn
+// floor is neither: the floor's request always says its drawers replay (drawEnds:
+// false), so a draw against an honouring server replays and never reaches a
+// result here -- the branch exists as the client-side half of the same rule, that
+// an outcome which cannot decide a floor must not be able to reset one. It reads
+// and writes the run with the same repair on the way in, so a ladder that crossed
+// a deploy which changed the roster progresses on the repaired order rather than
+// on one that is no longer valid.
 //
 // Returns what the result screen should offer, since the honest label differs:
-// the next floor after a win, the same floor again after a draw, and a new ladder
-// after a loss or once the mirror is down.
+// the next floor after a win, the same floor again after a draw, a spent retry
+// after a loss that was survived, and a new ladder after a loss that was not or
+// once the mirror is down.
 function advanceLadder(outcome) {
   const a = readArcade(ladderPair);
   if (outcome === 'win') {
+    a.floorsCleared += 1;
+    a.lostLast = false;
     if (a.floor >= a.order.length - 1) {
       // The mirror is down. The run stays where it is and says it is cleared,
       // rather than the floor wrapping to zero and the ladder reading as a run in
@@ -457,10 +485,16 @@ function advanceLadder(outcome) {
     }
     a.floor += 1;
   } else if (outcome === 'loss') {
-    // A lost floor ends the run: unlike the arcade original, a defeat does not
-    // drop the player back onto the same ladder. The next entry draws a new one,
-    // and the floor is forgotten with it so the tower opens at the bottom rather
-    // than animating a drop onto a ladder the player no longer has.
+    // A banked retry is a continue: the run stays on the floor it lost and is
+    // marked so the replay can spend the retry. With nothing banked the run ends
+    // as it always did -- discarded, the floor forgotten, so the next entry draws
+    // a new ladder and the tower opens at the bottom rather than animating a drop
+    // onto a ladder the player no longer has.
+    if (retryBank(a) > 0) {
+      a.lostLast = true;
+      saveArcade(ladderPair, a);
+      return 'retry-loss';
+    }
     discardArcade(ladderPair);
     ladderFloor = -1;
     return 'done';
@@ -896,7 +930,8 @@ function renderResult(d) {
     if (ladderNext) {
       $('#btn-again').textContent = ladderNext === 'done' ? 'New Arcade Mode'
         : ladderNext === 'retry' ? 'Back to Floor 1'
-        : ladderNext === 'retry-floor' ? 'Retry This Floor' : 'Next Floor';
+        : ladderNext === 'retry-floor' ? 'Retry This Floor'
+        : ladderNext === 'retry-loss' ? 'Use Retry' : 'Next Floor';
     }
     $('#btn-mode').classList.remove('hidden');
   }
@@ -958,14 +993,27 @@ function postCPU(mode) {
   // current selection: switching the control mid-run moves to a different run,
   // and a floor must always be the length its own run started at.
   const a = readArcade(ladderPair);
+  // A replay after a loss is the retry being taken. It is spent here, where the
+  // floor is actually re-fought, so the result screen's "Use Retry" and a resume
+  // from the lobby cannot spend it twice or decline to -- both arrive at this
+  // request. `lostLast` is only set with a banked retry; a hand-edited store that
+  // lost the bank is cleared rather than trusted into a negative one.
+  if (a.lostLast) {
+    if (retryBank(a) > 0) a.retriesSpent += 1;
+    a.lostLast = false;
+  }
   // A cleared run -- or a stored position past the end of the order, which the
   // clamp cannot produce but a hand-edited store can -- starts a new ladder. This is
   // the only redraw, so both the result screen's "New Arcade Mode" and the lobby's entry
-  // go through it, and neither can leave a player with nothing to do.
+  // go through it, and neither can leave a player with nothing to do. The retry
+  // bookkeeping is reset with the order: a new run has won nothing yet.
   if (a.cleared || a.floor >= a.order.length) {
     a.order = drawOrder();
     a.floor = 0;
     a.cleared = false;
+    a.floorsCleared = 0;
+    a.retriesSpent = 0;
+    a.lostLast = false;
   }
   ladderFloor = a.floor;
   saveArcade(ladderPair, a);

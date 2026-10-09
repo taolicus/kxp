@@ -106,6 +106,7 @@ Features that depend on identity, persistence, or ranking.
 - [Arcade entry opens on the tower](tasks/closed/arcade-tower-entry.md)
 - [Arcade run lifecycle](tasks/closed/arcade-run-lifecycle.md)
 - [Arcade runs tracked per mode](tasks/closed/arcade-runs-per-mode.md) (subsumes [the length-change reset](tasks/closed/lobby-length-change-resets-arcade.md))
+- [Arcade: one retry every N floors cleared](tasks/closed/arcade-retry-every-n-floors.md)
 - [Match history](tasks/closed/match-history.md)
 - [Lobby: Match History out of the mode stack](tasks/closed/lobby-history-with-modes.md)
 - [Lobby: name the length control for what it sets](tasks/closed/length-control-label.md)

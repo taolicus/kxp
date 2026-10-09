@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: []
-gated-on: []
----
-
 # Arcade: one retry every N floors cleared
 
 The arcade ladder ends a run on a decided loss (`advanceLadder`, `web/app.js`).
@@ -51,9 +45,9 @@ retry the moment the client updates.
   retry" reset event — and no migration of one — is needed.
 - **One constant, not a difficulty selector.** The lobby has no difficulty
   control; `floorsPerRetry` starts as `ARCADE_RETRY_FLOORS = 2`. A value per
-  difficulty is a later slice of [solo-campaign](solo-campaign.md), not this
-  one. The constant is named and used in one place, so that slice changes one
-  line.
+  difficulty is a later slice of [solo-campaign](../open/solo-campaign.md), not
+  this one. The constant is named and used in one place, so that slice changes
+  one line.
 - **Client-side authority.** The ladder is the client's own progression
   ([architecture](../../features/architecture.md#the-arcade-ladder)); the server
   judges every round and is told each floor's fighter. Retry eligibility is the
@@ -67,7 +61,7 @@ retry the moment the client updates.
   (the floor request and the redraw), and `renderResult`'s `ladderNext` labels.
 - [architecture](../../features/architecture.md#the-arcade-ladder) — the run
   shape, the repair, the "a loss ends the run" decision this amends.
-- [arcade-runs-per-mode](../closed/arcade-runs-per-mode.md) — the per-pair
+- [arcade-runs-per-mode](arcade-runs-per-mode.md) — the per-pair
   storage the run now lives in.
 
 ## Affected files
@@ -101,3 +95,41 @@ Go and no shared server state is touched, so the Go gates and `-race` do not
 apply; the wire is unchanged, so `t1`–`t8` are not affected. Rendering is
 unasserted on both hosts — the result-button label is hand-read — and
 `npm run e2e` is laptop-only, as always on the phone.
+
+## Landed
+
+**What changed.** The run gained `floorsCleared`, `retriesSpent` and `lostLast`,
+all defaulted in `readArcade` (a fresh redraw resets them) and reset by the one
+redraw in `postCPU('ladder')`. A win increments `floorsCleared`; `retryBank(a)` is
+`max(0, floor(floorsCleared / ARCADE_RETRY_FLOORS) - retriesSpent)`, so the
+constant `ARCADE_RETRY_FLOORS = 2` is the only place the rate lives. A decided
+loss with a banked retry sets `lostLast` and returns `'retry-loss'`, which the
+result screen labels **Use Retry**; a loss with no bank discards as before. The
+retry is spent in `postCPU('ladder')` — `retriesSpent += 1`, `lostLast = false` —
+where the floor is actually re-fought, so the result button and a lobby resume
+share the one spend. It is not retroactive: a run stored before this slice reads
+back an empty bank. [architecture](../../features/architecture.md#the-arcade-ladder)
+now records the retry exception and the rejected alternatives.
+
+**How it was verified.** `web/app.arcade.test.cjs` gained "a banked retry holds
+the run and offers the replay instead of ending it" (exactly `N`), "the retry is
+spent when the floor is re-fought, against the same fighter", "a retry survives
+leaving to the lobby, and the resume spends it", and the negative pin "a loss with
+an empty bank still ends the run after a retry is spent" (`N+1`: `floor(3/2)` is
+still one bank). The two existing loss tests that climbed past the threshold were
+moved below it (`climbTo 2 → 1`, `3 → 1`) so they still pin the discard. `npm run
+unit` 211/211; `npm run links` 0 broken; `gofmt -l .` clean.
+
+**Negative proof.** Against the pre-change `app.js` (`git show HEAD:web/app.js`)
+the three positive tests fail: the old loss branch discards unconditionally, so
+the held run reads back `null`. The empty-bank test passes before and after by
+design — it is the over-correction pin, asserting that spending the one banked
+retry makes the next loss discard again rather than the retry renewing. The two
+moved loss tests are not weakened: each still climbs floors, loses, and asserts
+`saved(app)` is `null`, so removing the discard would fail them.
+
+**Not verified here.** The wire is untouched — a floor still posts `POST /cpu`
+with `opponentCharacter` and `drawEnds: false` — so no protocol file changed and
+`t1`–`t8` are not affected. The host is the phone (arm64 Android); rendering is
+unasserted, so the **Use Retry** label is hand-read, and `npm run e2e` (Chromium)
+is laptop-only.

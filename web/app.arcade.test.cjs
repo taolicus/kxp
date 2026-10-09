@@ -443,7 +443,9 @@ test('progress moves on the final result only', async () => {
 test('losing a floor ends the run, and the next entry draws a new ladder', async () => {
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
   await started(app);
-  await climbTo(app, 2);
+  // One floor cleared, below the retry threshold: a loss here has no continue to
+  // spend, so it still ends the run. The retry case is pinned separately below.
+  await climbTo(app, 1);
   const order = saved(app).order;
 
   const atFloor = saved(app).floor;
@@ -458,6 +460,83 @@ test('losing a floor ends the run, and the next entry draws a new ladder', async
   assert.strictEqual(saved(app).floor, 0, 'the next run starts at the bottom');
   assert.strictEqual(askedFor(app).opponentCharacter, saved(app).order[0],
     'and fights its first floor');
+});
+
+test('a banked retry holds the run and offers the replay instead of ending it', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  // Two floors is the threshold: clearing both banks the first retry.
+  await climbTo(app, 2);
+  const order = saved(app).order;
+  const atFloor = saved(app).floor;
+
+  app.fire('matched', { ...MATCHED, opponentCharacter: order[atFloor] });
+  app.fire('result', series(true, 'loss'));
+
+  assert.ok(saved(app), 'the run is kept, not discarded');
+  assert.strictEqual(saved(app).lostLast, true, 'marked as having just lost this floor');
+  assert.strictEqual(saved(app).floor, atFloor, 'still standing on the floor it lost');
+  assert.strictEqual(saved(app).retriesSpent, 0, 'and nothing is spent by the offer alone');
+  assert.strictEqual(ladderLabel(app), 'Use Retry', 'the result offers the replay');
+});
+
+test('the retry is spent when the floor is re-fought, against the same fighter', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, 2);
+  const order = saved(app).order;
+  const atFloor = saved(app).floor;
+  app.fire('matched', { ...MATCHED, opponentCharacter: order[atFloor] });
+  app.fire('result', series(true, 'loss'));
+
+  await nextFloor(app);
+
+  assert.strictEqual(saved(app).retriesSpent, 1, 're-fighting the floor spends the retry');
+  assert.strictEqual(saved(app).lostLast, false, 'and clears the lost mark');
+  assert.strictEqual(saved(app).floor, atFloor, 'on the same floor');
+  assert.strictEqual(askedFor(app).opponentCharacter, order[atFloor], 'against the same fighter');
+});
+
+test('a retry survives leaving to the lobby, and the resume spends it', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  await climbTo(app, 2);
+  const order = saved(app).order;
+  const atFloor = saved(app).floor;
+  app.fire('matched', { ...MATCHED, opponentCharacter: order[atFloor] });
+  app.fire('result', series(true, 'loss'));
+
+  // Walk away without taking the offer: the retry is not charged for being shown.
+  await app.tap('#btn-mode');
+  await app.settle();
+  assert.strictEqual(saved(app).retriesSpent, 0, 'leaving does not spend the retry');
+  assert.strictEqual(saved(app).lostLast, true, 'the run is still waiting on its replay');
+
+  // Resuming and fighting is the same spend as the result button would have been.
+  await fight(app);
+  assert.strictEqual(saved(app).retriesSpent, 1, 'the resume spends it');
+  assert.strictEqual(askedFor(app).opponentCharacter, order[atFloor], 'the same floor again');
+});
+
+test('a loss with an empty bank still ends the run after a retry is spent', async () => {
+  const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
+  await started(app);
+  // Three floors is N+1: still one bank (`floor(3/2)`), never two, and the same
+  // negative pin one floor past the threshold.
+  await climbTo(app, 3);
+  const order = saved(app).order;
+  const atFloor = saved(app).floor;
+
+  // Lose, take the retry, and lose again: the threshold's single retry is gone.
+  app.fire('matched', { ...MATCHED, opponentCharacter: order[atFloor] });
+  app.fire('result', series(true, 'loss'));
+  await nextFloor(app);
+  const retryFloor = saved(app).floor;
+  app.fire('matched', { ...MATCHED, opponentCharacter: saved(app).order[retryFloor] });
+  app.fire('result', series(true, 'loss'));
+
+  assert.strictEqual(saved(app), null, 'the second loss discards the run');
+  assert.strictEqual(ladderLabel(app), 'New Arcade Mode', 'and offers a new ladder');
 });
 
 test('a new arcade run takes the lobby\'s length, not the last match\'s', async () => {
@@ -757,13 +836,14 @@ test('winning a floor climbs the player up the tower', async () => {
 });
 
 test('losing ends the run, and the tower opens on a fresh one at the bottom', async () => {
-  // A loss discards the run rather than dropping the player back onto the same
-  // ladder, so the tower the result opens is a new run: floor one, nothing behind.
-  // The pop a lost floor must NOT play is the point -- the run it would drop
-  // through no longer exists.
+  // A loss with no retry banked discards the run rather than dropping the player
+  // back onto the same ladder, so the tower the result opens is a new run: floor
+  // one, nothing behind. The pop a lost floor must NOT play is the point -- the run
+  // it would drop through no longer exists. One floor cleared is below the retry
+  // threshold, so this is that discard, not the replay a bank would offer.
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
   await started(app);
-  await climbTo(app, 3);
+  await climbTo(app, 1);
   await wonFloor(app, 'loss');
 
   const rows = towerRows(app);

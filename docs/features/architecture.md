@@ -233,10 +233,18 @@ is persisted alongside the floor (`kxp-arcade-runs` in `localStorage`, one entry
 per (length, rule) pair). Three decisions
 follow from that, and each has an alternative that was rejected:
 
-- **A loss ends the run.** A decided loss discards the ladder, and the next entry
-  draws a fresh one. The arcade original climbs the same ladder again; that is not
-  kept, because a run the player has been beaten out of is one they are no longer
-  on, and holding onto it only leaves stale progress to resume.
+- **A loss ends the run unless a retry is banked.** A decided loss with nothing
+  banked discards the ladder, and the next entry draws a fresh one. The arcade
+  original climbs the same ladder again; that is not kept, because a run the player
+  has been beaten out of is one they are no longer on, and holding onto it only
+  leaves stale progress to resume. What is kept is the *retry*: clearing
+  `ARCADE_RETRY_FLOORS` floors banks one, and a loss with one banked holds the run
+  on the floor it lost and offers "Use Retry". The retry is spent when the floor is
+  re-fought, not when the option is shown, so a player who walks away is not charged
+  for it and the result button and a lobby resume spend it exactly once between them.
+  The bank is derived from the floors the run has cleared rather than counted down,
+  so it is idempotent across a repair. A per-difficulty rate is deferred to the solo
+  campaign; the lobby has no difficulty control to read one from.
 - **Changing the lobby's mode switches runs; it does not end one.** A run is
   stored under the (length, rule) pair it was started at, so picking a different
   mode shows that pair's run and leaves the other in storage, and a re-tap of the
@@ -260,11 +268,12 @@ not a usable order draws a fresh ladder.
 
 Progress moves on the match's **final** result only — `seriesOver` — never on a
 mid-series round, which is the whole reason the series fields exist. A win climbs
-one floor; a loss ends the run and discards the ladder. A drawn floor is neither:
-every floor's request says its drawers replay (`drawEnds: false`), so a draw
-replays instead of reaching a result — and were one to arrive anyway, the run would
-stay where it was rather than misreading a round that decided nothing as one it
-lost.
+one floor and banks a retry at each multiple of `ARCADE_RETRY_FLOORS`; a loss ends
+the run and discards the ladder, unless a retry is banked, in which case the run
+holds its floor for the replay. A drawn floor is neither: every floor's request
+says its drawers replay (`drawEnds: false`), so a draw replays instead of reaching
+a result — and were one to arrive anyway, the run would stay where it was rather
+than misreading a round that decided nothing as one it lost.
 
 Clearing the mirror is a **state**, not a position. The run records `cleared`
 rather than leaving the floor wrapping to zero, because a run sitting on floor one
@@ -274,10 +283,12 @@ discarded one does — the redraw is shared by the result screen's "New Arcade M
 and the lobby's entry, so neither can leave a player with nothing to do.
 
 The result button stops being "Play Again" for a ladder match, because it is not
-the same match: it is a different fighter. It says which of the two things comes
-next — the next floor, or a new ladder after a loss or a completion — and it fights
-the run's own length, captured when the mode was entered rather than re-read from
-the lobby, so a floor is always the length its run was started at.
+the same match: it is a different fighter. It says which thing comes next — the
+next floor, "Retry This Floor" after a draw, "Use Retry" after a loss that a banked
+retry survived, or "New Arcade Mode" after a loss with nothing banked or a
+completion — and it fights the run's own length, captured when the mode was entered
+rather than re-read from the lobby, so a floor is always the length its run was
+started at.
 
 Server-side persistence is deferred to
 [player identity](../issues/player-identity.md); a per-tab localStorage ladder
@@ -329,7 +340,9 @@ lobby like everywhere else, and why the machine gives `ladder` no `stateIdle` ed
 to take: honouring it would put a player standing on their own ladder back in the
 menu with the climb half played. All of it is pinned in `app.arcade.test.cjs` — the
 entry drawing and saving the run it shows, the rows in ladder order, the climb up
-after a win, a new run opening at the bottom after a loss, the completed run at the
+after a win, a new run opening at the bottom after a loss, a loss below the retry
+threshold ending the run while one at it offers the replay, the retry being spent
+when the floor is re-fought and not when it is merely left, the completed run at the
 top, a second visit finding its button armed, and the leave that returns to a lobby
 resuming the same floor.
 
