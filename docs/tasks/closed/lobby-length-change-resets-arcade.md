@@ -38,3 +38,22 @@ questions 1 and 2 here are answered by it and this entry closes with it.
 **Prospective fix (not scheduled)** — whichever of the above wins, wired through
 the existing `#notice` path (`app.js:981`) or a per-run length stored with the
 order rather than read from the lobby at fight time.
+
+## Landed
+
+**What changed.** The keep-the-run branch of
+[arcade-runs-per-mode](arcade-runs-per-mode.md) won: runs are keyed by the
+`(length, rule)` pair, so the length control no longer calls `discardArcade` at
+all — a switch changes which run the Arcade entry resumes and leaves the other
+in storage. Question 2 (warn vs block) is moot once nothing is wiped; question 3
+(a second tab) remains unaddressed and unclaimed, as it was.
+
+**How it was verified.** Via the direction entry: `web/app.arcade.test.cjs`
+"switching the lobby mode keeps both runs, each resumable on its own" supersedes
+the old discard test, and `npm run unit` 206/206.
+
+**Negative proof.** See the direction entry — the surviving-run assertion is the
+pin that a reintroduced `discardArcade` in the length-control path would fail.
+
+**Not verified here.** A browser session (the phone cannot run `npm run e2e`);
+the re-labelling behaviour is hand-read.

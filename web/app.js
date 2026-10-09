@@ -18,10 +18,11 @@ let lastDrawEnds = null;
 // ladder match. The mode on the wire is `cpu` for both, so the distinction has to
 // live here; the server has no ladder to know about.
 let ladderFloor = -1;
-// The length a ladder run is fought at, captured from the lobby when the mode is
-// entered. Every floor repeats the run's length rather than the match that ended
-// last, so a new run is not fought at the previous match's length.
-let ladderTarget = 0;
+// The (length, rule) pair a ladder run is fought at, captured from the lobby when
+// the mode is entered and null when no run is in progress. It is the run's key:
+// every floor repeats the length its run started at rather than the match that
+// ended last, and two pairs keep two independent runs (see `readArcade`).
+let ladderPair = null;
 // What the result screen offers a ladder match: 'next', 'retry', 'done', or null
 // when the match that ended was not a ladder match.
 let ladderNext = null;
@@ -266,6 +267,16 @@ function saveStats(s) {
 // player's own character always last as the mirror match. Progression is the
 // client's own state, so nothing here is authoritative: the server judges every
 // round and is told which fighter to send out.
+//
+// A run is kept per (length, rule) pair -- the same pair the lobby control
+// stores -- so switching the lobby's mode leaves the other one's run intact and
+// each is resumable on its own. The pair *is* the run's length capture: a floor
+// posts the length of the pair it is stored under, never the lobby's current
+// selection.
+const ARCADE_RUNS_KEY = 'kxp-arcade-runs';
+// The pre-pair store: one run, no length of its own. Read once to migrate it
+// (see adoptLegacyRun) and then removed, so it can never be read beside its
+// replacement.
 const ARCADE_KEY = 'kxp-arcade';
 
 // Where the lobby remembers its chosen CPU series length, so a reload is not a
@@ -282,16 +293,68 @@ const CPU_LENGTH_KEY = 'kxp-cpu-length';
 // alone, which is the old meaning the stored length had.
 const CPU_DRAWENDS_KEY = 'kxp-cpu-draw-ends';
 
-// readArcade returns the saved run, repaired against the current roster. A run
-// with no saved order is a first run, and draws one -- deliberately not at
-// startup, because the draw depends on which fighter the player has picked, and
-// they pick it after the lobby is on screen.
-function readArcade() {
-  // Whatever is in storage is untrusted: it is writable by hand and outlives the
-  // code that wrote it. "null" and a bare number parse, so the shape is checked
-  // rather than assumed -- anything that is not an object is a first run.
-  let s = null;
-  try { s = JSON.parse(localStorage.getItem(ARCADE_KEY) || '{}'); } catch (e) { s = null; }
+// The map key for a pair. Draw ends is a boolean on the wire and in the button,
+// but a key is a string, so it is folded to `1`/`0` rather than left to
+// `String(true)`.
+function pairKey(rounds, drawEnds) {
+  return `${rounds}:${drawEnds ? '1' : '0'}`;
+}
+
+// The pair the lobby is currently showing. Read at the moment a run is entered
+// (or the entry's label is drawn), never cached: the whole point of the map is
+// that changing this selection changes which run is read.
+function currentPair() {
+  return { rounds: cpuTarget, drawEnds: cpuDrawEnds };
+}
+
+// readRuns is the runs map, with the pre-pair run migrated in on the way. The
+// map is untrusted input -- writable by hand and outliving the code that wrote
+// it -- so anything that is not an object is treated as empty.
+function readRuns() {
+  let runs = null;
+  try { runs = JSON.parse(localStorage.getItem(ARCADE_RUNS_KEY) || '{}'); } catch (e) { runs = null; }
+  if (!runs || typeof runs !== 'object' || Array.isArray(runs)) runs = {};
+  // The migration has to be written back: readArcade reads the map and does not
+  // save, so a run carried in memory and not persisted would vanish on the next
+  // read -- the legacy key already removed.
+  if (adoptLegacyRun(runs)) writeRuns(runs);
+  return runs;
+}
+
+// adoptLegacyRun folds the single pre-pair run into the map, under the pair the
+// saved lobby selection names -- the only pair it could have been fought at,
+// since the old store had no length of its own. A store without the rule key
+// predates the split, so a length of one restores as the 1-off it always meant.
+// The legacy key is removed in the same breath, so the migration happens once
+// even if the write below is refused.
+function adoptLegacyRun(runs) {
+  let legacy = null;
+  try { legacy = JSON.parse(localStorage.getItem(ARCADE_KEY) || 'null'); } catch (e) { legacy = null; }
+  if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return false;
+  const rounds = Number(localStorage.getItem(CPU_LENGTH_KEY)) || 1;
+  const storedEnds = localStorage.getItem(CPU_DRAWENDS_KEY);
+  const drawEnds = storedEnds === null ? rounds === 1 : storedEnds === 'true';
+  const key = pairKey(rounds, drawEnds);
+  // The map is the authority now: a pair that already has a run keeps it, and
+  // the stray legacy key is only a leftover, not a newer run.
+  if (!runs[key]) runs[key] = legacy;
+  try { localStorage.removeItem(ARCADE_KEY); } catch (e) {}
+  return true;
+}
+
+function writeRuns(runs) {
+  try { localStorage.setItem(ARCADE_RUNS_KEY, JSON.stringify(runs)); } catch (e) {}
+}
+
+// readArcade returns the saved run for a pair, repaired against the current
+// roster. A pair with no saved order is a first run, and draws one --
+// deliberately not at startup, because the draw depends on which fighter the
+// player has picked, and they pick it after the lobby is on screen.
+function readArcade(pair) {
+  // Whatever is in storage is untrusted: "null" and a bare number parse, so the
+  // shape is checked rather than assumed -- anything that is not an object is a
+  // first run.
+  let s = readRuns()[pairKey(pair.rounds, pair.drawEnds)];
   if (!s || typeof s !== 'object' || Array.isArray(s)) s = {};
   // A run whose fighters have all left the roster has no order left to keep.
   // Repairing it anyway would hand back the roster in server order -- the one
@@ -310,15 +373,20 @@ function readArcade() {
   return { order, floor, cleared: !fresh && !!s.cleared };
 }
 
-function saveArcade(a) {
-  try { localStorage.setItem(ARCADE_KEY, JSON.stringify(a)); } catch (e) {}
+function saveArcade(pair, a) {
+  const runs = readRuns();
+  runs[pairKey(pair.rounds, pair.drawEnds)] = a;
+  writeRuns(runs);
 }
 
-// discardArcade forgets the run: the next readArcade draws a new ladder. A loss
-// and a change of the lobby's mode both end the run this way, since neither leaves
-// a ladder the player is still climbing.
-function discardArcade() {
-  try { localStorage.removeItem(ARCADE_KEY); } catch (e) {}
+// discardArcade forgets one pair's run: the next readArcade for that pair draws
+// a new ladder. A loss ends the run this way -- the only caller left. Changing
+// the lobby's mode no longer discards anything, because a run belongs to the
+// pair it was started at and the other pair's run is still the player's.
+function discardArcade(pair) {
+  const runs = readRuns();
+  delete runs[pairKey(pair.rounds, pair.drawEnds)];
+  writeRuns(runs);
 }
 
 // drawOrder is a fresh run: the roster, shuffled, with the mirror last. The
@@ -375,7 +443,7 @@ function shuffle(ids) {
 // the next floor after a win, the same floor again after a draw, and a new ladder
 // after a loss or once the mirror is down.
 function advanceLadder(outcome) {
-  const a = readArcade();
+  const a = readArcade(ladderPair);
   if (outcome === 'win') {
     if (a.floor >= a.order.length - 1) {
       // The mirror is down. The run stays where it is and says it is cleared,
@@ -384,7 +452,7 @@ function advanceLadder(outcome) {
       // otherwise offer to resume.
       a.cleared = true;
       a.floor = 0;
-      saveArcade(a);
+      saveArcade(ladderPair, a);
       return 'done';
     }
     a.floor += 1;
@@ -393,26 +461,28 @@ function advanceLadder(outcome) {
     // drop the player back onto the same ladder. The next entry draws a new one,
     // and the floor is forgotten with it so the tower opens at the bottom rather
     // than animating a drop onto a ladder the player no longer has.
-    discardArcade();
+    discardArcade(ladderPair);
     ladderFloor = -1;
     return 'done';
   } else {
     a.cleared = false;
-    saveArcade(a);
+    saveArcade(ladderPair, a);
     return 'retry-floor';
   }
   a.cleared = false;
-  saveArcade(a);
+  saveArcade(ladderPair, a);
   return 'next';
 }
 
 
 // The lobby's Arcade Mode entry. Read-only -- resuming is a stored order, not a
-// flag, so this never draws.
+// flag, so this never draws. It reads the run for the pair the lobby is showing,
+// which is why switching the length control re-labels it: each pair has its own
+// run and its own answer.
 function setLadderEntry() {
   const btn = $('#btn-ladder');
   if (!btn) return;
-  const a = readArcade();
+  const a = readArcade(currentPair());
   btn.disabled = !CHARACTERS.length;
   // A cleared ladder has nothing to resume, so the entry says it will draw a new
   // one. Leaving the label alone would have the player pick a fighter and be told
@@ -435,7 +505,7 @@ function setLadderEntry() {
 // match order with CSS laying it out bottom-up: a ladder that showed only the next
 // few floors would be a list, and seeing how far is left is the point of climbing.
 function showTower() {
-  const a = readArcade();
+  const a = readArcade(ladderPair);
   const me = characterByID(loadCharacter());
   const pos = a.cleared ? a.order.length - 1 : a.floor;
   const hop = ladderFloor >= 0 && ladderFloor !== pos
@@ -879,27 +949,31 @@ function pipHTML(wins, target) {
 // against; a plain CPU match does not, and lets the server pick. The ladder's
 // order is saved *before* the request, so a reload mid-climb resumes the same
 // ladder rather than drawing a new one under the player.
-function postCPU(mode, { roundsTarget = cpuTarget, drawEnds = cpuDrawEnds } = {}) {
+function postCPU(mode) {
   if (mode !== 'ladder') {
     ladderFloor = -1;
-    return post('/cpu', { roundsTarget, drawEnds });
+    return post('/cpu', { roundsTarget: cpuTarget, drawEnds: cpuDrawEnds });
   }
+  // The floor is fought at the pair its run was entered under, never the lobby's
+  // current selection: switching the control mid-run moves to a different run,
+  // and a floor must always be the length its own run started at.
+  const a = readArcade(ladderPair);
   // A cleared run -- or a stored position past the end of the order, which the
   // clamp cannot produce but a hand-edited store can -- starts a new ladder. This is
   // the only redraw, so both the result screen's "New Arcade Mode" and the lobby's entry
   // go through it, and neither can leave a player with nothing to do.
-  const a = readArcade();
   if (a.cleared || a.floor >= a.order.length) {
     a.order = drawOrder();
     a.floor = 0;
     a.cleared = false;
   }
   ladderFloor = a.floor;
-  saveArcade(a);
+  saveArcade(ladderPair, a);
   // A floor is never 1-off: drawn rounds replay, so a draw can never decide a
   // floor. The server defaults a one-round request to "end on a draw", which is
-  // exactly what a 1-off CPU match wants, so the ladder has to say otherwise.
-  return post('/cpu', { roundsTarget, opponentCharacter: a.order[a.floor], drawEnds: false });
+  // exactly what a 1-off CPU match wants, so the ladder has to say otherwise --
+  // whatever the run's own pair says its draw rule is.
+  return post('/cpu', { roundsTarget: ladderPair.rounds, opponentCharacter: a.order[a.floor], drawEnds: false });
 }
 
 async function post(path, body = {}) {
@@ -994,7 +1068,7 @@ const enter = {
     clearTimeout(stallTimer);
     resetGame();
     ladderFloor = -1;
-    ladderTarget = 0;
+    ladderPair = null;
     setLadderEntry();
     // The match is over -- finished, cancelled or abandoned -- so the series it
     // belonged to is too, and the next one starts from empty pips.
@@ -1196,7 +1270,7 @@ const enter = {
     // A roster that emptied between the match and this frame -- a deploy, a
     // roster written down to nothing -- leaves no floors to draw and no fighter
     // to send out. The lobby is where the mode lives either way.
-    const a = readArcade();
+    const a = readArcade(ladderPair);
     if (!a.order.length) { transition('mode'); return; }
     // Save the run before it is shown. A first run's order is drawn by
     // readArcade -- only after the picker, because the draw depends on the fighter
@@ -1204,7 +1278,7 @@ const enter = {
     // That is safe from the result screen, where the fight just saved the order,
     // but not from the lobby: showing a draw storage has never heard of would let
     // the Fight button draw a different ladder under the player.
-    saveArcade(a);
+    saveArcade(ladderPair, a);
     showTower();
   },
 
@@ -1366,7 +1440,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadRoster();
   connect();
   setStats();
-  setLadderEntry();
   renderFighters();
 
   $('#fighters').addEventListener('click', (e) => {
@@ -1409,7 +1482,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (mode === 'online') transition('queue');
     if (mode === 'ladder') {
-      ladderTarget = cpuTarget;
+      ladderPair = currentPair();
       if (!transition('climb')) {
         clearPending();
         pendingMode = mode;
@@ -1436,12 +1509,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const lengthBtns = document.querySelectorAll('#cpu-length .seg-btn');
   lengthBtns.forEach((b) => {
     b.addEventListener('click', () => {
-      // A mode the player has not already picked: the run they were climbing
-      // belongs to the mode it was started in, so choosing another ends it. A
-      // re-tap of the mode already showing is not a change of heart and leaves
-      // the run alone.
-      const changed = (Number(b.dataset.rounds) || 0) !== cpuTarget
-        || (b.dataset.drawEnds === 'true') !== cpuDrawEnds;
       lengthBtns.forEach((o) => {
         o.classList.toggle('selected', o === b);
       });
@@ -1450,10 +1517,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // to the markup without one is a mode with a rule of its own, never an
       // accidental borrow of another button's.
       cpuDrawEnds = b.dataset.drawEnds === 'true';
-      if (changed) {
-        discardArcade();
-        setLadderEntry();
-      }
+      // Each pair owns its own run now, so switching the selection only changes
+      // which one the entry reads -- the one just left is kept, not discarded.
+      // Re-label because the pair's run may be cleared where the other was not.
+      setLadderEntry();
       try {
         localStorage.setItem(CPU_LENGTH_KEY, String(cpuTarget));
         localStorage.setItem(CPU_DRAWENDS_KEY, String(cpuDrawEnds));
@@ -1495,6 +1562,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       cpuDrawEnds = restored.dataset.drawEnds === 'true';
     }
   }
+  // After the selection is restored, not before: the entry reads the run for the
+  // pair the restore settled on, so a reload shows the right label for the mode
+  // the player actually left on.
+  setLadderEntry();
 
   $('#btn-back').addEventListener('click', () => show('lobby'));
   $('#btn-cancel').addEventListener('click', () => {
@@ -1568,7 +1639,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btn = $('#ladder-fight');
     if (btn.disabled) return;
     armPending(btn);
-    const p = postCPU('ladder', { roundsTarget: ladderTarget || cpuTarget });
+    const p = postCPU('ladder');
     Promise.resolve(p).then((res) => {
       if (!res || !res.ok) clearPending();
     });

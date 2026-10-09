@@ -129,14 +129,17 @@ read two ways. Nothing is marked selected in the markup for that control: the
 selection is decided once the roster that frames the lobby has arrived, so a
 saved choice is the one lit from the first paint rather than arriving as a flash
 of the default that swaps out. The stored pair is read back as untrusted input
-the way `kxp-arcade` is: only a choice the control still offers is honoured, so
+the way `kxp-arcade-runs` is: only a choice the control still offers is honoured, so
 a store left by the old three-segment control — which carried first-to-1 — has
 no button to light and falls back to the first option, as a hand-edited value
 would. A store without the rule key predates the split, so it restores on length
 alone (1 → "1 round", 3 → "First to 3"), the one reading that keeps an old
-length's meaning unchanged. Changing the mode discards any saved arcade run,
-because a floor is fought at the length its run started at, and a control the run
-no longer matches would offer a ladder the player cannot fight at what it shows.
+length's meaning unchanged. Changing the mode only changes which saved run the
+entry reads: a run is stored under the (length, rule) pair it was started at, so
+two pairs keep two runs and each is resumable on its own. A floor is still fought
+at the length its run started at — the pair is the run's capture, not the
+control's current value — so a switch neither discards nor re-lengths a run in
+progress.
 
 **A match the client asked to end on a draw is over whatever that round was.** A
 draw is worth nothing to either side and replays — but replaying it means playing
@@ -226,17 +229,20 @@ match, which is what keeps the rules server-side while the *route through* the
 ladder is the player's own business.
 
 Because the order is random, progress is a position *in that order*, so the order
-is persisted alongside the floor (`kxp-arcade` in `localStorage`). Three decisions
+is persisted alongside the floor (`kxp-arcade-runs` in `localStorage`, one entry
+per (length, rule) pair). Three decisions
 follow from that, and each has an alternative that was rejected:
 
 - **A loss ends the run.** A decided loss discards the ladder, and the next entry
   draws a fresh one. The arcade original climbs the same ladder again; that is not
   kept, because a run the player has been beaten out of is one they are no longer
   on, and holding onto it only leaves stale progress to resume.
-- **Changing the lobby's mode ends the run.** The run is fought at the length it
-  was started at, so picking a different mode discards it rather than carrying a
-  floor into a control that no longer matches it. A re-tap of the mode already
-  showing is not a change of mind and leaves the run alone.
+- **Changing the lobby's mode switches runs; it does not end one.** A run is
+  stored under the (length, rule) pair it was started at, so picking a different
+  mode shows that pair's run and leaves the other in storage, and a re-tap of the
+  mode already showing changes nothing. The pre-pair single run is migrated into
+  the pair the saved selection names, the only pair it could have been fought at,
+  rather than discarded on sight.
 - **A saved order is repaired against the current roster, not trusted and not
   discarded.** Stored fighters still on the roster keep their positions, roster
   fighters the run never mentioned are appended ahead of the mirror, removed ones
@@ -332,7 +338,7 @@ resuming the same floor.
 The lobby's "Match History" opens a `#history` view: one `<details>` per match
 this browser finished, newest first, expandable to the rounds it was made of. The
 record is the client's own — `kxp-history` in `localStorage`, beside `kxp-stats`
-and `kxp-arcade`, capped at 50 — and it is display-only: nothing is judged from
+and `kxp-arcade-runs`, capped at 50 — and it is display-only: nothing is judged from
 it, and clearing the site clears it.
 
 That limit is deliberate rather than a first step. The server keeps no history and

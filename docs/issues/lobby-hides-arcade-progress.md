@@ -9,7 +9,7 @@ floor 6 of 8 sees the same plain label as a first-timer; progress is visible
 only after choosing a fighter and reaching the tower — two screens later.
 
 **Where it shows** — the lobby, for anyone with a saved run
-(`kxp-arcade` in localStorage).
+(`kxp-arcade-runs` in localStorage, one entry per (length, rule) pair).
 
 **Working hypothesis** — the entry was kept label-only on purpose: it is
 read-only and never draws at lobby time, because the draw depends on the
@@ -20,9 +20,9 @@ the tower's job, but the tower is downstream of the resume decision.
 
 1. Append progress to the label (`Arcade Mode · Floor 6`) or a muted line
    under the buttons?
-2. How does it coexist with a cleared run's label, and with the silent reset
-   when the length control changes
-   ([lobby-length-change-resets-arcade](lobby-length-change-resets-arcade.md))?
+2. How does it coexist with a cleared run's label, and with a run kept per
+   (length, rule) pair — does it show the selected pair's floor
+   ([arcade-runs-per-mode](../tasks/closed/arcade-runs-per-mode.md))?
 3. Is a resume *hint* enough, or should the lobby offer "Resume" as its own
    action?
 

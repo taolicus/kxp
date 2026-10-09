@@ -44,7 +44,19 @@ const askedFor = (app) => {
 
 // The saved run, read after the client has written it -- which is also why the
 // corrupt-run test can seed unreadable JSON: only the client ever reads it.
-const saved = (app) => app.saved('kxp-arcade');
+//
+// The run is stored per (length, rule) pair now, so the helper has to say which
+// pair is the current one. It derives it the same way the client does: from the
+// saved lobby selection, with a store that has no rule key taking the length's
+// old meaning (a length of one was the 1-off). The selection keys are written by
+// the very toggle click a player makes, so this tracks `selectLength` too.
+const pairOf = (app) => {
+  const rounds = Number(app.saved('kxp-cpu-length')) || 1;
+  const ends = app.saved('kxp-cpu-draw-ends');
+  const drawEnds = ends === null || ends === undefined ? rounds === 1 : ends;
+  return `${rounds}:${drawEnds ? 1 : 0}`;
+};
+const saved = (app) => (app.saved('kxp-arcade-runs') || {})[pairOf(app)] ?? null;
 
 // The series-length toggle is a NodeList the harness does not read from markup,
 // and it is wired from that list. Which lengths (and rules) exist is the lobby's
@@ -101,7 +113,7 @@ async function started(app, selected) {
 }
 
 // Pick the lobby's mode the way a player does: click the seeded button the client
-// wired, so the run-discarding behaviour that hangs off that click is exercised.
+// wired, so the selection the run is keyed by moves the way it does in a browser.
 function selectLength(app, rounds) {
   const b = app.lengthBtns.find((b) => Number(b.dataset.rounds) === rounds);
   assert.ok(b, `the lobby must offer ${rounds} rounds to select it`);
@@ -466,21 +478,66 @@ test('a new arcade run takes the lobby\'s length, not the last match\'s', async 
   assert.strictEqual(askedFor(app).roundsTarget, 3, 'the floor is fought at the lobby\'s length');
 });
 
-test('changing the lobby mode discards the run, so the next entry starts a new ladder', async () => {
+test('switching the lobby mode keeps both runs, each resumable on its own', async () => {
+  // The direction this replaced "changing the mode discards the run" with: a run
+  // belongs to the (length, rule) pair it was started at, so switching to another
+  // pair shows that pair's run and leaves the first pair's run in storage. Coming
+  // back resumes the first run at the floor it was on rather than drawing a new
+  // one -- and the pair switched away from is not touched either way.
   const app = newApp({ roster: ROSTER, store: { 'kxp-character': 'hielito' } });
-  const view = await started(app);
+  await started(app);
   await fight(app);
   await climbTo(app, 1);
-  assert.strictEqual(saved(app).floor, 1, 'the run is one floor up');
+  const run3 = saved(app).order;
+  assert.strictEqual(saved(app).floor, 1, 'the first-pair run is one floor up');
 
   await app.tap('#ladder-leave');
   await app.settle();
-  assert.strictEqual(showing(view.lobby), true, 'back in the lobby');
   selectLength(app, 1);
+  assert.strictEqual(text(app, '#btn-ladder'), 'Arcade Mode',
+    'the other pair has no run, so its entry offers a fresh one');
 
   await fight(app);
-  assert.strictEqual(saved(app).floor, 0, 'the run was discarded, so the next one starts fresh');
-  assert.strictEqual(askedFor(app).roundsTarget, 1, 'and it is fought at the newly chosen length');
+  assert.strictEqual(saved(app).floor, 0, 'the newly selected pair starts at the bottom');
+  assert.strictEqual(askedFor(app).roundsTarget, 1, 'and is fought at the newly chosen length');
+
+  // The negative direction: the pair just left is still there, untouched.
+  const runs = app.saved('kxp-arcade-runs');
+  assert.deepStrictEqual(runs['3:0'].order, run3, 'the first-pair run survives the switch');
+  assert.strictEqual(runs['3:0'].floor, 1, 'at the floor it was on');
+
+  await app.tap('#ladder-leave');
+  await app.settle();
+  selectLength(app, 3);
+  await fight(app);
+  assert.strictEqual(saved(app).floor, 1, 'switching back resumes the first-pair run');
+  assert.deepStrictEqual(saved(app).order, run3, 'with the same ladder');
+  assert.strictEqual(askedFor(app).roundsTarget, 3, 'fought at that run\'s length');
+});
+
+test('the pre-pair single run is migrated into the pair the saved selection names', async () => {
+  // The old store held one run with no length of its own. It is adopted into the
+  // pair the saved lobby selection names -- the only pair it could have been
+  // fought at -- and the legacy key is removed, so a later visit does not read it
+  // beside its replacement.
+  const order = ['rayito', 'robok', 'dragon', 'hielito'];
+  const app = newApp({
+    roster: ROSTER,
+    store: {
+      'kxp-character': 'hielito',
+      'kxp-cpu-length': 3,
+      'kxp-arcade': { order, floor: 2 },
+    },
+  });
+  await started(app);
+
+  const runs = app.saved('kxp-arcade-runs');
+  assert.deepStrictEqual(runs['3:0'].order, order, 'the run lands under the saved selection');
+  assert.strictEqual(app.saved('kxp-arcade'), null, 'and the legacy key is gone');
+
+  await fight(app);
+  assert.strictEqual(saved(app).floor, 2, 'the migrated run resumes where it was');
+  assert.deepStrictEqual(saved(app).order, order, 'on the order it was stored with');
 });
 
 test('a drawn floor leaves the run where it was', async () => {
