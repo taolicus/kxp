@@ -30,6 +30,11 @@ const (
 	maxClients = 256
 	maxQueue   = 128
 	maxMatches = 64
+	// maxPlayers bounds the player registry (persistent browser ids), which
+	// accumulates rather than tracking concurrent connections. Over the cap the
+	// oldest identity is dropped; nothing durable is keyed to a player yet, so a
+	// dropped browser only receives a fresh pid on its next visit.
+	maxPlayers = 4096
 
 	// frameJournalCap bounds the per-client SSE frame journal (last frames
 	// actually flushed to the client) that is logged on leave so a vanished
@@ -135,6 +140,7 @@ func encodeEv(ev event) []byte {
 
 type Client struct {
 	id        string
+	pid       string
 	send      chan []byte
 	moves     chan moveMsg
 	alive     context.Context
@@ -193,9 +199,19 @@ type challengeEntry struct {
 	match   *match // set when paired
 }
 
+// player is the server's per-player record, keyed by the persistent browser id
+// (pid) rather than the connection id, so it outlives any single SSE stream.
+// Nothing durable hangs off it yet; later slices key matchmaking reservations
+// and ladder progress here.
+type player struct {
+	id string
+}
+
 type Hub struct {
 	mu         sync.Mutex
 	clients    map[string]*Client
+	players    map[string]*player
+	playerFIFO []string // insertion order, for bounded eviction
 	queue      []queueEntry
 	active     atomic.Int32
 	down       context.Context
@@ -211,6 +227,7 @@ func NewHub() *Hub {
 	down, stop := context.WithCancel(context.Background())
 	return &Hub{
 		clients:    make(map[string]*Client),
+		players:    make(map[string]*player),
 		challenges: make(map[string]*challengeEntry),
 		challenge:  make(map[string]*challengeEntry),
 		down:       down,
@@ -262,12 +279,15 @@ func (h *Hub) Shutdown() {
 	h.stop()
 }
 
-// getOrCreate returns the client for id, minting a fresh anonymous one when
-// id is empty or unknown. The second return is false when the hub is at
-// capacity (len(clients) >= maxClients) and a new client would have to be
-// created; existing clients are always returned so legit reconnects aren't
-// blocked by the cap.
-func (h *Hub) getOrCreate(id string) (*Client, bool) {
+// getOrCreate returns the client for the connection id, minting a fresh
+// anonymous one when id is empty or unknown. The persistent player id (pid) is
+// resolved here too, but is deliberately separate from id: id names the
+// connection, so a newer stream replaces an older one, while pid names the
+// player across connections (two tabs) and reloads. The second return is false
+// when the hub is at capacity (len(clients) >= maxClients) and a new client
+// would have to be created; existing clients are always returned so legit
+// reconnects aren't blocked by the cap.
+func (h *Hub) getOrCreate(id, pid string) (*Client, bool) {
 	h.mu.Lock()
 	if id != "" {
 		if c, ok := h.clients[id]; ok {
@@ -279,26 +299,44 @@ func (h *Hub) getOrCreate(id string) (*Client, bool) {
 		h.mu.Unlock()
 		return nil, false
 	}
-	if id != "" && validID(id) {
-		c := newClient()
-		c.id = id
-		c.metrics = h.metrics
-		h.clients[id] = c
-		h.metrics.incJoined()
-		log.Printf("kxp: client %s join online=%d", c.id, len(h.clients))
-		h.mu.Unlock()
-		h.broadcastOnline()
-		return c, true
-	}
 	c := newClient()
-	c.id = newID(6)
 	c.metrics = h.metrics
+	c.pid = h.resolvePlayerLocked(pid)
+	if id != "" && validID(id) {
+		c.id = id
+	} else {
+		c.id = newID(6)
+	}
 	h.clients[c.id] = c
 	h.metrics.incJoined()
 	log.Printf("kxp: client %s join online=%d", c.id, len(h.clients))
 	h.mu.Unlock()
 	h.broadcastOnline()
 	return c, true
+}
+
+// resolvePlayerLocked returns the pid to attach to a new connection. A pid the
+// server issued before is reattached; any other value -- absent, malformed, or
+// never issued -- mints and registers a fresh player. The server is the source
+// of the pid, so a client cannot choose its own identity. The registry is
+// bounded by insertion order: the oldest is dropped when it fills, which only
+// costs a dropped browser one fresh pid, because nothing durable is keyed to a
+// player yet.
+func (h *Hub) resolvePlayerLocked(pid string) string {
+	if pid != "" && validID(pid) {
+		if p, ok := h.players[pid]; ok {
+			return p.id
+		}
+	}
+	id := newID(6)
+	if len(h.playerFIFO) >= maxPlayers {
+		oldest := h.playerFIFO[0]
+		h.playerFIFO = h.playerFIFO[1:]
+		delete(h.players, oldest)
+	}
+	h.players[id] = &player{id: id}
+	h.playerFIFO = append(h.playerFIFO, id)
+	return id
 }
 
 func validID(id string) bool {
@@ -348,7 +386,7 @@ func (h *Hub) decode(w http.ResponseWriter, r *http.Request, v any) error {
 
 func (h *Hub) handleEvents(w http.ResponseWriter, r *http.Request) {
 	h.metrics.incStreamOpened()
-	c, ok := h.getOrCreate(r.URL.Query().Get("id"))
+	c, ok := h.getOrCreate(r.URL.Query().Get("id"), r.URL.Query().Get("pid"))
 	if !ok {
 		h.handlerError(w, http.StatusServiceUnavailable, "too many clients")
 		return
@@ -557,6 +595,9 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	out := map[string]any{"id": c.id, "state": "idle", "online": h.othersOnlineLocked(), "now": time.Now().UnixMilli()}
+	if c.pid != "" {
+		out["pid"] = c.pid
+	}
 	if c.match != nil {
 		m := c.match
 		out["state"] = "ingame"

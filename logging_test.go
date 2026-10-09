@@ -69,7 +69,7 @@ func TestJoinLeaveLoggedWithLiveCount(t *testing.T) {
 	defer restore()
 
 	h := NewHub()
-	c, ok := h.getOrCreate("")
+	c, ok := h.getOrCreate("", "")
 	if !ok {
 		t.Fatal("getOrCreate failed")
 	}

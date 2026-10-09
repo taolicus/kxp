@@ -39,12 +39,12 @@ func TestGetOrCreateRejectsPastCap(t *testing.T) {
 	h := NewHub()
 	fillClients(h, maxClients)
 
-	if _, ok := h.getOrCreate("brandnew"); ok {
+	if _, ok := h.getOrCreate("brandnew", ""); ok {
 		t.Fatal("new client minted while at capacity")
 	}
 
 	existing := registerTestClient(h, "exists")
-	got, ok := h.getOrCreate("exists")
+	got, ok := h.getOrCreate("exists", "")
 	if !ok || got != existing {
 		t.Fatal("existing client should always be returned at capacity")
 	}

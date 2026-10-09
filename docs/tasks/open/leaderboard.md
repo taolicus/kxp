@@ -1,7 +1,7 @@
 ---
 phase: 4
-depends-on: []
-gated-on: [player-identity]
+depends-on: [identity-registry]
+gated-on: []
 ---
 
 # Leaderboard
@@ -14,6 +14,5 @@ A `void` connectivity timeout scores like a draw — never a loss. See
 
 ## Blocked on
 
-[player-identity](../../issues/player-identity.md) — a leaderboard needs
-something to key a score to. The anti-cheat rules above are independent of which
-identity model is chosen.
+[identity-registry](../closed/identity-registry.md) — a leaderboard needs a player to key
+a score to. The anti-cheat rules above are independent of it.

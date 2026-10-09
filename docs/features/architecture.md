@@ -431,8 +431,10 @@ that agrees on both. A waiter whose length nobody else wants keeps its seat and
 its place rather than being bounced to the back or paired into a match only one
 of them asked for, and a side handed back by a cancelled handshake re-enters
 with the length it was playing — it is halfway through a series and must not
-come back as a one-off. Anonymous clients receive server-issued random IDs on
-first SSE connection. Every match runs a ready handshake between "matched" and
+come back as a one-off. A connection is named by its server-issued `id` and the
+player by a server-issued `pid` that outlives it — the browser stores the `pid`
+and presents it on the next connect, so identity survives a reload or a second
+tab while `id` still rotates per stream ([protocol](protocol.md#client-identity)). Every match runs a ready handshake between "matched" and
 the countdown: no countdown may start until every human side has `POST`ed
 `/ready` (re-sent every 2s while matched). The gate is a bitmask over the
 non-bot sides, so a CPU match waits on its one human and a PvP match waits on

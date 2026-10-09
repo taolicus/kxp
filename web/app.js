@@ -2,6 +2,10 @@ const KXP = window.KXP;
 const SM = window.StateMachine;
 
 let id = null;
+// The server-issued player id (`pid`) names this browser across reloads and
+// tabs; `id` names the SSE connection and is replaced whenever a newer stream
+// connects. It is an identity, not a credential.
+let pid = loadPid();
 let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
 let lastMode = 'online'; // online | cpu — mode of the finished match
 // The CPU series length the lobby has selected, and the one the finished match
@@ -1340,11 +1344,32 @@ const enter = {
   },
 };
 
+// The persistent player id is the server's to mint, so the client only reads
+// and stores it. Storage can throw (private mode, disabled), in which case the
+// client simply reconnects as a fresh player.
+function loadPid() {
+  try { return localStorage.getItem('kxp-pid'); } catch (e) { return null; }
+}
+
+function savePid(p) {
+  try { localStorage.setItem('kxp-pid', p); } catch (e) {}
+}
+
 function connect() {
-  es = new EventSource(id ? `/events?id=${encodeURIComponent(id)}` : '/events');
+  const params = new URLSearchParams();
+  if (id) params.set('id', id);
+  if (pid) params.set('pid', pid);
+  const query = params.toString();
+  es = new EventSource(query ? `/events?${query}` : '/events');
 
   es.addEventListener('connected', (e) => {
     const d = JSON.parse(e.data);
+    // The server mints the pid on a first visit and echoes it thereafter; store
+    // it so a reload or a second tab presents the same player.
+    if (d.pid && d.pid !== pid) {
+      pid = d.pid;
+      savePid(pid);
+    }
     if (d.id !== id) {
       es.close();
       id = d.id;

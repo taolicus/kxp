@@ -43,7 +43,7 @@ func TestMetricsCountersMove(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.handlerError(rec, http.StatusConflict, "move already submitted")
 
-	c, ok := h.getOrCreate("")
+	c, ok := h.getOrCreate("", "")
 	if !ok {
 		t.Fatal("getOrCreate failed")
 	}

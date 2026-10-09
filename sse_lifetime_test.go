@@ -136,7 +136,7 @@ func TestSSEFrameJournalLoggedOnLeave(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest("GET", "/events?id=journaled", nil).WithContext(ctx)
 
-	h.getOrCreate("journaled")
+	h.getOrCreate("journaled", "")
 
 	done := make(chan struct{})
 	go func() {
@@ -179,7 +179,7 @@ func TestSSEFrameJournalLoggedOnLeave(t *testing.T) {
 // /metrics payload after a reap, so operators can poll it.
 func TestReapedCounterVisibleInMetrics(t *testing.T) {
 	h := NewHub()
-	c, _ := h.getOrCreate("mx")
+	c, _ := h.getOrCreate("mx", "")
 	h.metrics.incReaped()
 	h.removeClient(c)
 

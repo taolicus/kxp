@@ -1,48 +1,73 @@
-# Which player-identity model should the server use?
+# Player identity: a persistent anonymous browser ID
 
-An open decision, not an observed symptom: several features need a shared player
-identity and none can be specified without it, but the model itself is unchosen.
+Several features need a shared player identity and none can be specified without
+it. The model is chosen and the primitive is specified as two tasks; what
+remains open is how a stale identity and its stored state end.
 
-**Question** — what identifies a player across sessions? A persistent anonymous
-ID, an account, or a token.
+**The model: a persistent anonymous ID.** A random value the browser keeps in
+`localStorage` and presents to the server, which keys per-player state to it
+rather than to the SSE connection. No accounts, no credential handling; it
+identifies but does not authenticate, so it carries no privilege to rotate.
 
-**Why it is open** — the options have different costs, and the repository has
-already committed to one of them in a way that has not been followed through.
+**Why the alternatives were rejected**
 
-- A persistent anonymous ID is the natural fit for this game: no accounts, no
-  credential handling, and it is enough for a leaderboard.
 - An account implies a registration and credential path the repo has never had,
   and the server is public and unauthenticated.
-- A token sits between the two, and needs a rotation and expiry story.
+- A bearer *token* with a rotation and expiry story is more machinery than a
+  nameless game needs.
 
-A persistent anonymous ID has been implemented client-side for the arcade ladder
-via `localStorage`. That storage is per-browser and per-origin, so it does not
-survive a different device — which is exactly the gap a server-side primitive
-would close.
+A persistent anonymous ID is already implemented client-side for the arcade
+ladder via `localStorage` (`kxp-stats`, `ARCADE_RUNS_KEY`, `kxp-character`). That
+storage is per-browser and per-origin, so it does not survive a different device
+— exactly the gap a server-side primitive closes.
 
-**Evidence that would settle it** — none needed; this is a decision, not a
-measurement. It needs a decision, recorded, with the ladder's `localStorage`
-persistence retrofitted onto whatever is chosen.
+**What the model does not cover** — persistence stays per-origin and per-browser:
+private mode, cleared site data, and another device each yield a fresh ID, so
+anything keyed to it is best-effort and needs a fallback or TTL rather than
+relying on the ID alone. Two live connections may share one ID (two tabs), and
+the SSE lifecycle's "newer connection survives" rule does not by itself say what
+a shared per-player reservation does.
+
+**The contract** — the primitive is specified by two slices:
+[identity-registry](../tasks/closed/identity-registry.md) (a server-issued `pid`
+carried on connect, persisted by the browser, and keyed separately from the
+connection) and
+[identity-owned-matchmaking](../tasks/open/identity-owned-matchmaking.md)
+(matchmaking state owned by the player, not the connection). A client that
+presents no `pid` behaves as today and receives a fresh one; two connections may
+share one `pid` (two tabs), and the connection id's freshness rule is unchanged.
+The ladder's `localStorage` is retrofitted onto it rather than left as a second
+copy of identity. Still open: what ends a stale identity and the state keyed to
+it (a TTL), which lands with the first thing that owns durable per-player state.
 
 **Context that must survive the answer** — these consumers all share the
-primitive, so the choice blocks them and they are recorded here as its blast
-radius rather than as separate items:
+primitive, so they are recorded here as its blast radius rather than as separate
+items each waiting on the same decision:
 
 - **Leaderboard** — server-authoritative, with anti-cheat (ignore
   client-submitted timestamps for ranking, cap CPU streaks). A `void`
   connectivity timeout scores like a draw, never a loss.
 - **Lobby / rooms** — private room creation, joining, discovery, access control.
 - **Tournament** — bracket/round structure for multi-match competition.
+- **Online match invitations** — the personal-queue reservation keys to the ID
+  rather than to the connection, and the ID is what lets the server enforce one
+  open code and reject a self-join across tabs; see
+  [matchmaking-share-code-overhaul](matchmaking-share-code-overhaul.md).
 
-Deciding this first is what keeps those three from each inventing its own notion
-of a player.
+Choosing one model is what keeps these from each inventing their own notion of a
+player.
 
-**Prospective fix (not scheduled)** — this gates four tasks rather than being one
-of them: the three above, plus [player-names](../tasks/open/player-names.md).
-The rest of Phase 4 does not wait on it, and each says why in its own file:
+**Prospective fix (not scheduled)** — [identity-registry](../tasks/closed/identity-registry.md)
+builds the primitive, and the consumers above now depend on that task rather than
+gating on this decision: [player-names](../tasks/open/player-names.md),
+[leaderboard](../tasks/open/leaderboard.md), [lobby-rooms](../tasks/open/lobby-rooms.md),
+and [tournament-model](../tasks/open/tournament-model.md) carry
+`depends-on: [identity-registry]`; [matchmaking-share-code-overhaul](matchmaking-share-code-overhaul.md)
+waits on [identity-owned-matchmaking](../tasks/open/identity-owned-matchmaking.md)
+rather than inventing an identity of its own. The rest of Phase 4 does not wait
+on it and says why in its own file:
 [solo-campaign](../tasks/open/solo-campaign.md) persists to `localStorage` like
 the arcade ladder and will be retrofitted onto whatever is chosen here, and
-[match-history](../tasks/closed/match-history.md) is a local record that carries no
-rank. [send-challenge](../tasks/closed/send-challenge.md) has already landed
-without one, for the same reason: a link identifies a match rather than a
-player.
+[match-history](../tasks/closed/match-history.md) is a local record that carries
+no rank. [send-challenge](../tasks/closed/send-challenge.md) landed without one,
+for the same reason: a link identifies a match rather than a player.

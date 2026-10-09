@@ -18,6 +18,18 @@ random server ID; the `connected` event carries it. The client keeps using that
 ID for POST bodies and reconnects. POSTs whose `id` has never connected are
 rejected with `400 not connected`.
 
+Two ids ride every connection, and they name different things. `id` names the
+**connection**: a newer stream with the same `id` replaces an older one, so it is
+not shared across tabs. `pid` names the **player** and outlives any single
+stream. The server mints it on a first visit and returns it on `connected`; the
+browser keeps it (`localStorage`) and presents it as `?pid=` on the next
+connect, so a reload or a second tab reattaches to the same player. It is
+deliberately server-issued: a `pid` the server never handed out is not adopted,
+so a client cannot choose its own identity. It is an identity, not a credential
+— it identifies, it does not authenticate. A client that presents no `pid`
+behaves exactly as before and receives a fresh one; the registry of issued ids
+is bounded, and a dropped identity simply gets a new `pid` on its next visit.
+
 ## Match lifecycle
 
 Server side a match moves through five atomic phases:
@@ -295,7 +307,7 @@ snapshot.
 
 | event | payload | meaning |
 | --- | --- | --- |
-| `connected` | `{id, state, online, now?, phase?, opponentName?, opponentCharacter?, background?, windowMs?, shootAt?, pending?, challenge?}` | First frame of every connection. `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`preparing`/`countdown`/`shoot`/`done`), the opponent fields and `background?` (the same stage name `matched` carries, so a reconnecting client restores the arena instead of picking its own) only when `ingame`; `shootAt`+`windowMs` whenever `phase` is `countdown` or `shoot` (`server.go:509`) — carrying the plan during countdown is what lets a client reconnect *inside* the window rather than being left without a deadline, and `preparing` is excluded because no deadline exists yet to carry; `pending=true` only while a handshake is still open, i.e. `phase === "preparing"` or the between-rounds pause/gate of an online series (`betweenRounds`), and not every human ready. `challenge` (the link token) is present only when `state` is `waiting` for a client that created a challenge link, so a reconnect or a reload restores the link it shared — the creator's own URL has no token the way a claimant's does, so the snapshot is the only frame that can rebuild it. A plain queue wait is `waiting` with no `challenge`. Used to reconcile on reconnect. |
+| `connected` | `{id, pid, state, online, now?, phase?, opponentName?, opponentCharacter?, background?, windowMs?, shootAt?, pending?, challenge?}` | First frame of every connection. `id` is the connection, `pid` the persistent player id (see "Client identity"). `state` is `idle` / `waiting` / `ingame`; `now` is the server's epoch-ms at send, used by the client to estimate clock skew (`skew = now − Date.now()`); `phase` (`preparing`/`countdown`/`shoot`/`done`), the opponent fields and `background?` (the same stage name `matched` carries, so a reconnecting client restores the arena instead of picking its own) only when `ingame`; `shootAt`+`windowMs` whenever `phase` is `countdown` or `shoot` (`server.go:509`) — carrying the plan during countdown is what lets a client reconnect *inside* the window rather than being left without a deadline, and `preparing` is excluded because no deadline exists yet to carry; `pending=true` only while a handshake is still open, i.e. `phase === "preparing"` or the between-rounds pause/gate of an online series (`betweenRounds`), and not every human ready. `challenge` (the link token) is present only when `state` is `waiting` for a client that created a challenge link, so a reconnect or a reload restores the link it shared — the creator's own URL has no token the way a claimant's does, so the snapshot is the only frame that can rebuild it. A plain queue wait is `waiting` with no `challenge`. Used to reconcile on reconnect. |
 | `online` | `{count}` | Number of other clients currently connected. |
 | `waiting` | `{}` | Entered the queue. |
 | `matched` | `{opponentName, opponentCharacter, background, ts, roundsTarget?}` | Opponent found, and the stage to play on: `background` is a name from the server's roster, chosen once per match so both sides are sent the same one. Only the name travels — the WebPs are client-side assets. `roundsTarget?` is present only for a match that is a series (see below), and is what lets the client draw the scoreboard before round one rather than after it. Every client should start `POST /ready`. |

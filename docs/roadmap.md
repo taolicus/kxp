@@ -111,13 +111,14 @@ Features that depend on identity, persistence, or ranking.
 - [Lobby: Match History out of the mode stack](tasks/closed/lobby-history-with-modes.md)
 - [Lobby: name the length control for what it sets](tasks/closed/length-control-label.md)
 - [Send challenge](tasks/closed/send-challenge.md)
+- [Player identity registry](tasks/closed/identity-registry.md)
 
-The rest of this phase is unstarted, and it is deliberately the last phase:
-most of it waits on an identity primitive that has not been chosen yet
-([player-identity](issues/player-identity.md)), so scheduling those now would
-mean scheduling work whose first step is still an open question — which tasks
-those are lives in that issue's blast radius and in each file's `gated-on`.
-The rest do not wait on it, and say why in their own files: a solo campaign
-persists to `localStorage` like the arcade ladder. They are specified, so
-they are tasks rather than issues, and unscheduled rather than low-priority:
+The rest of this phase is unstarted. The identity primitive is now chosen
+([player-identity](issues/player-identity.md)) and its first piece landed as the
+player registry above, so the dependent tasks have moved from `gated-on` to
+`depends-on: [identity-registry]`; keying matchmaking state to a player is the
+next slice ([identity-owned-matchmaking](tasks/open/identity-owned-matchmaking.md)).
+The tasks that do not wait on identity say why in their own files: a solo
+campaign persists to `localStorage` like the arcade ladder. They are specified,
+so they are tasks rather than issues, and unscheduled rather than low-priority:
 they sit in [tasks/open/](tasks/open/) carrying `phase: 4`.
