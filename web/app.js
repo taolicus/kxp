@@ -1184,7 +1184,12 @@ function connect() {
       const params = new URLSearchParams(location.search);
       const token = params.get('challenge');
       if (token && d.state === 'idle') {
-        // claimant: post join after connected; guard by lobby/idle only? also run once
+        // The claim runs at most once per page load. `connected` is an SSE
+        // reconnect event, not a once-per-load one, and a second claim would
+        // post into a token the first already consumed. The latch is only set
+        // on an actual attempt and is never reset: a non-idle snapshot is the
+        // match the claim just built, and clearing it there would let the
+        // reconnect after that match re-claim its own consumed token.
         if (!window.__challengeJoined) {
           window.__challengeJoined = true;
           post('/join', { id, token }).then((res) => {
@@ -1194,8 +1199,6 @@ function connect() {
             }
           });
         }
-      } else {
-        window.__challengeJoined = false;
       }
     } catch (e) {}
 

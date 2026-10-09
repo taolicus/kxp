@@ -112,6 +112,11 @@ function loadApp(opts = {}) {
       });
     },
     navigator: { sendBeacon: () => true },
+    // A vm context inherits the language built-ins but not the web/Node globals,
+    // so app.js's `new URLSearchParams(location.search)` would throw inside its
+    // own try/catch and the challenge-claim path would silently never run in a
+    // test. Supplying the real parser here keeps the claim path testable.
+    URLSearchParams,
     localStorage: {
       getItem: (k) => (store.has(k) ? store.get(k) : null),
       setItem: (k, v) => store.set(k, String(v)),
