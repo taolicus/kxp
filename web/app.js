@@ -221,6 +221,11 @@ function armReadyLoop() {
 }
 
 function show(view) {
+  // The screen a pending button sits on is only now being left -- showGame
+  // defers the swap behind the background decode -- so a button waiting on the
+  // server is re-armed here, when its screen actually changes, not at the
+  // transition that decided the move.
+  clearPending();
   document.querySelectorAll('.view').forEach((v) => {
     v.classList.toggle('hidden', v.id !== view);
   });
@@ -959,9 +964,6 @@ function transition(ev, data) {
   }
   const from = state;
   state = to;
-  // The awaited frame moved the screen on, so whatever button was waiting on it
-  // is done: re-arm it before the entry handler draws the screen it is leaving.
-  clearPending();
   if (enter[to]) enter[to](data || {}, from);
   return true;
 }
