@@ -64,3 +64,17 @@ the filled-chip affordance is hand-read from the CSS, not observed in a browser.
 `npm run e2e` (Chromium) does not run on this host (the phone), and this markup
 change was not exercised in a browser session. No behaviour changed, so no probe
 is relevant.
+
+## Follow-up: the visible label was dropped
+
+The rename above proved the ambiguous word could be fixed, but the visible
+`Length:` label was itself redundant: "1 round" and "First to 3" already say what
+the control chooses, so it was removed from `web/index.html`. The group keeps
+`aria-label="Match length"`, which is now the control's only name — a screen
+reader still hears what it sets. The filled-chip selected state introduced above
+stands unchanged.
+
+`web/lobby-markup.test.cjs`'s case now asserts the opposite: that no `seg-label`
+span is present and the group's `aria-label` remains. Verified with `npm run
+unit` 206/206 and `npm run links` 0 broken; hand-read in the same browser gap as
+above.

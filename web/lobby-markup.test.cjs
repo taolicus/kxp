@@ -69,14 +69,14 @@ test('Match History is still on the lobby, as its own control', () => {
     'and it sits after the stack ends, not inside it');
 });
 
-test('the length control is labelled for what it chooses', () => {
-  // "Mode:" answered to two controls at once — this one and the "Arcade Mode"
-  // button below it — while it actually chooses the match length (and the draw
-  // rule that rides with it). The label names the axis now. Pinned because the
-  // ambiguous word is a one-edit revert and nothing else in the tree would
-  // notice it come back.
+test('the length control relies on its buttons, not a visible label', () => {
+  // "Mode:" collided with the "Arcade Mode" button, and "Length:" restated what
+  // "1 round" / "First to 3" already say. The control carries no visible label;
+  // its accessible name is the group's aria-label, so a screen reader still
+  // hears what it chooses. Pinned because a stray span is easy to add back and
+  // nothing else in the tree would notice.
   const lobby = lobbySection();
-  const label = /<span class="seg-label">([^<]*)<\/span>/.exec(lobby);
-  assert.ok(label, 'the control carries a label');
-  assert.strictEqual(label[1], 'Length:', 'the control names the length, not a mode');
+  assert.ok(!lobby.includes('seg-label'), 'no visible label on the length control');
+  assert.ok(lobby.includes('id="cpu-length" class="seg" role="group" aria-label="Match length"'),
+    'the accessible name still says what the control chooses');
 });
