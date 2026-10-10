@@ -576,6 +576,8 @@ function showTower() {
     const meRow = i === pos
       ? `<span class="climber${hop}"><span class="climber-emoji">${me ? me.emoji : ''}</span>you</span>`
       : '';
+    // data-floor is the row's index, kept as the arcade test's hook for ordering
+    // the floors it reads back off the markup; the app itself only writes it.
     return `<div role="listitem" class="floor${i < pos ? ' cleared' : ''}${i === pos ? ' here' : ''}" data-floor="${i}"><span class="floor-no">${i + 1}</span><span class="floor-foe">${foe}</span>${meRow}</div>`;
   }).join('');
   $('#ladder-title').textContent = a.cleared

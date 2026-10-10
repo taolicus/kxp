@@ -136,11 +136,6 @@ main {
   -webkit-text-fill-color: transparent;
 }
 
-.tagline {
-  margin: 0 0 var(--s5);
-  color: var(--muted);
-}
-
 h2 {
   margin: 0 0 var(--s4);
   color: var(--muted);
