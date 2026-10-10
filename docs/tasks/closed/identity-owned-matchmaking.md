@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: [identity-registry]
-gated-on: []
----
-
 # Matchmaking state owned by the player, not the connection
 
 Re-key the challenge/reservation to the player registry so a shared invite
@@ -52,3 +46,37 @@ waits on.
 - Not in this slice: the invite-screen UX, the Share API, the code format, and
   the "search for anyone" toggle — those are the matchmaking overhaul, not the
   re-key.
+
+## Landed
+
+The challenge maps are keyed by `pid`, not connection id. `challengeEntry` now
+holds `creatorPid` (no `*Client`, which would go stale across a drop) and
+`handleJoin` resolves the creator through `creatorClientLocked(pid)`, the
+live connection that plays. `removeClient` no longer drops the reservation, and
+the per-player lookups in `handleQueue`, `handleCancel`, the CPU handler, the
+snapshot, and `finishMatch`'s teardown all move to `pid`. The self-join guard is
+now `c.pid == ch.creatorPid`, so a second tab can no longer claim the first
+tab's own code, and `handleChallenge` returns a player's existing token rather
+than minting a second reservation.
+
+Verified to *fail* against the pre-change hub first, with `server.go` checked
+out from HEAD: `TestChallengeSurvivesCreatorDisconnect` ("disconnect spent the
+reservation"), `TestChallengeSecondTabSharesReservation` (second tab minted a new
+token), `TestChallengeSecondTabSelfJoinRefused` (self-join got 200, want 409),
+and `TestChallengeClaimPairsWithPlayersLiveConnection` (join got 404, want 200).
+The first also carries the negative direction: while the owner has no live
+connection the join is `404`, but the reservation is *not* consumed — a reconnect
+with the same `pid` still shows `waiting` on the same token. `go test ./...` ok
+on the phone (207s); `npm run unit` 214/214; `npm run links` 402 links, 0 broken;
+`gofmt -l .` and `go vet ./...` clean.
+
+`TestChallengeDisconnectSpendsTheLink` was rewritten to this contract (a
+disconnect no longer spends the link) and `TestChallengeJoinReturns404WhenGone`
+was made deterministic by removing the connection directly instead of racing the
+network close's reap.
+
+Not verified here: `go test -race` (refuses on `android/arm64`). The touched
+shared state is `h.challenge` / `h.challenges`, both read and written only under
+`h.mu` (including `creatorClientLocked`, which iterates `h.clients` under the
+same lock), so no lock ordering changed. `npm run e2e` needs Chromium (laptop).
+

@@ -112,12 +112,14 @@ Features that depend on identity, persistence, or ranking.
 - [Lobby: name the length control for what it sets](tasks/closed/length-control-label.md)
 - [Send challenge](tasks/closed/send-challenge.md)
 - [Player identity registry](tasks/closed/identity-registry.md)
+- [Matchmaking state owned by the player](tasks/closed/identity-owned-matchmaking.md)
 
 The rest of this phase is unstarted. The identity primitive is now chosen
-([player-identity](issues/player-identity.md)) and its first piece landed as the
-player registry above, so the dependent tasks have moved from `gated-on` to
-`depends-on: [identity-registry]`; keying matchmaking state to a player is the
-next slice ([identity-owned-matchmaking](tasks/open/identity-owned-matchmaking.md)).
+([player-identity](issues/player-identity.md)) and built as the registry and the
+player-owned reservation above, so the dependent tasks moved from `gated-on` to
+`depends-on: [identity-registry]`. What remains is the matchmaking overhaul on
+top of it — the invite screen, the Share API, and the paste field
+([matchmaking-share-code-overhaul](issues/matchmaking-share-code-overhaul.md)).
 The tasks that do not wait on identity say why in their own files: a solo
 campaign persists to `localStorage` like the arcade ladder. They are specified,
 so they are tasks rather than issues, and unscheduled rather than low-priority:

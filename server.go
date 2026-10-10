@@ -194,9 +194,9 @@ type queueEntry struct {
 }
 
 type challengeEntry struct {
-	token   string
-	creator *Client
-	match   *match // set when paired
+	token      string
+	creatorPid string
+	match      *match // set when paired
 }
 
 // player is the server's per-player record, keyed by the persistent browser id
@@ -220,7 +220,7 @@ type Hub struct {
 	metrics    *HubMetrics
 	started    time.Time
 	challenges map[string]*challengeEntry // token -> challenge
-	challenge  map[string]*challengeEntry // creator id -> challenge (open)
+	challenge  map[string]*challengeEntry // creator pid -> challenge (open)
 }
 
 func NewHub() *Hub {
@@ -337,6 +337,22 @@ func (h *Hub) resolvePlayerLocked(pid string) string {
 	h.players[id] = &player{id: id}
 	h.playerFIFO = append(h.playerFIFO, id)
 	return id
+}
+
+// creatorClientLocked returns a live connection for pid, or nil if the player
+// has no stream. A reservation belongs to the player, so whichever of its
+// connections is present is the one that plays; the lookup is under h.mu
+// because h.clients is plain state.
+func (h *Hub) creatorClientLocked(pid string) *Client {
+	if pid == "" {
+		return nil
+	}
+	for _, c := range h.clients {
+		if c.pid == pid {
+			return c
+		}
+	}
+	return nil
 }
 
 func validID(id string) bool {
@@ -551,13 +567,10 @@ func (h *Hub) removeClient(c *Client) {
 		h.dequeueLocked(c)
 		c.queueing = false
 	}
-	// Drop any open challenge created by this client
-	if ch, ok := h.challenge[c.id]; ok {
-		delete(h.challenge, c.id)
-		if ch.token != "" {
-			delete(h.challenges, ch.token)
-		}
-	}
+	// An open reservation is deliberately *not* dropped here. It is keyed to the
+	// player (pid), not this connection, so a backgrounded phone or a refreshed
+	// tab must not spend the link a friend may still claim. The reservation ends
+	// by claim, cancel, match end, or (later) a TTL -- never by a stream closing.
 	c.match = nil
 	n := len(h.clients)
 	h.mu.Unlock()
@@ -629,7 +642,7 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 		if (out["phase"] == "preparing" || m.betweenRounds.Load()) && !m.allHumanReady() {
 			out["pending"] = true
 		}
-	} else if ch, ok := h.challenge[c.id]; ok {
+	} else if ch, ok := h.challenge[c.pid]; ok {
 		// A creator waiting on a link is waiting, and the snapshot is the only
 		// frame a reconnect gets. Without this branch it reads `idle`, the
 		// client's snapshot:idle edge walks the creator to the lobby, and the
@@ -817,8 +830,8 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 			s.client.match = nil
 			teardown[i] = true
 			// Consume any open challenge involving this side (match produced)
-			if ch, ok := h.challenge[s.client.id]; ok {
-				delete(h.challenge, s.client.id)
+			if ch, ok := h.challenge[s.client.pid]; ok {
+				delete(h.challenge, s.client.pid)
 				if ch.token != "" {
 					delete(h.challenges, ch.token)
 				}
@@ -829,8 +842,8 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 	for tok, ch := range h.challenges {
 		if ch.match == m {
 			delete(h.challenges, tok)
-			if ch.creator != nil {
-				delete(h.challenge, ch.creator.id)
+			if ch.creatorPid != "" {
+				delete(h.challenge, ch.creatorPid)
 			}
 		}
 	}
@@ -916,8 +929,8 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 	// mode the seat is waiting for, so a player who changes their length in the
 	// lobby changes what they will be paired with instead of acquiring a
 	// second place in the queue.
-	// A client with an open challenge cannot be silently queue-killed; challenge takes precedence in intent.
-	if _, ok := h.challenge[c.id]; ok {
+	// A player with an open challenge cannot be silently queue-killed; challenge takes precedence in intent.
+	if _, ok := h.challenge[c.pid]; ok {
 		h.mu.Unlock()
 		h.handlerError(w, http.StatusConflict, "challenge already open")
 		return
@@ -953,12 +966,12 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 		c.queueing = false
 		cancelled = true
 	}
-	// Drop any open challenge created by this client. The waiting life of a
-	// token is bound to its creator, and removeClient is the other path that
-	// ends it; both maps are guarded by h.mu, so the drop must be inside the
-	// lock. Outside it, this read/write races every handler that touches them.
-	if ch, ok := h.challenge[c.id]; ok {
-		delete(h.challenge, c.id)
+	// Cancel is the player's own intent to spend the link, so it drops the
+	// reservation keyed to this player. Both maps are guarded by h.mu, so the
+	// drop must be inside the lock. A disconnect is not this path: the
+	// reservation is keyed to the player, so a closed stream leaves it open.
+	if ch, ok := h.challenge[c.pid]; ok {
+		delete(h.challenge, c.pid)
 		if ch.token != "" {
 			delete(h.challenges, ch.token)
 		}
@@ -1124,9 +1137,9 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		h.dequeueLocked(c)
 		c.queueing = false
 	}
-	// If client has an open challenge, drop it (they chose CPU mode)
-	if ch, ok := h.challenge[c.id]; ok {
-		delete(h.challenge, c.id)
+	// If the player has an open challenge, drop it (they chose CPU mode)
+	if ch, ok := h.challenge[c.pid]; ok {
+		delete(h.challenge, c.pid)
 		if ch.token != "" {
 			delete(h.challenges, ch.token)
 		}
@@ -1329,7 +1342,7 @@ func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusConflict, "already in a match")
 		return
 	}
-	if ch, ok := h.challenge[c.id]; ok {
+	if ch, ok := h.challenge[c.pid]; ok {
 		tok := ch.token
 		h.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
@@ -1346,9 +1359,9 @@ func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tok := newID(8)
-	ch := &challengeEntry{token: tok, creator: c}
+	ch := &challengeEntry{token: tok, creatorPid: c.pid}
 	h.challenges[tok] = ch
-	h.challenge[c.id] = ch
+	h.challenge[c.pid] = ch
 	h.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"token":%q}`, tok)
@@ -1374,27 +1387,39 @@ func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ch, ok := h.challenges[req.Token]
-	if !ok || ch == nil || ch.creator == nil {
+	if !ok || ch == nil {
 		h.mu.Unlock()
 		h.handlerError(w, http.StatusNotFound, "challenge gone")
 		return
 	}
-	creator := ch.creator
+	// A token whose match is live is "in play" whatever the owner's connections
+	// are doing: it is consumed at match end, not here, so a second opener must
+	// be told that rather than told the link is gone.
+	if ch.match != nil {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusConflict, "challenge in play")
+		return
+	}
+	// The reservation belongs to the player, so the creator is whichever of the
+	// player's connections is live right now -- a reloaded tab or a backgrounded
+	// phone that has reconnected is the same creator. No live connection means
+	// there is nobody to play against: the join is refused, but the reservation
+	// is *not* consumed, so it is claimable again once the creator returns.
+	creator := h.creatorClientLocked(ch.creatorPid)
+	if creator == nil {
+		h.mu.Unlock()
+		h.handlerError(w, http.StatusNotFound, "challenge gone")
+		return
+	}
 	if creator.match != nil {
 		h.mu.Unlock()
 		h.handlerError(w, http.StatusConflict, "challenge in play")
 		return
 	}
-	if creator.alive.Err() != nil {
-		// consume and return gone
-		delete(h.challenges, req.Token)
-		delete(h.challenge, creator.id)
-		h.mu.Unlock()
-		h.handlerError(w, http.StatusNotFound, "challenge gone")
-		return
-	}
-	if c == creator {
-		// shouldn't happen but treat as in play/conflict? idempotent already handled; otherwise not found
+	if c.pid == ch.creatorPid {
+		// A second connection of the creator's own player is a self-join: the
+		// reservation is theirs, so pairing them with themselves is refused. The
+		// connection-id guard missed this because each tab is its own client.
 		h.mu.Unlock()
 		h.handlerError(w, http.StatusConflict, "challenge in play")
 		return

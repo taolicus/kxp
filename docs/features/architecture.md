@@ -434,7 +434,14 @@ with the length it was playing — it is halfway through a series and must not
 come back as a one-off. A connection is named by its server-issued `id` and the
 player by a server-issued `pid` that outlives it — the browser stores the `pid`
 and presents it on the next connect, so identity survives a reload or a second
-tab while `id` still rotates per stream ([protocol](protocol.md#client-identity)). Every match runs a ready handshake between "matched" and
+tab while `id` still rotates per stream ([protocol](protocol.md#client-identity)).
+An open invitation (a *reservation*) is keyed to the player too, not to the
+stream: one open code per player, shared by every connection that player has so a
+second tab sees the same link, and left open by a disconnect so a backgrounded
+phone does not spend a link a friend may still claim. A claim pairs with whichever
+of the owner's connections is live, and a claim from the owner's own player is
+refused as a self-join. A reservation ends by claim, cancel, match end, or a TTL
+that is not built yet — never by a stream closing. Every match runs a ready handshake between "matched" and
 the countdown: no countdown may start until every human side has `POST`ed
 `/ready` (re-sent every 2s while matched). The gate is a bitmask over the
 non-bot sides, so a CPU match waits on its one human and a PvP match waits on

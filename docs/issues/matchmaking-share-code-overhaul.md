@@ -41,8 +41,10 @@ server-enforced "one open code per identity", surviving drops and coordinating
 tabs. That primitive is the model chosen in
 [player-identity](player-identity.md) and built as
 [identity-registry](../tasks/closed/identity-registry.md) and
-[identity-owned-matchmaking](../tasks/open/identity-owned-matchmaking.md); this
-issue waits on the second rather than inventing an identity of its own.
+[identity-owned-matchmaking](../tasks/closed/identity-owned-matchmaking.md), both
+landed: the reservation is now keyed to the player, so those three symptoms are
+resolved rather than argued around, and this issue waits on neither — what
+remains is the invite-first UI on top of the re-key.
 
 **Where it shows** — the lobby's mode control and the queue view
 (`web/index.html`, `web/app.js`), the challenge endpoints

@@ -773,7 +773,13 @@ func TestChallengeJoinReturns404WhenGone(t *testing.T) {
 	}
 	tok, _ := body["token"].(string)
 
-	st1.close()
+	// Remove the connection deterministically rather than closing the stream and
+	// racing the server's reap: with no live creator connection a join must find
+	// nothing to pair with. The reservation itself survives the disconnect for a
+	// reconnect (TestChallengeSurvivesCreatorDisconnect).
+	if c := h.client(id1); c != nil {
+		h.removeClient(c)
+	}
 
 	code, body = postJSON(t, srv.URL+"/join", map[string]any{"id": id2, "token": tok})
 	if code != http.StatusNotFound {

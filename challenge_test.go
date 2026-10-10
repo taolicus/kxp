@@ -221,22 +221,41 @@ func TestChallengeCancelSpendsTheLink(t *testing.T) {
 	}
 }
 
-// The waiting life of a link is bound to its creator: a disconnect drops it.
-func TestChallengeDisconnectSpendsTheLink(t *testing.T) {
+// A reservation is keyed to the player, not the connection, so a disconnect
+// leaves it in place: the same player reconnecting still sees the link
+// waiting. With no live connection there is nobody to play against, so a join
+// is refused -- but the reservation is never spent by the disconnect.
+func TestChallengeSurvivesCreatorDisconnect(t *testing.T) {
 	h := NewHub()
 	srv := httptest.NewServer(h.routes())
 	t.Cleanup(srv.Close)
 	_, id1 := connect(t, srv)
 	_, id2 := connect(t, srv)
 	tok := mint(t, srv, id1)
+	pid := h.client(id1).pid
 
-	c := h.client(id1)
-	if c == nil {
-		t.Fatal("creator already gone")
+	if c := h.client(id1); c != nil {
+		h.removeClient(c)
 	}
-	h.removeClient(c)
+
+	h.mu.Lock()
+	_, still := h.challenge[pid]
+	h.mu.Unlock()
+	if !still {
+		t.Fatal("disconnect spent the reservation")
+	}
+
 	if code := joinStatus(t, srv, id2, tok); code != http.StatusNotFound {
-		t.Fatalf("/join after the creator disconnected: %d, want 404", code)
+		t.Fatalf("/join with the creator absent: %d, want 404", code)
+	}
+
+	st, snap := connectPlayer(t, srv, "", pid)
+	t.Cleanup(st.close)
+	if got := snapshotString(t, snap, "pid"); got != pid {
+		t.Fatalf("reconnect pid = %q, want %q", got, pid)
+	}
+	if s := h.snapshot(h.client(snapshotString(t, snap, "id"))); s["state"] != "waiting" || s["challenge"] != tok {
+		t.Fatalf("reconnect snapshot = %v, want waiting on %q", s, tok)
 	}
 }
 

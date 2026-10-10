@@ -32,7 +32,7 @@ a shared per-player reservation does.
 [identity-registry](../tasks/closed/identity-registry.md) (a server-issued `pid`
 carried on connect, persisted by the browser, and keyed separately from the
 connection) and
-[identity-owned-matchmaking](../tasks/open/identity-owned-matchmaking.md)
+[identity-owned-matchmaking](../tasks/closed/identity-owned-matchmaking.md)
 (matchmaking state owned by the player, not the connection). A client that
 presents no `pid` behaves as today and receives a fresh one; two connections may
 share one `pid` (two tabs), and the connection id's freshness rule is unchanged.
@@ -63,7 +63,7 @@ gating on this decision: [player-names](../tasks/open/player-names.md),
 [leaderboard](../tasks/open/leaderboard.md), [lobby-rooms](../tasks/open/lobby-rooms.md),
 and [tournament-model](../tasks/open/tournament-model.md) carry
 `depends-on: [identity-registry]`; [matchmaking-share-code-overhaul](matchmaking-share-code-overhaul.md)
-waits on [identity-owned-matchmaking](../tasks/open/identity-owned-matchmaking.md)
+waits on [identity-owned-matchmaking](../tasks/closed/identity-owned-matchmaking.md)
 rather than inventing an identity of its own. The rest of Phase 4 does not wait
 on it and says why in its own file:
 [solo-campaign](../tasks/open/solo-campaign.md) persists to `localStorage` like
