@@ -807,6 +807,41 @@ function openChoose(mode) {
   show('choose');
 }
 
+// The lobby's confirm. The mode openChoose left behind decides which start runs:
+// an online create, the tower, or a CPU match. The button is armed against a
+// double-tap, and a refused start re-arms it through its helper.
+function startMatch() {
+  const btn = $('#btn-start');
+  if (btn.disabled) return;
+  const mode = pendingMode;
+  pendingMode = '';
+  armPending(btn);
+  if (mode === 'online') {
+    // Invite-first: the confirm reserves the player at the lobby's chosen length
+    // and hands them a code, rather than entering the matchmaker.
+    mintChallenge({ roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }, 'queue', refuseStart(mode));
+    return;
+  }
+  if (mode === 'ladder') {
+    ladderPair = currentPair();
+    if (!transition('climb')) {
+      clearPending();
+      pendingMode = mode;
+    }
+    return;
+  }
+  postPending(btn, postCPU(mode), refuseStart(mode));
+}
+
+// A refused start restores the mode the button was pressed for, so the same tap
+// retries the same request; a 409 says why.
+function refuseStart(mode) {
+  return (res) => {
+    pendingMode = mode;
+    if (res && res.status === 409) setNotice('You are already in a match.');
+  };
+}
+
 // Put a reservation's code on the invite screen. The code is the token in a
 // /?challenge= URL: the same string a friend pastes back into the field, or taps
 // as a link. Setting the flag here -- before the transition into waiting -- is
@@ -1621,36 +1656,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-online').addEventListener('click', () => openChoose('online'));
   $('#btn-cpu').addEventListener('click', () => openChoose('cpu'));
   $('#btn-ladder').addEventListener('click', () => openChoose('ladder'));
-  $('#btn-start').addEventListener('click', () => {
-    const btn = $('#btn-start');
-    if (btn.disabled) return;
-    const mode = pendingMode;
-    pendingMode = '';
-    armPending(btn);
-    if (mode === 'online') {
-      // Invite-first: the confirm reserves the player at the lobby's chosen
-      // length and hands them a code, rather than entering the matchmaker. A
-      // refusal restores the mode the button was pressed for, so the same tap
-      // retries the same request.
-      mintChallenge({ roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }, 'queue', (res) => {
-        pendingMode = mode;
-        if (res && res.status === 409) setNotice('You are already in a match.');
-      });
-      return;
-    }
-    if (mode === 'ladder') {
-      ladderPair = currentPair();
-      if (!transition('climb')) {
-        clearPending();
-        pendingMode = mode;
-      }
-      return;
-    }
-    postPending(btn, postCPU(mode), (res) => {
-      pendingMode = mode;
-      if (res && res.status === 409) setNotice('You are already in a match.');
-    });
-  });
+  $('#btn-start').addEventListener('click', startMatch);
   // The length and draw rule a CPU match runs as. The numbers are the control's
   // own, so the client posts a choice it was shown rather than a copy of the
   // rules; the server decides whether it is a length it offers. The rule rides
