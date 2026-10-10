@@ -99,6 +99,27 @@ format, and no paste field — a claimant follows the URL and the client posts
    (`server.go:1377`) and the token is spent at termination, so decide whether a
    rematch mints a new code or the winner lands back on a fresh invite screen.
 
+**Decided scoping.** Four calls settle the questions above, all taken with the
+owner:
+
+1. **Opaque link, paste either form.** The code *is* today's server-issued token
+   in a `/?challenge=TOKEN` URL — no short code, so the abuse story is unchanged.
+   The paste field accepts a full pasted URL or a bare token and extracts the
+   token from either.
+2. **Search for anyone ships now**, as a secondary control on the invite screen:
+   it leaves the reservation (the same intent as cancel) and joins the global
+   FIFO queue at the lobby's chosen length.
+3. **Claim is explicit.** A Confirm button beside the paste field posts `/join`
+   and surfaces `404 challenge gone` / `409 challenge in play` inline; opening a
+   `?challenge=` URL still auto-claims through the existing page-load latch, so a
+   tapped link stays one tap.
+4. **Play Again returns to the invite screen**, minting a fresh reservation —
+   invite-first end to end, rather than re-queueing the FIFO.
+
+The build is three slices: [invite-match-length](../tasks/closed/invite-match-length.md)
+(server, landed), [invite-first-entry](../tasks/open/invite-first-entry.md) (client +
+markup), and [invite-share](../tasks/open/invite-share.md) (Share API).
+
 **Proves the cause** — a recorded decision on the code format (question 1) and
 on the identity primitive (player-identity). The paste UI and error states
 follow, and only then does this graduate to a task.

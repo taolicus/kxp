@@ -479,9 +479,12 @@ ack re-post plus the `pending` snapshot flag — which routes a reconnecting cli
 back through `matched` and re-arms its acks — cover the realistic cases.
 
 **A challenge link is a scoped queue that lives until its match ends.**
-`POST /challenge` binds a token to its creator; `POST /join` pairs the first
-claimant through the same `makeMatch`/`startMatchLocked` path the queue uses,
-creator at slot 0 and claimant at slot 1. The token is consumed when the *match*
+`POST /challenge` binds a token to its creator's *player* (`pid`, not the
+connection, so it survives a dropped stream and is shared by every tab the player
+has open) and carries the match length the invite advertises; `POST /join` pairs
+the first claimant through the same `makeMatch`/`startMatchLocked` path the queue
+uses, at that length, creator at slot 0 and claimant at slot 1. The token is
+consumed when the *match*
 ends, not when it is paired: while the match is live a second opener is told
 `409 challenge in play`, and only a join after termination finds `404 challenge
 gone`. `finishMatch` is the one hook, because every termination — a decided
@@ -489,7 +492,13 @@ round, a `void`, an opponent-left, a ready timeout or abandon — reaches it
 through `m.finish`, and it drops the entry whose match is this one. A challenge
 match's `requeue` returns false, so the survivor of a cancelled handshake goes to
 the lobby rather than the global queue: the link named the opponent, and there is
-nobody to pair with — the same branch a CPU match takes. The endpoints landed in
+nobody to pair with — the same branch a CPU match takes. A disconnect does not
+spend the reservation: `removeClient` leaves it, a claim resolves whichever of the
+owner's connections is live, and a claim from the owner's own player is a
+self-join, refused. With no live connection the owner's link is unclaimable, but
+the reservation survives and is claimable again the moment the owner reconnects.
+The re-key to the player landed in `2f3c05c`.
+The endpoints landed in
 `8e59608`; consuming at termination, rather than at `/join`, is what keeps the
 live/in-play distinction and is pinned by `challenge_test.go`.
 

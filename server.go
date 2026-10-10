@@ -194,9 +194,11 @@ type queueEntry struct {
 }
 
 type challengeEntry struct {
-	token      string
-	creatorPid string
-	match      *match // set when paired
+	token        string
+	creatorPid   string
+	roundsTarget int
+	drawEnds     bool
+	match        *match // set when paired
 }
 
 // player is the server's per-player record, keyed by the persistent browser id
@@ -1327,9 +1329,30 @@ func (h *Hub) handleReport(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("{}"))
 }
 func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
-	var req struct{ ID string }
+	var req struct {
+		ID           string
+		RoundsTarget int
+		DrawEnds     *bool
+	}
 	if err := h.decode(w, r, &req); err != nil {
 		return
+	}
+	// The invite advertises the length the creator picked, so the reservation
+	// carries it and /join pairs at it. Decoded exactly as /queue decodes it:
+	// a target nobody could ask the queue for would be a series the lobby never
+	// described, and absent means one round with drawEnds=true, today's
+	// hardwired reservation.
+	target := req.RoundsTarget
+	if target == 0 {
+		target = 1
+	}
+	if !validSeriesTarget(target) {
+		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
+		return
+	}
+	drawEnds := target <= 1
+	if req.DrawEnds != nil {
+		drawEnds = *req.DrawEnds
 	}
 	c := h.client(req.ID)
 	if c == nil {
@@ -1343,6 +1366,12 @@ func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ch, ok := h.challenge[c.pid]; ok {
+		// One open code per player. Re-minting returns the same token, but the
+		// length is the player's current choice -- the same "re-posting updates
+		// the seat" rule /queue uses -- so a length picked before the code is
+		// claimed still reaches the match.
+		ch.roundsTarget = target
+		ch.drawEnds = drawEnds
 		tok := ch.token
 		h.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
@@ -1359,7 +1388,7 @@ func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tok := newID(8)
-	ch := &challengeEntry{token: tok, creatorPid: c.pid}
+	ch := &challengeEntry{token: tok, creatorPid: c.pid, roundsTarget: target, drawEnds: drawEnds}
 	h.challenges[tok] = ch
 	h.challenge[c.pid] = ch
 	h.mu.Unlock()
@@ -1429,8 +1458,11 @@ func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request) {
 		h.dequeueLocked(c)
 		c.queueing = false
 	}
-	m := h.makeMatch(newID(4), 1, side{client: creator}, side{client: c})
-	m.drawEnds = true
+	// The match runs at the length the reservation carries, so the invite screen
+	// can advertise what the creator picked. The entry always holds a valid
+	// target (handleChallenge normalizes absent to one round).
+	m := h.makeMatch(newID(4), ch.roundsTarget, side{client: creator}, side{client: c})
+	m.drawEnds = ch.drawEnds
 	// The token is consumed when the *match* ends, not here. A second opener
 	// while the match is live must be told it is in play (409), and only a join
 	// after termination finds the token gone (404). finishMatch is the one hook:
