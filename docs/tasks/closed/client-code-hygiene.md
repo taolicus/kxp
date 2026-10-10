@@ -1,9 +1,3 @@
----
-phase: 3
-depends-on: []
-gated-on: []
----
-
 # De-duplicate the client's start paths and drop dead surface
 
 `web/app.js` is a single IIFE that has grown to just under 1,900 lines. Several
@@ -69,3 +63,30 @@ dispatcher over the shared helpers.
 No defect and no failing test. It is scheduled ahead of the invite-on-home slice
 in spirit, not by frontmatter: the two touch the same paths, and settling them
 first means the later slice edits one helper rather than three copies.
+
+## Landed
+
+Every seam landed as its own green commit, in the order the survey listed them:
+`mintChallenge` then `postPending` (the two helpers the rest waited on),
+`enterMatchFromScratch`, `leaveLiveRound`, `readyGateOpen`, the redundant
+`clearTimeout(slotTimer)`, the DOM-lookup standardization, the `startMatch` and
+`playAgain` dispatchers, and the dead-surface triage. The acceptance holds: the
+count never moved — `node --test web/*.test.cjs tools/lib/*.test.mjs` stayed at
+222/222 on every commit, and `node tools/check-links.mjs` at 417/0. The one test
+change rode in its slice: the harness lost its `document.getElementById` stub,
+which app.js no longer reaches for now that every lookup is `$`.
+
+The negative proof, since this is a refactor and the risk is a seam that keeps a
+copy: the pins are the existing client tests, untargeted, and for the
+standardization the check is that `grep -rn getElementById web/app.js` is empty —
+the one remaining reference, renderInvite's DOM guard, now checks `querySelector`,
+which is what `$` itself needs. A missed site would have thrown on the node it
+could not find, not passed silently.
+
+The two dead-surface decisions are recorded where they were made: `.tagline`
+matched no element and was deleted — a hand-check, because CSS is asserted on
+neither host — and `data-floor` turned out not to be dead, being the arcade
+test's row-ordering hook read back off the markup, so it was kept with a comment
+saying so rather than re-opened at the next survey. The invite-on-home slice can
+now edit one create/re-mint helper and one start dispatcher instead of three
+copies each.
