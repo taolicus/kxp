@@ -60,6 +60,17 @@ test('the lobby stack holds the ways to start a match, and nothing else', () => 
     'Challenge a Friend is gone — Play Online is invite-first now');
 });
 
+test('Play Online ships live, not gated on the online count', () => {
+  // Invite-first lets a lone player mint a code, so the button must not carry
+  // the `disabled` it did when Play Online joined the FIFO. The unit tests seed
+  // controls by selector and never read this file, and the browser suite asserts
+  // flow, so nothing else would notice the attribute coming back.
+  const lobby = lobbySection();
+  const tag = /<button id="btn-online"[^>]*>/.exec(lobby);
+  assert.ok(tag, 'the lobby carries Play Online');
+  assert.ok(!/\bdisabled\b/.test(tag[0]), 'and it is not disabled in the shipped markup');
+});
+
 test('Match History sits before the mode selector, outside the stack', () => {
   const lobby = lobbySection();
   // Outside the stack, but present: the wiring looks the control up by id

@@ -45,6 +45,11 @@ const SHUT = { shootAt: C - 3000, windowMs: 2000 };
 
 function connected(d) {
   const app = loadApp();
+  // The lobby ships #btn-online in markup; this harness seeds controls on first
+  // read, so a test that observes the button must have it present from the start
+  // rather than created by the app under test (which would make the assertion
+  // race setOnline's own read).
+  app.ctx.document.querySelector('#btn-online');
   runInContext('connect()', app.ctx);
   app.fire('connected', { id: null, now: C, ...d });
   return app;
@@ -149,12 +154,13 @@ test('a snapshot refreshes the online count without waiting for the next event',
   assert.match(busy.html('#online'), /7 online now/);
   assert.equal(busy.el('#btn-online').disabled, false, 'joinable while others are around');
 
-  // The other half of the same branch: nobody in the lobby means the button is
-  // dead, and the dot dims. Pinned in the same direction as the fix, so a
-  // snapshot that simply stopped calling setOnline would fail both.
+  // Invite-first: a lone player creates a code, so an empty lobby no longer
+  // gates Play Online. The dot still dims, which is the only thing setOnline
+  // touches besides the text. Pinned in the same direction as the fix, so a
+  // snapshot that simply stopped calling setOnline would fail the count and dim.
   const empty = connected({ state: 'waiting', online: 0 });
   assert.match(empty.html('#online'), /dim/);
-  assert.equal(empty.el('#btn-online').disabled, true, 'not joinable alone');
+  assert.equal(empty.el('#btn-online').disabled, false, 'joinable even alone');
 });
 
 // The stall watchdog. `connected()` above records transitions and runs no enter

@@ -4,9 +4,11 @@
 an observed session.
 
 **Symptom** — `#online` and `#stats` are both 0.9rem `--muted`, stacked under
-the title (`style.css:214-235`). The count gates Play Online (`app.js:243`);
-the stats line (Wins · Streak · Last · Best) is local vanity — the same text
-is shown again on the result screen (`app.js:650-657`).
+the title (`style.css:214-235`). The count used to gate Play Online, but that
+gate is gone — invite-first makes a solo player the one who mints a code — so the
+count is now informational and the stats line (Wins · Streak · Last · Best) is
+local vanity; the same text is shown again on the result screen
+(`app.js:650-657`).
 
 **Where it shows** — the lobby, above the fold, on every visit.
 
@@ -20,8 +22,8 @@ they read as a pair.
    lobby entirely?
 2. If the lobby copy goes, what happens to `#game-stats` — the result screen's
    copy is driven by the same `setStats()` call?
-3. Does the online count *deserve* more emphasis (it is the reason a button is
-   dead), and is that a different issue from demoting the stats?
+3. Does the online count *deserve* more emphasis now that it is purely
+   informational, and is that a different issue from demoting the stats?
 
 **Proves the cause** — a decision on what the lobby above the fold is for.
 

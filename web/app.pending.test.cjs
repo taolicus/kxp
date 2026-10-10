@@ -85,12 +85,17 @@ test('a refused request re-arms the button immediately', async () => {
 });
 
 test('the failsafe leaves a button it did not mark alone', async () => {
-  // clearPending must re-enable what it disabled, not every disabled button:
-  // the online counter disables Play Online for reasons of its own, and a
-  // blanket re-enable would offer a button that cannot work.
+  // clearPending must re-enable what it disabled, not every disabled button: a
+  // bystander may be disabled for reasons of its own, and a blanket re-enable
+  // would offer a control that cannot work. The waiter is a real pending button,
+  // so clearPending definitely runs; the bystander is disabled directly, so the
+  // test does not depend on what setOnline does.
   const app = await client();
-  app.fire('online', { count: 0 });
-  assert.equal(app.el('#btn-online').disabled, true, 'no players online');
+  app.el('#btn-online').disabled = true;
+  app.tap('#btn-cpu');
+  app.tap('#btn-start');
+  assert.equal(app.el('#btn-start').disabled, true, 'the waiter is pending');
   app.runUntil(Number.MAX_SAFE_INTEGER);
-  assert.equal(app.el('#btn-online').disabled, true, 'and still disabled afterwards');
+  assert.equal(app.el('#btn-start').disabled, false, 'the failsafe re-arms its own');
+  assert.equal(app.el('#btn-online').disabled, true, 'the bystander is left alone');
 });

@@ -513,7 +513,11 @@ match. Pinned by `web/app.challenge.test.cjs`; the claim path landed in
 The waiting screen *is* the invite screen, because reservation is the default.
 *Play Online* mints a reservation and shows its code beside a paste field, so the
 one who shares and the one who claims meet on the same screen — and the code's
-own `?challenge=` path is the claimer's one-tap route around the field. A player
+own `?challenge=` path is the claimer's one-tap route around the field. *Play
+Online* is live from first paint: the count does not gate it, because a solo
+player is exactly who mints a code, and the count's only remaining job is its
+own text and dimmed dot. Pinned by `web/lobby-markup.test.cjs` and
+`web/app.reconnect.test.cjs`. A player
 who would rather not wait for one person leaves the reservation with the screen's
 "search for anyone" control, which cancels and joins the shared queue; that is
 the only way to reach the screen without a reservation, so a reload of a plain
