@@ -64,9 +64,12 @@ const defaultSeriesTarget = 3
 // client on the teardown frame so a bounced player learns the round was
 // *cancelled* rather than lost — silence here is what made a slow link look
 // like a mystery.
+//
+// The values start at one: a match's abandon field is zero for a match that ran,
+// so the natural default needs no named constant, and nothing may name zero
+// without checking abandonReason's "" reading first.
 const (
-	abandonNone int32 = iota
-	abandonTimeout
+	abandonTimeout int32 = iota + 1
 	abandonOpponentLeft
 )
 
@@ -287,15 +290,13 @@ type match struct {
 	// provided for any match that actually runs.
 	finish func()
 
-	// abandon records why the handshake was cancelled (abandonNone for a match
-	// that ran). A plain int32 rather than an atomic: it is written in
+	// abandon records why the handshake was cancelled (zero for a match that
+	// ran). A plain int32 rather than an atomic: it is written in
 	// readyTimeout/readyAbandon and read in finish, which is deferred in run on
 	// the same goroutine, so the accesses are already ordered. Every other field
 	// here is atomic because it is genuinely shared across goroutines; this one
 	// is not, and an atomic would imply a guarantee that isn't needed.
 	abandon int32
-	// abandonSide is the side that left, for abandonOpponentLeft only.
-	abandonSide int
 	// requeued records, per side, whether that side went back on the online
 	// queue when the handshake failed. Written by requeueSide and read by the
 	// hub's teardown, so same ordering argument as abandon.
@@ -352,18 +353,6 @@ func (m *match) deadline() time.Time { return m.shootAtTime().Add(shootWindow) }
 // tsNow stamps an outbound frame with the server clock (epoch-ms). Clients use
 // it to separate delivery lag from clock skew.
 func tsNow() int64 { return time.Now().UnixMilli() }
-
-// humanMask is the set of sides that must ack readiness: every non-bot. A CPU
-// match has one human, so its mask is 0b01 rather than the PVP 0b11.
-func (m *match) humanMask() int32 {
-	var mask int32
-	for i := range m.sides {
-		if !m.sides[i].bot {
-			mask |= 1 << i
-		}
-	}
-	return mask
-}
 
 // ackReady records that side i is ready to receive the countdown, and refreshes
 // the lease on every call rather than only the first -- a repeat ack is the
@@ -520,7 +509,6 @@ func (m *match) readyTimeout() {
 // between-rounds gate goes to forfeitOnLeave instead.
 func (m *match) readyAbandon(i int) {
 	m.abandon = abandonOpponentLeft
-	m.abandonSide = i
 	m.advance(phasePreparing, phaseDone)
 	m.requeueSide(1 - i)
 }
@@ -554,7 +542,6 @@ func (m *match) forfeitOnTimeout() {
 // carried -- so a client needs no new edge to explain the bounce.
 func (m *match) forfeitOnLeave(i int) {
 	m.abandon = abandonOpponentLeft
-	m.abandonSide = i
 	m.advance(phaseCountdown, phaseDone)
 	m.forfeitWin(1 - i)
 }
