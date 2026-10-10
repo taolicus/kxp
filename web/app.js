@@ -816,6 +816,16 @@ function tokenFromPaste(value) {
   return s;
 }
 
+// Put the invite URL on the clipboard. execCommand is the copy that needs no
+// permission prompt, and the select() is what the command copies from; it is the
+// fallback for a browser with no share sheet and for a dismissed one.
+function copyInvite() {
+  const inp = document.getElementById('challenge-url');
+  if (!inp) return;
+  inp.select();
+  try { document.execCommand('copy'); } catch (e) {}
+}
+
 // Paint the invite screen from the reservation flag. Called on entering the wait
 // and when "search for anyone" leaves the reservation without leaving the screen.
 function renderInvite() {
@@ -1678,13 +1688,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     transition('cancel');
     post('/cancel');
   });
-  $('#btn-copy').addEventListener('click', () => {
+  // Send the invite through the browser's share sheet when there is one -- on a
+  // phone that is the way a link is meant to travel -- and fall back to Copy
+  // wherever it is absent, refuses (an insecure context), or is dismissed (the
+  // user cancelled, which rejects). The promise is handled here rather than left
+  // to float: an unhandled rejection from a cancelled sheet would reach the
+  // error beacon and read as a client fault.
+  $('#btn-share').addEventListener('click', () => {
     const inp = document.getElementById('challenge-url');
-    if (inp) {
-      inp.select();
-      try { document.execCommand('copy'); } catch (e) {}
+    const url = inp && inp.value;
+    if (!url) return;
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        const p = navigator.share({ title: 'KACHIPUN TOURNAMENT', text: 'Fight me!', url });
+        if (p && p.catch) p.catch(() => copyInvite());
+        return;
+      } catch (e) {}
     }
+    copyInvite();
   });
+  $('#btn-copy').addEventListener('click', copyInvite);
+  // No share sheet, no Share button: on a desktop the control would do exactly
+  // what the Copy beside it does, so the fallback is the whole of it.
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+    const shareBtn = $('#btn-share');
+    if (shareBtn && shareBtn.classList) shareBtn.classList.add('hidden');
+  }
   // The claim half of the invite screen: the player pasted someone else's code
   // and is joining their reservation. Success is the `matched` frame, not the
   // reply, so nothing moves the screen here; a refusal shows inline and leaves

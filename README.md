@@ -10,11 +10,13 @@ original terminal game.
 - **Play Online** — opens an invite screen: it reserves you at the mode the
   lobby's control is showing (one round or first to 3, the control naming the
   draw rule) and hands you a code to share, beside a field for pasting a friend's
-  code. The link is live while it waits and is spent when its match ends, so it
-  pairs exactly two players once; **search for anyone** instead leaves the
-  reservation and joins the global matchmaker at the same length. A series keeps
-  the score as pips under each fighter and re-opens the ready handshake between
-  rounds. Synced countdown and a shared **PUN!** instant either way.
+  code. Share it through the browser's own share sheet where there is one, or the
+  copy button; either way the link is live while it waits and is spent when its
+  match ends, so it pairs exactly two players once. **Search for anyone** instead
+  leaves the reservation and joins the global matchmaker at the same length. A
+  series keeps the score as pips under each fighter and re-opens the ready
+  handshake between rounds. Synced countdown and a shared **PUN!** instant either
+  way.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay, in
   a series you pick in the lobby: one round (a draw is the result) or first to 3
   (a draw replays). One round is the default, and the lobby remembers the mode

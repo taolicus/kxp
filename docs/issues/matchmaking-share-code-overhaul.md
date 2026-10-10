@@ -118,7 +118,8 @@ owner:
 
 The build is three slices: [invite-match-length](../tasks/closed/invite-match-length.md)
 (server, landed), [invite-first-entry](../tasks/closed/invite-first-entry.md) (client +
-markup, landed), and [invite-share](../tasks/open/invite-share.md) (Share API).
+markup, landed), and [invite-share](../tasks/closed/invite-share.md) (Share API,
+landed).
 
 **Proves the cause** — a recorded decision on the code format (question 1) and
 on the identity primitive (player-identity). The paste UI and error states

@@ -46,6 +46,9 @@ function stubElement() {
     querySelectorAll: () => [],
     appendChild() {},
     remove() {},
+    // The copy path selects the input before execCommand; a stub without this
+    // would make every copy fall into the catch and look like it worked.
+    select() {},
     setAttribute() {},
     getAttribute: () => null,
   };
@@ -75,6 +78,10 @@ function loadApp(opts = {}) {
   const store = new Map();
   const docHandlers = {};
   const frames = [];
+  // Copies the client asked the document to make. A recording rather than a
+  // no-op, so a share-falls-back-to-copy test can tell a control that ran from
+  // one that only looked like it did.
+  const copies = [];
   let clock = 1700000000000;
   // A frame is only ever presented when the test says so, which is the property
   // the readiness gate depends on: app.js arms its ack from a rAF callback
@@ -118,7 +125,10 @@ function loadApp(opts = {}) {
         json: () => Promise.resolve(isRoster ? (opts.roster || []) : isChallenge ? { token: 'tok' } : {}),
       });
     },
-    navigator: { sendBeacon: () => true },
+    // `share` is whatever the test passes: a function to record the Web Share
+    // call, a rejecting one to model a dismissed sheet, or nothing to model a
+    // browser that has no share sheet at all.
+    navigator: { sendBeacon: () => true, share: opts.share },
     // A vm context inherits the language built-ins but not the web/Node globals,
     // so app.js's `new URLSearchParams(location.search)` would throw inside its
     // own try/catch and the challenge-claim path would silently never run in a
@@ -180,6 +190,9 @@ function loadApp(opts = {}) {
     // than fail loudly, which is the wrong way to find out.
     querySelectorAll: (sel) => elements.get(sel) || [],
     addEventListener(type, fn) { docHandlers[type] = fn; },
+    // The copy path: recorded so a test can see the fallback ran. Returns true
+    // like a browser that accepted the command.
+    execCommand: (cmd) => { copies.push(cmd); return true; },
   };
   ctx.KXP = KXP;
   ctx.StateMachine = {
@@ -272,6 +285,8 @@ function loadApp(opts = {}) {
       el.handlers.click();
     },
     html: (sel) => elements.get(sel)?.innerHTML,
+    // The document-copy commands the client issued, in order.
+    copies: () => copies.slice(),
     count: () => elements.get('#count')?.textContent,
     // Move the stubbed clock. Done from here rather than by reassigning Date.now
     // inside the context, which would detach the timers' due times from it.

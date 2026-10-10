@@ -518,7 +518,12 @@ who would rather not wait for one person leaves the reservation with the screen'
 "search for anyone" control, which cancels and joins the shared queue; that is
 the only way to reach the screen without a reservation, so a reload of a plain
 wait shows no code. A pasted bad code surfaces inline and leaves both the screen
-and the player's own reservation intact, rather than bouncing to the lobby.
+and the player's own reservation intact, rather than bouncing to the lobby. The
+code leaves the screen through the browser's share sheet where there is one; a
+sheet that is absent, refuses (an insecure context), or is dismissed falls back
+to a clipboard copy, and the rejected promise is handled so a cancellation never
+reaches the error beacon. The share control hides itself where there is no sheet,
+leaving Copy as the whole of it.
 
 ## SSE lifecycle
 

@@ -43,8 +43,8 @@ const joins = (app) => app.posted().filter((p) => p === '/join').length;
 // lobby has a fighter to draw and the start button is wired. `id` is set the way
 // the server's first frame sets it, so post() is not the null short-circuit.
 const ROSTER = [{ id: 'aaa', name: 'Aaa', emoji: 'x' }];
-async function creator() {
-  const app = loadApp({ next: (from, ev) => SM.next(from, ev), roster: ROSTER });
+async function creator(opts = {}) {
+  const app = loadApp(Object.assign({ next: (from, ev) => SM.next(from, ev), roster: ROSTER }, opts));
   runInContext("id = 'c1'", app.ctx);
   await app.boot();
   return app;
@@ -206,4 +206,41 @@ test('Play Again mints a fresh invite at the length just played', async () => {
     app.el('#challenge-link').classList.contains('hidden'), false,
     'the new code is on screen'
   );
+});
+
+// The share control. On a phone the invite travels through the browser's share
+// sheet; everywhere else, and whenever the sheet is dismissed, the URL goes to
+// the clipboard instead -- never into the error beacon.
+
+async function withInvite(opts) {
+  const app = await creator(opts);
+  app.tap('#btn-online');
+  app.tap('#btn-start');
+  await app.settle();
+  return app;
+}
+
+test('share hands the invite URL to the Web Share API', async () => {
+  const calls = [];
+  const app = await withInvite({ share: (d) => { calls.push(d); return Promise.resolve(); } });
+  app.tap('#btn-share');
+  await app.settle();
+  assert.equal(calls.length, 1, 'the sheet was opened once');
+  assert.match(calls[0].url, /challenge=tok/, 'with the invite URL');
+  assert.deepEqual(app.copies(), [], 'and not copied behind it');
+});
+
+test('with no share sheet the share control copies instead', async () => {
+  const app = await withInvite();
+  assert.ok(app.el('#btn-share').classList.contains('hidden'), 'the Share button is not offered');
+  app.tap('#btn-share');
+  await app.settle();
+  assert.deepEqual(app.copies(), ['copy'], 'it copied the link');
+});
+
+test('a dismissed share sheet falls back to copy', async () => {
+  const app = await withInvite({ share: () => Promise.reject(new Error('AbortError')) });
+  app.tap('#btn-share');
+  await app.settle();
+  assert.deepEqual(app.copies(), ['copy'], 'the dismissal copied the link, not an error frame');
 });

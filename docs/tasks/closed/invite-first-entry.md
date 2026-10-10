@@ -54,7 +54,7 @@ with a secondary "search for anyone" control as the fallback.
 
 - Device: client + markup, `node --test` on the phone; rendering is hand-checked
   (no e2e here).
-- Share API is [invite-share](../open/invite-share.md), a follow-up so the Web-API stub
+- Share API is [invite-share](../closed/invite-share.md), a follow-up so the Web-API stub
   work stays out of this slice.
 - The stale state list comment at `web/app.js:9` can be corrected here.
 
