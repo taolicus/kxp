@@ -183,6 +183,14 @@ function leaveLiveRound() {
 
 function sendReady() { post('/ready'); }
 
+// Whether the server will still accept a readiness ack: only while the client is
+// on the match screen (`matched`) or in the between-rounds pause, which it sits
+// in as a non-final `result`. One reading, so the opening arm, its
+// background-decode re-check and its interval all agree on what open means.
+function readyGateOpen() {
+  return state === 'matched' || state === 'result';
+}
+
 // The ack waits for the announced background to decode *and* for a presented
 // frame, in that order. The frame half is self-suppressing: rAF does not run in a
 // backgrounded tab, so an app in the background never acknowledges and the
@@ -211,7 +219,7 @@ function armReadyLoop() {
   // (`matched`) and, for an online series, the pause between rounds, which the
   // client sits in as a non-final `result`. Outside that span the gate is
   // closed and the ack would be a claim about a round that will not run.
-  if (state !== 'matched' && state !== 'result') return;
+  if (!readyGateOpen()) return;
   readyArmed = true;
   // Behind bgReady, so the frame we wait for is a frame of the match screen
   // rather than of whatever was on screen while the background downloaded.
@@ -220,15 +228,15 @@ function armReadyLoop() {
   bgReady.then(() => {
     // The match can end while the background is still loading; arming then would
     // ack a match that no longer exists.
-    if (!readyArmed || (state !== 'matched' && state !== 'result')) return;
+    if (!readyArmed || !readyGateOpen()) return;
     const go = () => {
-      if (!readyArmed || (state !== 'matched' && state !== 'result') || document.visibilityState === 'hidden') return;
+      if (!readyArmed || !readyGateOpen() || document.visibilityState === 'hidden') return;
       sendReady();
       // Clear without disarming: this arm's own interval is being replaced, and
       // stop -- the thing that invalidates a pending frame -- is not.
       clearInterval(readyTimer);
       readyTimer = setInterval(() => {
-        if (!readyArmed || (state !== 'matched' && state !== 'result')) { stopReadyLoop(); return; }
+        if (!readyArmed || !readyGateOpen()) { stopReadyLoop(); return; }
         sendReady();
       }, 2000);
     };
