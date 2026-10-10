@@ -842,6 +842,45 @@ function refuseStart(mode) {
   };
 }
 
+// The result screen's Play Again. A ladder win's next action is the tower, not a
+// rematch; otherwise it repeats the match that just ended -- the same length and
+// the same rule -- through the CPU or online path that ran it.
+function playAgain() {
+  if (ladderNext) {
+    // The ladder's own action, ahead of the CPU branch below: both are CPU
+    // matches, and a plain rematch must never be able to stand in for the next
+    // floor -- that would ask for floor one again and read as a ladder that had
+    // reset itself.
+    //
+    // It goes to the tower rather than straight into the fight, because the next
+    // floor is a different fighter and the tower is where that gets said and
+    // animated. Disarmed for the same double-tap reason as the branches below,
+    // and re-armed if the route is refused -- and it is the result screen's
+    // button, not the tower's, which showTower arms.
+    const btn = $('#btn-again');
+    armPending(btn);
+    if (!transition('climb')) clearPending();
+    return;
+  }
+  // The match that just ended, not the lobby's current selection: "Play Again"
+  // means the same match again. The rule comes back with the length because
+  // first-to-1 and 1-off share a target; if the result reported nothing it falls
+  // back to the selection, with the same "older server" reading as the length's
+  // fallback -- and at a target of one that reading is 1-off, the mode an absent
+  // rule has always meant.
+  const again = lastTarget || cpuTarget;
+  const againEnds = lastDrawEnds ?? (again <= 1);
+  if (lastMode === 'cpu') {
+    postPending($('#btn-again'), post('/cpu', { roundsTarget: again, drawEnds: againEnds }));
+  } else {
+    // Invite-first rematch: the ended match's reservation is spent, so a fresh
+    // one is minted and the invite screen returns with a new code. The length is
+    // the match that just ran, not the lobby's current selection.
+    armPending($('#btn-again'));
+    mintChallenge({ roundsTarget: again, drawEnds: againEnds }, 'rematch:online');
+  }
+}
+
 // Put a reservation's code on the invite screen. The code is the token in a
 // /?challenge= URL: the same string a friend pastes back into the field, or taps
 // as a link. Setting the flag here -- before the transition into waiting -- is
@@ -1795,41 +1834,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-history').addEventListener('click', () => transition('history'));
   $('#btn-history-back').addEventListener('click', () => transition('mode'));
 
-  $('#btn-again').addEventListener('click', () => {
-    if (ladderNext) {
-      // The ladder's own action, ahead of the CPU branch below: both are CPU
-      // matches, and a plain rematch must never be able to stand in for the next
-      // floor -- that would ask for floor one again and read as a ladder that had
-      // reset itself.
-      //
-      // It goes to the tower rather than straight into the fight, because the next
-      // floor is a different fighter and the tower is where that gets said and
-      // animated. Disarmed for the same double-tap reason as the branches below,
-      // and re-armed if the route is refused -- and it is the result screen's
-      // button, not the tower's, which showTower arms.
-      const btn = $('#btn-again');
-      armPending(btn);
-      if (!transition('climb')) clearPending();
-      return;
-    }
-    // The match that just ended, not the lobby's current selection: "Play
-    // Again" means the same match again. The rule comes back with the length
-    // because first-to-1 and 1-off share a target; if the result reported
-    // nothing it falls back to the selection, with the same "older server"
-    // reading as the length's fallback -- and at a target of one that reading
-    // is 1-off, the mode an absent rule has always meant.
-    const again = lastTarget || cpuTarget;
-    const againEnds = lastDrawEnds ?? (again <= 1);
-    if (lastMode === 'cpu') {
-      postPending($('#btn-again'), post('/cpu', { roundsTarget: again, drawEnds: againEnds }));
-    } else {
-      // Invite-first rematch: the ended match's reservation is spent, so a fresh
-      // one is minted and the invite screen returns with a new code. The length
-      // is the match that just ran, not the lobby's current selection.
-      armPending($('#btn-again'));
-      mintChallenge({ roundsTarget: again, drawEnds: againEnds }, 'rematch:online');
-    }
-  });
+  $('#btn-again').addEventListener('click', playAgain);
   $('#btn-mode').addEventListener('click', () => {
     transition('mode');
   });
