@@ -47,7 +47,7 @@ lobby shows.
 - Device: hub-only, no new shared state beyond the fields on `challengeEntry`
   (read under `h.mu`); the phone can carry it.
 - Not in this slice: the invite screen and the paste field
-  ([invite-first-entry](../open/invite-first-entry.md)).
+  ([invite-first-entry](../closed/invite-first-entry.md)).
 
 ## Landed
 

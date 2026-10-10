@@ -230,14 +230,12 @@ test('a rematch repeats the match just played, rule included', async () => {
   assert.strictEqual(bodyOf(app, '/cpu').drawEnds, false, 'the rematch stays first-to-1, not 1-off');
 });
 
-test('the choice the lobby is showing rides the queue, not just /cpu', async () => {
-  // Flipped from its old form ("an online match is not started with a series
-  // length"), whose comment anticipated this very change: the field used to be
-  // one the server had to ignore, and a ready-per-round change could start
-  // honouring it in the wrong place. The server now honours it in the right
-  // place — equal-length pairing — so the control's choice is what the queue
-  // is asked for. The default case first: the client's own default, not the
-  // markup's, and an explicit field rather than the absent-means-one fallback.
+test('the choice the lobby is showing rides the invite, not just /cpu', async () => {
+  // An online match now starts from a reservation, so the control's choice is
+  // what the invite is minted at — the length a friend sees on the link and the
+  // one the claim pairs at. The default case first: the client's own default,
+  // not the markup's, and an explicit field rather than the absent-means-one
+  // fallback.
   const app = loadApp({ next: SM.next });
   lobby(app);
   await started(app);
@@ -246,11 +244,11 @@ test('the choice the lobby is showing rides the queue, not just /cpu', async () 
   app.tap('#btn-start');
   await app.settle();
 
-  assert.equal(bodyOf(app, '/queue').roundsTarget, 1, 'the default length is sent, not omitted');
-  assert.strictEqual(bodyOf(app, '/queue').drawEnds, true, 'with the rule that makes it a 1-off');
+  assert.equal(bodyOf(app, '/challenge').roundsTarget, 1, 'the default length is sent, not omitted');
+  assert.strictEqual(bodyOf(app, '/challenge').drawEnds, true, 'with the rule that makes it a 1-off');
 });
 
-test('choosing first-to-3 online is what the queue is asked for', async () => {
+test('choosing first-to-3 online is what the invite is minted at', async () => {
   const app = loadApp({ next: SM.next });
   const btns = lobby(app);
   await started(app);
@@ -260,11 +258,11 @@ test('choosing first-to-3 online is what the queue is asked for', async () => {
   app.tap('#btn-start');
   await app.settle();
 
-  assert.equal(bodyOf(app, '/queue').roundsTarget, 3, 'the picked length is the match the queue pairs');
-  assert.strictEqual(bodyOf(app, '/queue').drawEnds, false, 'and its rule is part of the pairing');
+  assert.equal(bodyOf(app, '/challenge').roundsTarget, 3, 'the picked length is the match the invite pairs');
+  assert.strictEqual(bodyOf(app, '/challenge').drawEnds, false, 'and its rule is part of the pairing');
 });
 
-test('an online rematch queues at the mode just played', async () => {
+test('an online rematch mints a fresh invite at the mode just played', async () => {
   // The same rule the CPU branch already follows: "Play Again" means the match
   // that just ended, read off the result frame rather than off the lobby's
   // current selection — with the same older-server fallback for a result that
@@ -286,8 +284,8 @@ test('an online rematch queues at the mode just played', async () => {
   app.tap('#btn-again');
   await app.settle();
 
-  assert.equal(bodyOf(app, '/queue').roundsTarget, 3, 'the rematch repeats the series just played');
-  assert.strictEqual(bodyOf(app, '/queue').drawEnds, false, 'with the rule it was played under');
+  assert.equal(bodyOf(app, '/challenge').roundsTarget, 3, 'the rematch repeats the series just played');
+  assert.strictEqual(bodyOf(app, '/challenge').drawEnds, false, 'with the rule it was played under');
 });
 
 test('an online rematch of a 1-off that reported no series keeps the lobby 1-off', async () => {
@@ -308,6 +306,6 @@ test('an online rematch of a 1-off that reported no series keeps the lobby 1-off
   app.tap('#btn-again');
   await app.settle();
 
-  assert.equal(bodyOf(app, '/queue').roundsTarget, 1, 'the fallback length is the selection');
-  assert.strictEqual(bodyOf(app, '/queue').drawEnds, true, 'and the fallback rule is the 1-off it implied');
+  assert.equal(bodyOf(app, '/challenge').roundsTarget, 1, 'the fallback length is the selection');
+  assert.strictEqual(bodyOf(app, '/challenge').drawEnds, true, 'and the fallback rule is the 1-off it implied');
 });

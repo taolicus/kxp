@@ -7,16 +7,14 @@ original terminal game.
 ## Features
 
 - **Single-binary web app** — the UI is embedded in the executable.
-- **Play Online** — matchmaking pairs you with another player at the mode the
-  lobby's control is showing: one round or first to 3. The control names the
-  draw rule with the length — a one-round match is a 1-off, which ends on a
-  drawn round, while first to 3 replays it. A series keeps the score as pips
-  under each fighter and re-opens the ready handshake between rounds. Synced
-  countdown and a shared **PUN!** instant either way.
-- **Challenge a friend** — the lobby can mint a link to one specific match
-  instead of waiting in the global queue: whoever opens it is the other side, no
-  account or matching needed. The link is live while it waits and is spent when
-  its match ends, so it pairs exactly two players once.
+- **Play Online** — opens an invite screen: it reserves you at the mode the
+  lobby's control is showing (one round or first to 3, the control naming the
+  draw rule) and hands you a code to share, beside a field for pasting a friend's
+  code. The link is live while it waits and is spent when its match ends, so it
+  pairs exactly two players once; **search for anyone** instead leaves the
+  reservation and joins the global matchmaker at the same length. A series keeps
+  the score as pips under each fighter and re-opens the ready handshake between
+  rounds. Synced countdown and a shared **PUN!** instant either way.
 - **Play vs CPU** — a bot picks a random move after a random reaction delay, in
   a series you pick in the lobby: one round (a draw is the result) or first to 3
   (a draw replays). One round is the default, and the lobby remembers the mode
@@ -63,9 +61,10 @@ Then open `http://localhost:<port>`.
 
 ## Play
 
-1. Open the app in two browser tabs (one per player) and hit **Play Online** in
-   both to face each other, hit **Play vs CPU** for a solo match, or hit **Arcade
-   Mode** to climb the roster one floor at a time.
+1. Open the app in two browser tabs (one per player). Hit **Play Online** in one
+   to reserve that player and get an invite code, then paste it into the other
+   tab's invite screen to pair them. For a solo match hit **Play vs CPU**, or hit
+   **Arcade Mode** to climb the roster one floor at a time.
 2. When a match is found, the round waits for you. **Both sides do** — keep the
    app in the foreground and a round never fires at someone who wasn't looking at
    the screen.

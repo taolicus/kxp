@@ -55,7 +55,6 @@
     </div>
     <div class="buttons">
       <button id="btn-online" class="primary" disabled>Play Online</button>
-      <button id="btn-challenge">Challenge a Friend</button>
       <button id="btn-ladder">Arcade Mode</button>
       <button id="btn-cpu">Play vs CPU</button>
     </div>
@@ -70,15 +69,28 @@
     </div>
   </section>
 
+  <!-- The invite screen: the one place an online match starts, whether by
+       sharing the code below or by pasting someone else's. It doubles as the
+       plain matchmaker's wait when the player chooses "search for anyone", in
+       which case the player holds no reservation and no code is shown. -->
   <section id="queue" class="view hidden">
-    <h2>Searching for an opponent&hellip;</h2>
+    <h2 id="queue-title">Invite a friend</h2>
     <div id="challenge-link" class="hidden" style="margin-top:1em;text-align:center">
       <p>Share this link with your friend:</p>
       <input id="challenge-url" readonly style="width:80%;max-width:30em;padding:0.5em">
       <button id="btn-copy">Copy</button>
     </div>
+    <div id="claim" style="margin-top:1em;text-align:center">
+      <p>Have a code? Paste a link or token to join:</p>
+      <input id="claim-url" style="width:80%;max-width:30em;padding:0.5em">
+      <button id="btn-claim">Join</button>
+      <p id="claim-error" class="note hidden"></p>
+    </div>
     <div class="spinner"></div>
-    <button id="btn-cancel">Cancel</button>
+    <div class="buttons">
+      <button id="btn-search">Search for anyone</button>
+      <button id="btn-cancel">Cancel</button>
+    </div>
   </section>
 
   <section id="game" class="view hidden">

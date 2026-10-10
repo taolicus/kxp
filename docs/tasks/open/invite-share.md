@@ -14,7 +14,7 @@ where Share is absent or dismissed.
 
 - Sharing today is `document.execCommand('copy')` only (`web/app.js:1646-1652`);
   there is no `navigator.share` or `navigator.clipboard` anywhere in `app.js`.
-- The invite screen and its link live in [invite-first-entry](invite-first-entry.md).
+- The invite screen and its link live in [invite-first-entry](../closed/invite-first-entry.md).
 - The client test harness stubs a context at `web/appHarness.cjs:121` but no
   `navigator.share`/`clipboard`, so those stubs land with this slice.
 

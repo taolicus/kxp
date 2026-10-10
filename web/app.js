@@ -6,7 +6,9 @@ let id = null;
 // tabs; `id` names the SSE connection and is replaced whenever a newer stream
 // connects. It is an identity, not a credential.
 let pid = loadPid();
-let state = 'lobby'; // lobby | waiting | countdown | shoot | locked | result
+// The client's screen state. Kept in step with web/machine.js STATES, which owns
+// the transitions; this list is only a reader's map of the names.
+let state = 'lobby'; // lobby | waiting | matched | countdown | shoot | locked | result | ladder | history
 let lastMode = 'online'; // online | cpu — mode of the finished match
 // The CPU series length the lobby has selected, and the one the finished match
 // actually played. Nothing here is a literal copy of the rules: the selection is
@@ -31,10 +33,12 @@ let ladderPair = null;
 // when the match that ended was not a ladder match.
 let ladderNext = null;
 let pendingMode = null; // online | cpu — mode picked on the lobby, awaiting fighter confirmation
-// Whether the queue screen is waiting on a challenge link rather than the
-// matchmaker. The link lives in the queue screen, and entering it always runs
-// waiting() -- so without this flag the create path's own transition would hide
-// the link it just filled in, and the screen would show only the spinner.
+// Whether the player holds a challenge reservation. It decides what the invite
+// screen shows: a reservation (true) puts the player's own code and the "search
+// for anyone" fallback up, a plain matchmaker wait (false) hides both. Entering
+// the waiting view is the one place it is read -- the create path sets it before
+// the transition that would otherwise show a bare spinner, and a plain queue
+// clears any code left from before.
 let challengePending = false;
 let es = null;
 let shootTimer = null;
@@ -778,17 +782,60 @@ function renderFighters() {
 
 function openChoose(mode) {
   pendingMode = mode;
-  if (mode === 'challenge') {
-    $('#btn-start').textContent = 'Create Challenge';
-  } else {
-    $('#btn-start').textContent = mode === 'online' ? 'Search for Opponent' : 'Fight!';
-  }
+  // Online is invite-first: the confirm mints a reservation rather than joining
+  // the matchmaker, so the button says what it does.
+  $('#btn-start').textContent = mode === 'online' ? 'Create Invite' : 'Fight!';
   $('#btn-start').disabled = false;
   if (CHARACTERS.length && !localStorage.getItem('kxp-character')) {
     saveCharacter(CHARACTERS[0].id);
   }
   renderFighters();
   show('choose');
+}
+
+// Put a reservation's code on the invite screen. The code is the token in a
+// /?challenge= URL: the same string a friend pastes back into the field, or taps
+// as a link. Setting the flag here -- before the transition into waiting -- is
+// what keeps the screen from showing a bare spinner over the code just made.
+function showInvite(token) {
+  const inp = document.getElementById('challenge-url');
+  if (inp) inp.value = location.origin + '/?challenge=' + encodeURIComponent(token);
+  challengePending = true;
+}
+
+// The token out of whatever the player pasted: a full /?challenge= URL or a bare
+// token. The link is opaque and carries no format beyond its path, so the only
+// thing to strip is the surrounding URL when one was pasted.
+function tokenFromPaste(value) {
+  const s = String(value || '').trim();
+  if (!s) return '';
+  const m = s.match(/[?&]challenge=([^&\s]+)/);
+  if (m) {
+    try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+  }
+  return s;
+}
+
+// Paint the invite screen from the reservation flag. Called on entering the wait
+// and when "search for anyone" leaves the reservation without leaving the screen.
+function renderInvite() {
+  if (typeof document === 'undefined' || !document.getElementById) return;
+  const link = document.getElementById('challenge-link');
+  if (link && link.classList) link.classList.toggle('hidden', !challengePending);
+  const search = document.getElementById('btn-search');
+  if (search && search.classList) search.classList.toggle('hidden', !challengePending);
+  const title = document.getElementById('queue-title');
+  if (title) title.textContent = challengePending ? 'Invite a friend' : 'Searching for an opponent\u2026';
+}
+
+// The inline failure line beside the paste field. A bad code must leave the
+// screen usable rather than bounce the player to the lobby, so the message lives
+// here instead of the shared notice.
+function setClaimError(msg) {
+  const el = document.getElementById('claim-error');
+  if (!el) return;
+  el.textContent = msg || '';
+  if (el.classList) el.classList.toggle('hidden', !msg);
 }
 
 function fighterHTML(charId, role) {
@@ -1141,15 +1188,11 @@ const enter = {
     stopReadyLoop();
     clearTimeout(stallTimer);
     show('queue');
-    // The link is shown only for a challenge wait. Entering the queue is the
-    // single place this is decided, because both paths reach it: a plain /queue
-    // (challengePending false) clears any link left from an earlier challenge,
-    // and a created link (challengePending true) keeps it up across the
-    // transition that would otherwise hide it.
-    if (typeof document !== 'undefined' && document.getElementById) {
-      const cl = document.getElementById('challenge-link');
-      if (cl && cl.classList) cl.classList.toggle('hidden', !challengePending);
-    }
+    // Whether the screen shows the player's own code and the "search for anyone"
+    // fallback is read here, the one entry both paths reach: a reservation keeps
+    // them up across the transition that would otherwise hide the code, and a
+    // plain queue hides any left from before.
+    renderInvite();
     // A plain /queue has no reason, so this clears any notice left over from an
     // earlier cancelled handshake rather than stranding it above the spinner.
     setNotice(d && d.reason);
@@ -1408,9 +1451,7 @@ function connect() {
     // screen; without it the wait would drop to the lobby and the link with it.
     // Rebuild it before the transition below, which is what shows the link.
     if (d.challenge) {
-      const inp = document.getElementById('challenge-url');
-      if (inp) inp.value = location.origin + '/?challenge=' + encodeURIComponent(d.challenge);
-      challengePending = true;
+      showInvite(d.challenge);
     }
 
     if (d.state === 'waiting') transition('snapshot:waiting', d);
@@ -1531,17 +1572,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mode = pendingMode;
     pendingMode = '';
     armPending(btn);
-    if (mode === 'challenge') {
-      const p = post('/challenge', { id });
-      Promise.resolve(p).then((res) => {
+    if (mode === 'online') {
+      // Invite-first: the confirm reserves the player at the lobby's chosen
+      // length and hands them a code, rather than entering the matchmaker.
+      post('/challenge', { roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }).then((res) => {
         if (res && res.ok) {
-          const d = res.data || {};
-          const url = location.origin + '/?challenge=' + encodeURIComponent(d.token);
-          const inp = document.getElementById('challenge-url');
-          if (inp) inp.value = url;
-          // Mark the wait a challenge wait *before* the transition: waiting()
-          // is the one place the link is shown or hidden, and it reads this.
-          challengePending = true;
+          showInvite((res.data || {}).token);
           transition('queue');
           return;
         }
@@ -1551,7 +1587,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       return;
     }
-    if (mode === 'online') transition('queue');
     if (mode === 'ladder') {
       ladderPair = currentPair();
       if (!transition('climb')) {
@@ -1560,7 +1595,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       return;
     }
-    const p = mode === 'online' ? post('/queue', { roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }) : postCPU(mode);
+    const p = postCPU(mode);
     Promise.resolve(p).then((res) => {
       if (res && res.ok) return;
       clearPending();
@@ -1650,12 +1685,40 @@ document.addEventListener('DOMContentLoaded', async () => {
       try { document.execCommand('copy'); } catch (e) {}
     }
   });
+  // The claim half of the invite screen: the player pasted someone else's code
+  // and is joining their reservation. Success is the `matched` frame, not the
+  // reply, so nothing moves the screen here; a refusal shows inline and leaves
+  // the screen -- and the player's own code, if they hold one -- intact.
+  $('#btn-claim').addEventListener('click', () => {
+    const inp = document.getElementById('claim-url');
+    const token = tokenFromPaste(inp && inp.value);
+    if (!token) {
+      setClaimError('Paste a link or code first.');
+      return;
+    }
+    setClaimError('');
+    post('/join', { token }).then((res) => {
+      if (res && res.ok) return;
+      if (res && res.status === 404) setClaimError('That code has expired or was already used.');
+      else if (res && res.status === 409) setClaimError('That game is already in play.');
+      else setClaimError('Could not join \u2014 check the code and try again.');
+    });
+  });
+  // The fallback: leave the reservation and take the ordinary matchmaker wait.
+  // The cancel must land first, or the queue join trips the server's "challenge
+  // already open" guard and the player is stuck on a code they no longer want.
+  $('#btn-search').addEventListener('click', () => {
+    challengePending = false;
+    renderInvite();
+    post('/cancel').then(() =>
+      post('/queue', { roundsTarget: cpuTarget, drawEnds: cpuDrawEnds })
+    );
+  });
 
 
   // The record, from the lobby that holds it. The back button is the tower's
   // leave button one screen over: `mode` puts the lobby back the way it was,
   // which is what a player who opened a list expects to return to.
-  $('#btn-challenge').addEventListener('click', () => openChoose('challenge'));
   $('#btn-history').addEventListener('click', () => transition('history'));
   $('#btn-history-back').addEventListener('click', () => transition('mode'));
 
@@ -1690,12 +1753,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!res || !res.ok) clearPending();
       });
     } else {
-      transition('rematch:online');
-      // The match that just ended, not the lobby's current selection -- the same
-      // rule the CPU branch follows above, with the same fallback for a result
-      // that reported no target (a one-round match omits it, as an older server
-      // would).
-      post('/queue', { roundsTarget: again, drawEnds: againEnds });
+      // Invite-first rematch: the ended match's reservation is spent, so a fresh
+      // one is minted and the invite screen returns with a new code. The length
+      // is the match that just ran, not the lobby's current selection.
+      armPending($('#btn-again'));
+      post('/challenge', { roundsTarget: again, drawEnds: againEnds }).then((res) => {
+        if (res && res.ok) {
+          showInvite((res.data || {}).token);
+          transition('rematch:online');
+          return;
+        }
+        clearPending();
+      });
     }
   });
   $('#btn-mode').addEventListener('click', () => {

@@ -49,13 +49,15 @@ test('the lobby stack holds the ways to start a match, and nothing else', () => 
   const lobby = lobbySection();
   const stack = innerOf(lobby, '<div class="buttons">');
 
-  // The four ways to start something, each by the id app.js wires. A mode
-  // added later belongs here too — and will fail this list until it is named.
-  for (const id of ['btn-online', 'btn-cpu', 'btn-ladder', 'btn-challenge']) {
+  // The ways to start something, each by the id app.js wires. A mode added
+  // later belongs here too — and will fail this list until it is named.
+  for (const id of ['btn-online', 'btn-cpu', 'btn-ladder']) {
     assert.ok(stack.includes(`id="${id}"`), `${id} is in the mode stack`);
   }
   assert.ok(!stack.includes('btn-history'),
     'Match History is not in the mode stack — it opens a record, not a match');
+  assert.ok(!stack.includes('btn-challenge'),
+    'Challenge a Friend is gone — Play Online is invite-first now');
 });
 
 test('Match History sits before the mode selector, outside the stack', () => {
@@ -73,14 +75,14 @@ test('Match History sits before the mode selector, outside the stack', () => {
   assert.ok(historyAt < lobby.indexOf(stack), 'and outside the mode stack, above it');
 });
 
-test('the stack orders the ways to play: online, challenge, arcade, cpu', () => {
+test('the stack orders the ways to play: online, arcade, cpu', () => {
   // The order is the lobby's own, so it is invisible to every other gate: the
   // harness seeds controls by selector and the browser suite asserts flow. Named
   // here in the sequence a player reads them, so a reorder is a deliberate edit
   // rather than a silent one.
   const lobby = lobbySection();
   const stack = innerOf(lobby, '<div class="buttons">');
-  const ids = ['btn-online', 'btn-challenge', 'btn-ladder', 'btn-cpu'];
+  const ids = ['btn-online', 'btn-ladder', 'btn-cpu'];
   const at = ids.map((id) => stack.indexOf(`id="${id}"`));
   ids.forEach((id, n) => assert.ok(at[n] >= 0, `${id} is in the mode stack`));
   for (let n = 1; n < at.length; n++) {

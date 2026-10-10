@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: [invite-match-length]
-gated-on: []
----
-
 # Invite-first entry
 
 Hitting *Play Online* opens one screen that reserves the player and hands them a
@@ -60,6 +54,29 @@ with a secondary "search for anyone" control as the fallback.
 
 - Device: client + markup, `node --test` on the phone; rendering is hand-checked
   (no e2e here).
-- Share API is [invite-share](invite-share.md), a follow-up so the Web-API stub
+- Share API is [invite-share](../open/invite-share.md), a follow-up so the Web-API stub
   work stays out of this slice.
 - The stale state list comment at `web/app.js:9` can be corrected here.
+
+## Landed
+
+*Play Online* now mints a reservation at the lobby's chosen length and shows the
+invite screen; the *Challenge a Friend* button and its `challenge` mode are gone.
+The waiting screen gained a paste field (`#claim-url`/`#btn-claim`, inline
+`#claim-error`), a "search for anyone" control (`#btn-search`, posts `/cancel`
+then `/queue`), and a title that reads as invite or plain wait. `showInvite`,
+`tokenFromPaste`, `renderInvite` and `setClaimError` live in `web/app.js`;
+`enter.waiting` paints from the reservation flag, the snapshot rebuild reuses
+`showInvite`, and Play Again after an online match posts `/challenge` and returns
+to the invite screen. Markup changed in `web/index.html`; the stale state-list
+comment at `web/app.js:9` now matches `web/machine.js`.
+
+Verified on the phone: `npm run unit` 218/218 (up from 214), `go test ./...` ok,
+`npm run links` 411 links 0 broken, `gofmt`/`go vet` clean. The new client tests
+in `web/app.challenge.test.cjs` (created link shown; search cancels then queues;
+full-URL and bare-token claims; empty paste posts nothing; reconnect rebuild;
+Play Again re-mints) and the retargeted `web/app.lobby.test.cjs` online cases all
+fail against the pre-change `app.js` (the create path posted `/queue`, there was
+no `#btn-search`/`#btn-claim`, and `#btn-challenge` existed). Rendering is
+hand-checked only: `npm run e2e` is laptop-only (Chromium).
+

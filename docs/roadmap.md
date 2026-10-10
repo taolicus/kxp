@@ -114,12 +114,14 @@ Features that depend on identity, persistence, or ranking.
 - [Player identity registry](tasks/closed/identity-registry.md)
 - [Matchmaking state owned by the player](tasks/closed/identity-owned-matchmaking.md)
 - [Invite pairs at the creator's length](tasks/closed/invite-match-length.md)
+- [Invite-first entry](tasks/closed/invite-first-entry.md)
 
 The rest of this phase is unstarted. The identity primitive is now chosen
 ([player-identity](issues/player-identity.md)) and built as the registry and the
 player-owned reservation above. The matchmaking overhaul on top of it is now
-scoped into slices — the invite-first entry (client + markup) and the Share API
-follow the landed server length slice; the decisions and remaining slices are in
+scoped into slices: the landed server length slice and invite-first entry screen,
+followed by the Share API ([invite-share](tasks/open/invite-share.md)); the
+decisions and remaining slices are in
 [matchmaking-share-code-overhaul](issues/matchmaking-share-code-overhaul.md).
 The tasks that do not wait on identity say why in their own files: a solo
 campaign persists to `localStorage` like the arcade ladder. They are specified,

@@ -117,8 +117,8 @@ owner:
    invite-first end to end, rather than re-queueing the FIFO.
 
 The build is three slices: [invite-match-length](../tasks/closed/invite-match-length.md)
-(server, landed), [invite-first-entry](../tasks/open/invite-first-entry.md) (client +
-markup), and [invite-share](../tasks/open/invite-share.md) (Share API).
+(server, landed), [invite-first-entry](../tasks/closed/invite-first-entry.md) (client +
+markup, landed), and [invite-share](../tasks/open/invite-share.md) (Share API).
 
 **Proves the cause** — a recorded decision on the code format (question 1) and
 on the identity primitive (player-identity). The paste UI and error states

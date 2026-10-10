@@ -94,17 +94,20 @@ test('a non-idle first snapshot does not claim, and an idle one later does', () 
   assert.equal(joins(app), 1, 'claimed once idle');
 });
 
-// The create side. It shares the queue screen with plain matchmaking, and the
-// first attempt showed the link and then entered the queue -- whose entry handler
-// hid every link it saw, including the one just created. The player saw a bare
-// spinner and a dead button. These two tests pin both directions: a created link
-// stays up, and a plain queue still clears a link left over from before.
+// The create side is now the only online entry: Play Online mints a reservation
+// and shows its code. The hazard the old form pinned still holds -- the invite
+// screen's own entry must not hide the code the create path just filled in --
+// but the "plain queue clears a stale code" direction moved to the search
+// fallback below, which is now the only way to reach the screen without a
+// reservation.
 
-test('creating a challenge leaves its link visible on the queue screen', async () => {
+test('Play Online reserves and shows its code on the invite screen', async () => {
   const app = await creator();
-  app.tap('#btn-challenge');
+  app.tap('#btn-online');
   app.tap('#btn-start');
   await app.settle();
+  assert.ok(app.posted().includes('/challenge'), 'the confirm reserves, it does not queue');
+  assert.ok(!app.posted().includes('/queue'), 'and does not enter the matchmaker');
   assert.equal(
     app.el('#challenge-link').classList.contains('hidden'), false,
     'the created link is on screen'
@@ -112,25 +115,62 @@ test('creating a challenge leaves its link visible on the queue screen', async (
   assert.match(app.el('#challenge-url').value, /challenge=tok/, 'the token reached the link');
 });
 
-test('a plain online queue hides a stale challenge link', async () => {
+test('search for anyone cancels the reservation, then queues, and hides the code', async () => {
   const app = await creator();
-  // A link left on screen by a previous challenge -- the state a fresh screen
-  // does not start in, so the assertion is against the hide, not the default.
-  app.seed('#challenge-link', stubElement());
   app.tap('#btn-online');
   app.tap('#btn-start');
   await app.settle();
+  app.tap('#btn-search');
+  await app.settle();
+  const posted = app.posted();
+  const cancelAt = posted.lastIndexOf('/cancel');
+  const queueAt = posted.lastIndexOf('/queue');
+  assert.ok(cancelAt >= 0, 'the reservation is released');
+  assert.ok(queueAt > cancelAt, 'and the queue join lands after it, or the server refuses it');
   assert.equal(
     app.el('#challenge-link').classList.contains('hidden'), true,
-    'the link is not on the queue screen'
+    'no reservation, no code on screen'
   );
 });
 
-// A reconnect (or reload) while waiting on a link. The creator's own URL carries
-// no token -- only a claimant's does -- so the waiting snapshot is the only
-// thing that can put the link back. Without it the client walks to the lobby and
-// the shared link vanishes while the challenge is still open.
-test('a reconnect carrying the link token rebuilds the queue screen', async () => {
+// The paste half. A full link and a bare token both reduce to the token the
+// server minted, because the link is opaque beyond its path.
+test('confirming a pasted full link posts /join with its token', async () => {
+  const app = await creator();
+  app.seed('#claim-url', stubElement());
+  app.el('#claim-url').value = 'https://example.test/?challenge=abc123';
+  app.tap('#btn-claim');
+  await app.settle();
+  const join = app.posts.filter((p) => String(p.url).endsWith('/join')).pop();
+  assert.ok(join, 'a join was posted');
+  assert.equal(JSON.parse(join.body).token, 'abc123');
+});
+
+test('confirming a bare pasted token posts /join with it', async () => {
+  const app = await creator();
+  app.seed('#claim-url', stubElement());
+  app.el('#claim-url').value = '  tok9  ';
+  app.tap('#btn-claim');
+  await app.settle();
+  const join = app.posts.filter((p) => String(p.url).endsWith('/join')).pop();
+  assert.ok(join, 'a join was posted');
+  assert.equal(JSON.parse(join.body).token, 'tok9');
+});
+
+test('an empty paste is refused without a request', async () => {
+  const app = await creator();
+  app.seed('#claim-url', stubElement());
+  app.el('#claim-url').value = '';
+  app.tap('#btn-claim');
+  await app.settle();
+  assert.equal(app.posted().filter((p) => p === '/join').length, 0, 'nothing to claim');
+});
+
+// A reconnect (or reload) while reserved. The creator's own URL carries no
+// token -- only a claimant's does -- so the waiting snapshot is the only thing
+// that can put the code back. Without it the client walks to the lobby and the
+// shared link vanishes while the reservation is still open.
+test('a reconnect carrying the link token rebuilds the invite screen', async () => {
   const app = await creator();
   app.fire('connected', { id: 'c1', state: 'waiting', challenge: 'tok' });
   assert.equal(
@@ -140,12 +180,30 @@ test('a reconnect carrying the link token rebuilds the queue screen', async () =
   assert.match(app.el('#challenge-url').value, /challenge=tok/, 'with its token');
 });
 
-test('a plain waiting snapshot shows no challenge link', async () => {
+test('a plain waiting snapshot shows no code', async () => {
   const app = await creator();
-  app.seed('#challenge-link', stubElement());
   app.fire('connected', { id: 'c1', state: 'waiting' });
   assert.ok(
     app.el('#challenge-link').classList.contains('hidden'),
-    'no link without a token'
+    'no code without a token'
+  );
+});
+
+// Play Again after an online match is a fresh invite, not a rematch of the pair:
+// the ended match's reservation is spent, so a new one is minted and the screen
+// comes back with a new code, at the length that just played.
+test('Play Again mints a fresh invite at the length just played', async () => {
+  const app = await creator();
+  runInContext("state = 'result'; lastMode = 'online'; lastTarget = 3; lastDrawEnds = false", app.ctx);
+  app.tap('#btn-again');
+  await app.settle();
+  const ch = app.posts.filter((p) => String(p.url).endsWith('/challenge')).pop();
+  assert.ok(ch, 'a fresh reservation is minted');
+  const body = JSON.parse(ch.body);
+  assert.equal(body.roundsTarget, 3, 'at the length just played');
+  assert.equal(body.drawEnds, false, 'and its rule');
+  assert.equal(
+    app.el('#challenge-link').classList.contains('hidden'), false,
+    'the new code is on screen'
   );
 });
