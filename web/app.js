@@ -1199,6 +1199,19 @@ function setNotice(reason) {
   el.classList.toggle('hidden', !text);
 }
 
+// First entry into a match screen: paint the stage, swap to the game view and
+// clear the previous round before the countdown or shoot frame lays its round
+// over it. The `countdown` and `shoot` entries both reach it when their frame is
+// the first of the match (from a non-game state); they differ only in what the
+// opponent slot names, so that comes in as arguments.
+function enterMatchFromScratch(d, oppChar, oppName) {
+  setBg(d);
+  showGame();
+  resetGame();
+  setYouSlot();
+  setOppSlot(oppChar, oppName);
+}
+
 const enter = {
   lobby(d) {
     stopReadyLoop();
@@ -1298,11 +1311,7 @@ const enter = {
       // series, not to the round panel resetGame just cleared.
       paintPips();
     } else if (!GAME_STATES.includes(from)) {
-      setBg(d);
-      showGame();
-      resetGame();
-      setYouSlot();
-      setOppSlot(d.opponentCharacter || null, d.opponentName || 'Opponent');
+      enterMatchFromScratch(d, d.opponentCharacter || null, d.opponentName || 'Opponent');
     } else {
       showGame();
       if (d.opponentCharacter) {
@@ -1321,11 +1330,7 @@ const enter = {
     const plan = KXP.shootWindow(Date.now(), d.shootAt, d.windowMs, remainingWindowMs, clockSkew);
     armStallWatchdog();
     if (!GAME_STATES.includes(from)) {
-      setBg(d);
-      showGame();
-      resetGame();
-      setYouSlot();
-      setOppSlot(null, 'Opponent');
+      enterMatchFromScratch(d, null, 'Opponent');
     } else {
       showGame();
     }
