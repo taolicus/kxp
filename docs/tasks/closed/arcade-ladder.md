@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: [game-mode-architecture]
-gated-on: []
----
-
 # Arcade ladder
 
 One floor per character, climbed against the stock bot, in a randomised order

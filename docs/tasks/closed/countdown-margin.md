@@ -1,9 +1,3 @@
----
-phase: 3
-depends-on: []
-gated-on: []
----
-
 # Buy the countdown a delivery margin
 
 The report was a player going from `MATCH FOUND` straight to **PUN!**, with the

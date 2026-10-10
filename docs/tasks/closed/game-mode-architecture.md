@@ -1,9 +1,3 @@
----
-phase: 3
-depends-on: []
-gated-on: []
----
-
 # Game-mode architecture
 
 A match can be a sequence of rounds — first to `N` decisive wins, a drawn round

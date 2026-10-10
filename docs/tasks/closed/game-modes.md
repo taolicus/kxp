@@ -1,9 +1,3 @@
----
-phase: 3
-depends-on: []
-gated-on: []
----
-
 # Game modes: 1-off, first-to-1, first-to-3, arcade
 
 Three match lengths and one ladder, and the difference between the first two is

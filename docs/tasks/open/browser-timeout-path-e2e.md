@@ -1,6 +1,6 @@
 ---
 phase: 2
-depends-on: [browser-cpu-match-e2e]
+depends-on: []
 gated-on: []
 ---
 

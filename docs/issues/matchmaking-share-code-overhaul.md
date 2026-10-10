@@ -122,11 +122,32 @@ markup, landed), and [invite-share](../tasks/closed/invite-share.md) (Share API,
 landed).
 
 **Proves the cause** — a recorded decision on the code format (question 1) and
-on the identity primitive (player-identity). The paste UI and error states
-follow, and only then does this graduate to a task.
+on the identity primitive (player-identity). Both are answered and built; what
+remains is the placement decision below.
 
-**Prospective fix (not scheduled)** — reuse `makeMatch`/`startMatchLocked` and
-the token lifecycle the challenge flow already pins, keyed to the identity rather
-than the connection; make the invite screen the default path out of the lobby;
-add the Share/paste UI; keep the wire change additive so a tab open across the
-deploy still pairs.
+**What remains — invite on the home screen.** The three slices put the invite on
+the waiting screen, but the owner wants *Play Online* gone entirely: mint the
+code on page load and show it on the lobby, with no button press. That is a
+smaller build than a new feature, but it collides with the current shape, and
+the collisions have to be decided before it is a task:
+
+1. **Screen ownership.** The server calls a reserved player `waiting` and the
+   snapshot carries `challenge` (`server.go` `snapshot`), so today the invite
+   screen *is* the waiting screen. Putting the code on the lobby means
+   `waiting + challenge` must route to the lobby (client-only, wire-additive),
+   while a bare `waiting` (the FIFO search) still routes to the wait view.
+2. **Fighter selection.** Removing *Play Online* removes online's fighter picker;
+   a reserved player would play as whatever `kxp-character` is saved, with no way
+   to change it short of a CPU match. Pick one: saved fighter, a picker on the
+   home block, or a pick at claim time.
+3. **Reservation by default.** If the lobby re-mints on every entry, "cancel the
+   invite" can no longer mean anything and `enter.lobby`'s `challengePending`
+   reset has to change; a bot match already drops the reservation server-side, so
+   "always reserved" is only ever true while idle.
+
+**Prospective fix (not scheduled)** — mint on first idle snapshot (never on a
+reconnect, which already carries the token) and render the invite block on the
+lobby; route `waiting + challenge` to the lobby client-side. The one gate that
+blocked the button regardless — the online-count `disabled` — is already gone:
+*Play Online* is live from first paint (see `architecture.md`, the invite
+screen).

@@ -1,6 +1,6 @@
 ---
 phase: 4
-depends-on: [identity-registry]
+depends-on: []
 gated-on: []
 ---
 
@@ -12,7 +12,7 @@ ranking, cap CPU streaks.
 A `void` connectivity timeout scores like a draw — never a loss. See
 [connectivity-safe-scoring](connectivity-safe-scoring.md).
 
-## Blocked on
+## No longer blocked
 
-[identity-registry](../closed/identity-registry.md) — a leaderboard needs a player to key
-a score to. The anti-cheat rules above are independent of it.
+[identity-registry](../closed/identity-registry.md) has landed — the server-issued
+`pid` is what a score keys to. The anti-cheat rules above are independent of it.

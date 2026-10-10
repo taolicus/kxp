@@ -6,11 +6,20 @@ gated-on: []
 
 # Split `server.go` into per-concern files
 
-`server.go` is 1001 lines holding the whole HTTP and hub layer: the `Client`
-type, the `Hub` type and its registry, the SSE event stream, matchmaking, match
-teardown, and eleven route handlers. It is the largest file in the tree and the
-only one where unrelated concerns share a namespace by accident rather than by
-design. This is the seam map, so nobody has to re-derive it.
+`server.go` holds the whole HTTP and hub layer: the `Client` type, the `Hub`
+type and its registry, the SSE event stream, matchmaking, match teardown, and
+**thirteen** route handlers. It is the largest file in the tree and the only one
+where unrelated concerns share a namespace by accident rather than by design.
+This is the seam map, so nobody has to re-derive it.
+
+It was drawn at 1001 lines; it is now about 1480. Line numbers have drifted as
+the map says they will, but so has the content, so before starting the split,
+reconcile the map against the tree. Landed since the map was drawn, and needing
+a home in it: types `queueEntry`, `challengeEntry`, `player`; functions
+`pickBackground`, `resolvePlayerLocked`, `creatorClientLocked`, `validID`,
+`indexOfQueuedLocked`, `firstEqualPairLocked`, `validSeriesTarget`; the
+`backgrounds`/`seriesOffer` vars; and two handlers, `handleChallenge` and
+`handleJoin` — the identity and invite work.
 
 ## Why one task and not five
 
@@ -31,7 +40,7 @@ contract.
 | `hub.go` | `Hub`, `NewHub`, `routes`, `Shutdown`, `getOrCreate`, `client`, `removeClient` |
 | `sse.go` | `handleEvents` (98 lines, the largest unit), `endConn`, `frameType`, `encodeEv`, `logDroppedEvent`, `sseWriteDeadline`, the var block at `:53` |
 | `matchmaking.go` | `side`, `tryMatch`, `makeMatch`, `startMatchLocked`, `finishMatch`, `dequeueLocked`, `snapshot`, `othersOnlineLocked`, `broadcastOnline` |
-| `handlers.go` | `statusWriter`/`accessLog`, `handlerError`, `decode`, the eleven `handle*` route handlers, `clip` |
+| `handlers.go` | `statusWriter`/`accessLog`, `handlerError`, `decode`, the thirteen `handle*` route handlers, `clip` |
 
 Two calls are judgement, not mechanics. `snapshot` and `broadcastOnline` are hub
 state reporting rather than matchmaking, and could sit in either; pick one and

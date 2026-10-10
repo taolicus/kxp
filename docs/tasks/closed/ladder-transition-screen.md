@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: [arcade-ladder]
-gated-on: []
----
-
 # Ladder transition screen
 
 The tower between ladder floors: the whole order drawn, floor one at the bottom,

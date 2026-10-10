@@ -1,9 +1,3 @@
----
-phase: 3
-depends-on: []
-gated-on: []
----
-
 # Make the countdown deadline adapt to the slowest side
 
 **The presence half shipped; the adaptive half was measured and not built.** The

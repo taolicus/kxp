@@ -1,6 +1,6 @@
 ---
 phase: 2
-depends-on: [browser-cpu-match-e2e]
+depends-on: []
 gated-on: []
 ---
 
@@ -24,7 +24,8 @@ with a fresh match possible â€” and must never sit stuck on "Waiting for resultâ
   (docs/issues/ entries seen in
   [app.reconnect.test.cjs](../../../web/app.reconnect.test.cjs) header); the old
   withdrawn suite flow 3 was exactly this test.
-- Land after [browser-cpu-match-e2e](../closed/browser-cpu-match-e2e.md).
+- [browser-cpu-match-e2e](../closed/browser-cpu-match-e2e.md) has landed; share
+  its helpers rather than copying them.
 
 ## Scope
 

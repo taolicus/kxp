@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: []
-gated-on: []
----
-
 # Match history
 
 A player opens a list of the matches this browser has finished: one row per

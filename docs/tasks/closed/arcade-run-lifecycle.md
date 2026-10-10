@@ -1,9 +1,3 @@
----
-phase: 4
-depends-on: [arcade-ladder, arcade-tower-entry, game-modes]
-gated-on: []
----
-
 # Arcade run lifecycle
 
 What ends a saved arcade run: a decided loss, and a change of the lobby's mode.

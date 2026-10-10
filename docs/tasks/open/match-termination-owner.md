@@ -1,6 +1,6 @@
 ---
 phase: 3
-depends-on: [game-mode-architecture]
+depends-on: []
 gated-on: []
 ---
 
@@ -26,10 +26,13 @@ client's own channel, not the engine's view.
 ## Not urgent and deliberately not scheduled
 
 The current path is correct and pinned by `finish_test.go`; this is a structural
-refactor of the finish seam, and the Phase 3 work that actually pays off — series
-mode (see [game-mode-architecture](../closed/game-mode-architecture.md)) — has to add
-per-round termination *on top of* whatever shape this takes. Do it in that
-order, not before, or it is paid for twice.
+refactor of the finish seam. It used to carry one ordering constraint: series
+mode had to add per-round termination *on top of* whatever shape the seam takes,
+so finishing it before then would have paid for the shape twice. That constraint
+is spent — series mode has landed, and it fit the existing shape without the
+rewrite, which is itself evidence the current seam is workable. So the task now
+waits on nothing but the occasion: a defect in the conditional-teardown branch,
+or a change that wants the termination record.
 
 Unscheduled by priority, not by lifecycle: it is a task, so it does not belong in
 `docs/issues/` — [docs/register.md](../../register.md) makes priority metadata, not a

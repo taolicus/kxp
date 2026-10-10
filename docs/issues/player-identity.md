@@ -28,7 +28,7 @@ relying on the ID alone. Two live connections may share one ID (two tabs), and
 the SSE lifecycle's "newer connection survives" rule does not by itself say what
 a shared per-player reservation does.
 
-**The contract** — the primitive is specified by two slices:
+**The contract** — the primitive is built by two landed slices:
 [identity-registry](../tasks/closed/identity-registry.md) (a server-issued `pid`
 carried on connect, persisted by the browser, and keyed separately from the
 connection) and
@@ -58,16 +58,17 @@ Choosing one model is what keeps these from each inventing their own notion of a
 player.
 
 **Prospective fix (not scheduled)** — [identity-registry](../tasks/closed/identity-registry.md)
-builds the primitive, and the consumers above now depend on that task rather than
-gating on this decision: [player-names](../tasks/open/player-names.md),
+built the primitive and [identity-owned-matchmaking](../tasks/closed/identity-owned-matchmaking.md)
+re-keyed matchmaking to it, both landed, so the consumers above no longer wait
+on anything here: [player-names](../tasks/open/player-names.md),
 [leaderboard](../tasks/open/leaderboard.md), [lobby-rooms](../tasks/open/lobby-rooms.md),
-and [tournament-model](../tasks/open/tournament-model.md) carry
-`depends-on: [identity-registry]`; [matchmaking-share-code-overhaul](matchmaking-share-code-overhaul.md)
-waits on [identity-owned-matchmaking](../tasks/closed/identity-owned-matchmaking.md)
-rather than inventing an identity of its own. The rest of Phase 4 does not wait
-on it and says why in its own file:
+and [tournament-model](../tasks/open/tournament-model.md) carry empty
+`depends-on` and name the `pid` as the thing they key to; the invite work
+([matchmaking-share-code-overhaul](matchmaking-share-code-overhaul.md)) awaits
+only its own placement decision. What stays open is the TTL question in the
+paragraph above. The rest of Phase 4 never waited on it:
 [solo-campaign](../tasks/open/solo-campaign.md) persists to `localStorage` like
-the arcade ladder and will be retrofitted onto whatever is chosen here, and
+the arcade ladder and will be retrofitted onto the primitive, and
 [match-history](../tasks/closed/match-history.md) is a local record that carries
 no rank. [send-challenge](../tasks/closed/send-challenge.md) landed without one,
 for the same reason: a link identifies a match rather than a player.

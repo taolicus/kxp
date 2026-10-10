@@ -1,6 +1,6 @@
 ---
 phase: 4
-depends-on: [game-mode-architecture]
+depends-on: []
 gated-on: []
 ---
 
@@ -12,14 +12,14 @@ final floor, loss restarts the tower, best floor persisted in `localStorage`.
 
 Fights run under the mode selector (best-of-5 default; draws replayed).
 
-## Blocked on
+## No longer blocked
 
-[game-mode-architecture](../closed/game-mode-architecture.md) — the mode selector it runs
-under is the series work.
+[game-mode-architecture](../closed/game-mode-architecture.md) has landed — the mode
+selector it runs under is the series work.
 
-Not blocked on the identity primitive: this persists to `localStorage` like the
-[arcade ladder](../closed/arcade-ladder.md), and will need retrofitting onto whatever
-[player-identity](../../issues/player-identity.md) decides.
+Not blocked on the identity primitive either: this persists to `localStorage`
+like the [arcade ladder](../closed/arcade-ladder.md), and will need retrofitting
+onto whatever [player-identity](../../issues/player-identity.md) decided.
 
 ## Relationship to the arcade ladder
 

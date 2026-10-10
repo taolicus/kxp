@@ -1,6 +1,6 @@
 ---
 phase: 3
-depends-on: [identity-registry]
+depends-on: []
 gated-on: []
 ---
 
@@ -8,8 +8,8 @@ gated-on: []
 
 A defined model for assignment, validation, and display.
 
-## Blocked on
+## No longer blocked
 
-[identity-registry](../closed/identity-registry.md) — names have to attach to whatever
-identifies a player, and the arcade ladder's existing `localStorage` names are
-per-browser rather than server-side.
+[identity-registry](../closed/identity-registry.md) has landed — names attach to the
+server-issued `pid`. The arcade ladder's existing `localStorage` names are
+per-browser rather than server-side, which is the retrofit this task carries.

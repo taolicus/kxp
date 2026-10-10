@@ -1,6 +1,6 @@
 ---
 phase: 4
-depends-on: [identity-registry]
+depends-on: []
 gated-on: []
 ---
 
@@ -8,7 +8,7 @@ gated-on: []
 
 Private room creation, joining, discovery, and access control.
 
-## Blocked on
+## No longer blocked
 
-[identity-registry](../closed/identity-registry.md) — access control is a statement about
-who may enter, which needs a player identity first.
+[identity-registry](../closed/identity-registry.md) has landed — access control is a
+statement about who may enter, and the `pid` is who.
