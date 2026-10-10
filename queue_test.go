@@ -96,7 +96,7 @@ func TestRequeuedSideReentersWithTheLengthItWasPlaying(t *testing.T) {
 
 	// A first-to-three match loses a side to a disconnect mid-handshake. The
 	// survivor goes back to the queue asking for the length it was playing.
-	m := h.makeMatch("rq3", defaultSeriesTarget, side{client: a}, side{client: b})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 	waitForEvent(t, a, "matched")
 	m.ackReady(0)

@@ -97,6 +97,7 @@ Build on a stable foundation without rewriting the core.
 - [Game mode architecture](tasks/closed/game-mode-architecture.md)
 - [Game modes](tasks/closed/game-modes.md)
 - [Busy affordances](tasks/closed/busy-affordances.md)
+- [Remove dead engine state](tasks/closed/engine-dead-state.md)
 
 ## Phase 4 — Public features
 

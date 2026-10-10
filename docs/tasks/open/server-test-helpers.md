@@ -32,10 +32,10 @@ refactor: no production file changes.
 - **Save/restore-a-package-var** — the pattern repeats in `series_test.go`,
   `challenge_test.go`, and `sse_lifetime_test.go`; a `freeze(t, &v, val)` covers
   the family.
-- **Hand-built `&match{id: …}` literals** — six or more sites also wire
+- **Hand-built `&match{…}` literals** — six or more sites also wire
   `readyCh`/`now`/`phase` by hand; a `testMatch()` constructor removes the
-  repetition (and pairs with the `match.id` removal in
-  [engine-dead-state](engine-dead-state.md)).
+  repetition (the `match.id` field that used to label these literals is gone —
+  see [engine-dead-state](../closed/engine-dead-state.md)).
 
 ## Constraints
 

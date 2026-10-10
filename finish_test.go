@@ -33,14 +33,14 @@ func TestFinishMatchSkipsTeardownForRepairedSide(t *testing.T) {
 	a, b := newClient(), newClient()
 	// `old` puts both sides in it; `next` then re-points a at a new match, which
 	// is what a re-pair does in production. b is deliberately left in `old`.
-	old := h.makeMatch("old", defaultSeriesTarget, side{client: a}, side{client: b})
-	next := h.makeMatch("new", defaultSeriesTarget, side{client: a}, side{bot: true})
+	old := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
+	next := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 	h.active.Add(1) // balance the decrement inside finishMatch
 
 	h.finishMatch(old, [2]side{{client: a}, {client: b}})
 
 	if got := drainEventTypes(t, a); len(got) != 0 {
-		t.Errorf("re-paired side received %v, want no frames: it is playing match %q", got, next.id)
+		t.Errorf("re-paired side received %v, want no frames: it is playing the new match", got)
 	}
 	if got := drainEventTypes(t, b); len(got) != 1 || got[0] != "state" {
 		t.Errorf("side still in the torn-down match received %v, want exactly [state]", got)
@@ -63,7 +63,7 @@ func TestFinishMatchSkipsTeardownForRepairedSide(t *testing.T) {
 func TestFinishMatchSendsTeardownToBoth(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("done", defaultSeriesTarget, side{client: a}, side{client: b})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	h.active.Add(1)
 
 	h.finishMatch(m, [2]side{{client: a}, {client: b}})
@@ -90,7 +90,7 @@ func TestFinishMatchSendsTeardownToBoth(t *testing.T) {
 func TestFinishMatchSkipsTornDownSide(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("gone", defaultSeriesTarget, side{client: a}, side{client: b})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	h.active.Add(1)
 	// b has already been torn down: removeClient clears the pointer to nil.
 	h.mu.Lock()

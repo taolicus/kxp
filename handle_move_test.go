@@ -19,7 +19,7 @@ func registerMoveTestClient(h *Hub, id string) *Client {
 }
 
 func newMoveMatch(c *Client, phase int32, shootAt time.Time) *match {
-	m := &match{id: "mvt"}
+	m := &match{}
 	c.match = m
 	m.phase.Store(phase)
 	m.setShootAt(shootAt)

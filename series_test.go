@@ -29,7 +29,7 @@ func seriesMatchForTest(t *testing.T) (*match, *Client) {
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel)
-	m := h.makeMatch("s1", defaultSeriesTarget, side{client: a}, side{bot: true})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.phase.Store(phaseDone)
 	return m, a
 }
@@ -42,7 +42,7 @@ func oneRoundMatchForTest(t *testing.T) (*match, *Client) {
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel)
-	m := h.makeMatch("one", 1, side{client: a}, side{bot: true})
+	m := h.makeMatch(1, side{client: a}, side{bot: true})
 	m.phase.Store(phaseDone)
 	return m, a
 }
@@ -241,7 +241,7 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 	noSeriesBreak(t)
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("pvps", 1, side{client: a}, side{client: b})
+	m := h.makeMatch(1, side{client: a}, side{client: b})
 	if m.seriesMatch() {
 		t.Fatal("a one-round PvP match reports itself as a series")
 	}
@@ -303,7 +303,7 @@ func TestAPVPMatchCanBeAFirstToThree(t *testing.T) {
 	a, b := newClient(), newClient()
 	t.Cleanup(a.cancel)
 	t.Cleanup(b.cancel)
-	m := h.makeMatch("pvp3", defaultSeriesTarget, side{client: a}, side{client: b})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	if !m.seriesMatch() {
 		t.Fatal("a first-to-three match without a bot does not report itself as a series")
 	}
@@ -336,7 +336,7 @@ func TestASeriesOfOneRoundEndsImmediately(t *testing.T) {
 	noSeriesBreak(t)
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("one", 1, side{client: a}, side{bot: true})
+	m := h.makeMatch(1, side{client: a}, side{bot: true})
 	m.start()
 	m.ackReady(0)
 
@@ -376,7 +376,7 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	h := NewHub()
 
 	cpu := newClient()
-	cm := h.makeMatch("cs", defaultSeriesTarget, side{client: cpu}, side{bot: true})
+	cm := h.makeMatch(defaultSeriesTarget, side{client: cpu}, side{bot: true})
 	cm.start()
 	md := waitForEvent(t, cpu, "matched")
 	if md["roundsTarget"] != float64(defaultSeriesTarget) {
@@ -386,7 +386,7 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	cpu.cancel()
 
 	pvpA, pvpB := newClient(), newClient()
-	pm := h.makeMatch("pvps", 1, side{client: pvpA}, side{client: pvpB})
+	pm := h.makeMatch(1, side{client: pvpA}, side{client: pvpB})
 	pm.start()
 	for name, c := range map[string]*Client{"a": pvpA, "b": pvpB} {
 		frame := waitForEvent(t, c, "matched")
@@ -402,7 +402,7 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	// before round one here as well. This half fails against the old single-
 	// round PvP rule.
 	longA, longB := newClient(), newClient()
-	lm := h.makeMatch("pvp3", defaultSeriesTarget, side{client: longA}, side{client: longB})
+	lm := h.makeMatch(defaultSeriesTarget, side{client: longA}, side{client: longB})
 	lm.start()
 	for name, c := range map[string]*Client{"a": longA, "b": longB} {
 		frame := waitForEvent(t, c, "matched")
@@ -423,7 +423,7 @@ func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
 	noSeriesBreak(t)
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("cs", defaultSeriesTarget, side{client: a}, side{bot: true})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.start()
 	m.ackReady(0)
 
@@ -475,7 +475,7 @@ func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
 func TestBeginRoundClearsTheLastRoundsPicks(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("s2", defaultSeriesTarget, side{client: a}, side{bot: true})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 
 	m.moves[0] = &moveMsg{move: MoveRock, arrive: time.Now()}
 	m.moves[1] = &moveMsg{move: MoveRock, arrive: time.Now()}

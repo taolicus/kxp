@@ -719,7 +719,7 @@ func (h *Hub) tryMatch() {
 		h.queue = append(h.queue[:j], h.queue[j+1:]...)
 		h.queue = append(h.queue[:i], h.queue[i+1:]...)
 		a.client.queueing, b.client.queueing = false, false
-		m := h.makeMatch(newID(4), a.roundsTarget, side{client: a.client}, side{client: b.client})
+		m := h.makeMatch(a.roundsTarget, side{client: a.client}, side{client: b.client})
 		// The pairing carried the mode; the match must carry it too. makeMatch
 		// defaults drawEnds from the target, which agrees for every length the
 		// lobby offers today, but an entry may name either field independently
@@ -746,9 +746,9 @@ func (h *Hub) firstEqualPairLocked() (int, int) {
 
 // makeMatch builds an engine match from concrete sides and wires the engine's
 // callbacks back to the hub. Callers must hold h.mu.
-func (h *Hub) makeMatch(id string, roundsTarget int, a, b side) *match {
+func (h *Hub) makeMatch(roundsTarget int, a, b side) *match {
 	src := [2]side{a, b}
-	m := newMatch(id, roundsTarget)
+	m := newMatch(roundsTarget)
 	m.background = pickBackground()
 	for i := range src {
 		p := matchParty{name: "Opponent", character: src[i].character}
@@ -1146,7 +1146,7 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 			delete(h.challenges, ch.token)
 		}
 	}
-	m := h.makeMatch(newID(4), target, side{client: c}, side{bot: true, character: opponent})
+	m := h.makeMatch(target, side{client: c}, side{bot: true, character: opponent})
 	// The engine's default is the 1-off inference; the wire has spoken, so the
 	// floor's rule is the request's. Set before startMatchLocked, so it lands
 	// before the match's own goroutine reads it.
@@ -1461,7 +1461,7 @@ func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request) {
 	// The match runs at the length the reservation carries, so the invite screen
 	// can advertise what the creator picked. The entry always holds a valid
 	// target (handleChallenge normalizes absent to one round).
-	m := h.makeMatch(newID(4), ch.roundsTarget, side{client: creator}, side{client: c})
+	m := h.makeMatch(ch.roundsTarget, side{client: creator}, side{client: c})
 	m.drawEnds = ch.drawEnds
 	// The token is consumed when the *match* ends, not here. A second opener
 	// while the match is live must be told it is in play (409), and only a join

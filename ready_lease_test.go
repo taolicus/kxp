@@ -26,10 +26,10 @@ func advance(c *fakeClock, d time.Duration) {
 
 // twoSided is a PvP match with a fake clock already installed. Both sides are
 // humans, so neither bit of the gate can be satisfied by a bot.
-func twoSided(id string) (*Hub, *match, *Client, *Client, *fakeClock) {
+func twoSided() (*Hub, *match, *Client, *Client, *fakeClock) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch(id, defaultSeriesTarget, side{client: a}, side{client: b})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	clk := leaseClock()
 	m.now = clk.get
 	return h, m, a, b, clk
@@ -44,7 +44,7 @@ func TestStaleAckDoesNotOpenTheGate(t *testing.T) {
 	readyTimeout = 5 * time.Second
 	defer func() { readyTimeout = oldTimeout }()
 
-	_, m, a, b, clk := twoSided("stale")
+	_, m, a, b, clk := twoSided()
 	m.start()
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -68,7 +68,7 @@ func TestRenewalReopensTheGate(t *testing.T) {
 	readyTimeout = 5 * time.Second
 	defer func() { readyTimeout = oldTimeout }()
 
-	_, m, a, _, clk := twoSided("renew-gate")
+	_, m, a, _, clk := twoSided()
 	m.start()
 	waitForEvent(t, a, "matched")
 
@@ -87,7 +87,7 @@ func TestRenewalReopensTheGate(t *testing.T) {
 // keeps the lease alive. An implementation that did that would stall every match
 // for a client behaving perfectly.
 func TestRepeatedAckRenewsTheLease(t *testing.T) {
-	m := newMatch("renew-lease", defaultSeriesTarget)
+	m := newMatch(defaultSeriesTarget)
 	clk := leaseClock()
 	m.now = clk.get
 
@@ -113,7 +113,7 @@ func TestRepeatedAckRenewsTheLease(t *testing.T) {
 // this passed vacuously, everything above would be satisfied by a gate that never
 // expires anything.
 func TestStaleAckExpiresTheGate(t *testing.T) {
-	m := newMatch("expire", defaultSeriesTarget)
+	m := newMatch(defaultSeriesTarget)
 	clk := leaseClock()
 	m.now = clk.get
 
@@ -129,7 +129,7 @@ func TestStaleAckExpiresTheGate(t *testing.T) {
 func TestBotNeverSatisfiesTheGateLease(t *testing.T) {
 	h := NewHub()
 	a := newClient()
-	m := h.makeMatch("cpu-lease", defaultSeriesTarget, side{client: a}, side{bot: true})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 	clk := leaseClock()
 	m.now = clk.get
 
@@ -152,7 +152,7 @@ func TestVanishedSideIsCancelledRatherThanServed(t *testing.T) {
 	readyTimeout = 800 * time.Millisecond
 	defer func() { readyTimeout = oldTimeout }()
 
-	_, m, a, b, clk := twoSided("vanish")
+	_, m, a, b, clk := twoSided()
 	m.start()
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -202,7 +202,7 @@ func TestReadyRejectsAClientThatIsNotASideOfItsMatch(t *testing.T) {
 	h := NewHub()
 	c := registerMoveTestClient(h, "outsider")
 
-	m := &match{id: "other", readyCh: make(chan struct{}), now: time.Now}
+	m := &match{readyCh: make(chan struct{}), now: time.Now}
 	m.phase.Store(phaseCountdown)
 	m.sides[0].moves = make(chan moveMsg, 1)
 	m.sides[1].moves = make(chan moveMsg, 1)
@@ -223,7 +223,7 @@ func TestReadyRejectsAClientThatIsNotASideOfItsMatch(t *testing.T) {
 func TestReadyAcceptsAGenuineSide(t *testing.T) {
 	h := NewHub()
 	c := registerMoveTestClient(h, "insider")
-	m := &match{id: "ok", readyCh: make(chan struct{}), now: time.Now}
+	m := &match{readyCh: make(chan struct{}), now: time.Now}
 	m.phase.Store(phaseCountdown)
 	m.sides[0].moves = c.moves
 	m.sides[1].moves = make(chan moveMsg, 1)
@@ -248,7 +248,7 @@ func TestReadyAcceptsAGenuineSide(t *testing.T) {
 // reconnect path -- so the fallback is pinned here rather than left to whichever
 // test happens to build a match literally.
 func TestZeroValueMatchStillHasAClock(t *testing.T) {
-	m := &match{id: "zero"}
+	m := &match{}
 	m.sides[0].moves = make(chan moveMsg, 1)
 	m.sides[1].moves = make(chan moveMsg, 1)
 

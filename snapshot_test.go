@@ -24,7 +24,7 @@ func TestPhaseNameDistinguishesDone(t *testing.T) {
 func TestSnapshotReportsDonePhase(t *testing.T) {
 	h := NewHub()
 	c := registerMoveTestClient(h, "sn1")
-	m := &match{id: "sn1"}
+	m := &match{}
 	c.match = m
 	m.phase.Store(phaseDone)
 
@@ -40,7 +40,7 @@ func TestSnapshotReportsDonePhase(t *testing.T) {
 func TestSnapshotCarriesShootWindow(t *testing.T) {
 	h := NewHub()
 	c := registerMoveTestClient(h, "sn3")
-	m := &match{id: "sn3"}
+	m := &match{}
 	c.match = m
 	m.phase.Store(phaseShoot)
 	m.setShootAt(time.Now())
@@ -60,7 +60,7 @@ func TestSnapshotCarriesShootWindow(t *testing.T) {
 func TestSnapshotCarriesCountdownPlan(t *testing.T) {
 	h := NewHub()
 	c := registerMoveTestClient(h, "snc1")
-	m := &match{id: "snc1"}
+	m := &match{}
 	c.match = m
 	m.phase.Store(phaseCountdown)
 	m.setShootAt(time.Now().Add(2 * time.Second))
@@ -83,7 +83,7 @@ func TestSnapshotCarriesCountdownPlan(t *testing.T) {
 func TestSnapshotOmitsPlanBeforeAnnounce(t *testing.T) {
 	h := NewHub()
 	c := registerMoveTestClient(h, "snc2")
-	m := &match{id: "snc2"}
+	m := &match{}
 	c.match = m
 	m.phase.Store(phaseCountdown)
 

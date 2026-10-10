@@ -158,7 +158,7 @@ rather than something inferred from the count. A first-to-1 is no longer a lobby
 segment, but the field remains what carries it — the arcade posts it on every
 floor, so a drawn round there replays whatever the control is showing.
 
-**The target is a constructor argument, not a constant.** `newMatch(id,
+**The target is a constructor argument, not a constant.** `newMatch(
 roundsTarget)` takes the length, because the lobby offers a one-round CPU match
 alongside the default and a target fixed at construction would have to be
 overwritten afterwards — on a field documented as belonging to `run`'s own

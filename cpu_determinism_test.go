@@ -10,7 +10,7 @@ import (
 // deterministic: a zero think time completes botAction inline (the send is
 // buffered), so nothing here races or sleeps.
 func TestBotActionUsesTheInjectedPickerAndClock(t *testing.T) {
-	m := newMatch("t", 1)
+	m := newMatch(1)
 	m.botMove = make(chan moveMsg, 1)
 	at := time.Unix(1000, 0)
 	m.now = func() time.Time { return at }

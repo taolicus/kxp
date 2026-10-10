@@ -81,7 +81,7 @@ func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 	// Distinct fighters, so the terminal frame's identity fields round-trip to a
 	// value that cannot be confused with the sender's own.
 	a.character, b.character = "ronin", "kitsune"
-	m := h.makeMatch("da1", defaultSeriesTarget, side{client: a}, side{client: b})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -126,7 +126,7 @@ func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 func TestCountdownPhaseBeginsOnlyWhenTheGateOpens(t *testing.T) {
 	h := NewHub()
 	a, b := newClient(), newClient()
-	m := h.makeMatch("phase-split", defaultSeriesTarget, side{client: a}, side{client: b})
+	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	m.start()
 	waitForEvent(t, a, "matched")
 
@@ -153,7 +153,7 @@ func TestCountdownPhaseBeginsOnlyWhenTheGateOpens(t *testing.T) {
 func TestReadyAckIsAcceptedDuringPreparing(t *testing.T) {
 	h := NewHub()
 	c := registerMoveTestClient(h, "prep")
-	m := &match{id: "prep", readyCh: make(chan struct{}), now: time.Now}
+	m := &match{readyCh: make(chan struct{}), now: time.Now}
 	m.phase.Store(phasePreparing)
 	m.sides[0].moves = c.moves
 	m.sides[1].moves = make(chan moveMsg, 1)

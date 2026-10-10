@@ -1,9 +1,3 @@
----
-phase: 3
-depends-on: []
-gated-on: []
----
-
 # Remove dead state from the engine
 
 Four identifiers in `round.go` are defined or written but never read. None is a
@@ -51,3 +45,25 @@ reference.
 Nothing forces this: the code is correct, just carrying state a reader must
 evaluate. It is a task because the next action is fully specified and needs no
 conversation; it is not scheduled because the engine has not needed touching.
+
+## Landed
+
+- The three one-line removals (`humanMask`, `abandonSide`, `abandonNone`) landed
+  first, as their own commit so they stay independently revertable from the wide
+  one. The abandon values keep their numbers — `iota + 1` over zero, so the zero
+  value of a match's `abandon` field is still "never cancelled" and
+  `abandonReason()` still returns the same three labels.
+- `match.id` landed second: the field, `newMatch`/`makeMatch`'s `id` parameter,
+  and roughly sixty call sites (three production `newID(4)` feeds in `tryMatch`,
+  `handleCPU`, `handleJoin`; the rest literal labels in tests), plus the one
+  reader the field had, an error string in `finish_test.go` that now names the
+  new match instead of its id. The accusatory label in every struct-literal
+  test match (`&match{id: "…"}`) went with it. `architecture.md` now quotes
+  `newMatch(roundsTarget)`.
+- **Verified:** grep for `humanMask`, `abandonSide`, `abandonNone` and the
+  removed field is empty (the negative direction — each was found before its
+  own commit); `gofmt -l .` empty; `go vet ./...` clean; `go test -count=1
+  ./...` ok 197.620s. The readiness/finish/queue/series round of the focused
+  suite also ran green after the first commit.
+- A `newID(4)` call remains, in `Client.beginConn` — that one mints the
+  connection id, not a match id, so `newID` stays live.

@@ -193,7 +193,6 @@ type matchParty struct {
 }
 
 type match struct {
-	id      string
 	sides   [2]matchParty
 	botMove chan moveMsg
 	// background is the stage name chosen for this match. One value for the whole
@@ -311,9 +310,8 @@ type match struct {
 // one-round match is whatever that round came to (see the ladder's override in
 // the handler), so a match built without a thought for the field behaves exactly
 // as one round always did.
-func newMatch(id string, roundsTarget int) *match {
+func newMatch(roundsTarget int) *match {
 	return &match{
-		id:           id,
 		readyCh:      make(chan struct{}),
 		now:          time.Now,
 		pickMove:     randomMove,

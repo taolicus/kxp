@@ -24,7 +24,7 @@ import (
 // trailing " m=+<seconds>", which is how the two representations are told apart
 // here. Verified to distinguish them before relying on it.
 func TestShootAtKeepsMonotonicReading(t *testing.T) {
-	m := newMatch("mono", defaultSeriesTarget)
+	m := newMatch(defaultSeriesTarget)
 	if m.hasShootAt() {
 		t.Fatal("a fresh match already reports an announced deadline")
 	}
@@ -46,7 +46,7 @@ func TestShootAtKeepsMonotonicReading(t *testing.T) {
 // the same server epoch-ms a client reconciles against its own clock and skew
 // estimate, or every client would re-anchor its PUN timer to the wrong instant.
 func TestShootAtWireValueIsUnchanged(t *testing.T) {
-	m := newMatch("wire", defaultSeriesTarget)
+	m := newMatch(defaultSeriesTarget)
 	announceAt := time.Now()
 	want := announceAt.Add(2 * countStep)
 

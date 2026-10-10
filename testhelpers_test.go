@@ -3,7 +3,7 @@ package main
 // newPartiedMatch builds an engine match wired to concrete clients, for tests
 // that exercise resolve()/abort()/etc. without running a match or a hub.
 func newPartiedMatch(a, b *Client) *match {
-	m := newMatch("tm", defaultSeriesTarget)
+	m := newMatch(defaultSeriesTarget)
 	m.sides[0] = matchParty{
 		name:      "Opponent",
 		character: a.character,
