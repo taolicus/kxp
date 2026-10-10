@@ -177,12 +177,6 @@ function loadApp(opts = {}) {
       if (!elements.has(sel)) elements.set(sel, stubElement());
       return elements.get(sel);
     },
-    // app.js reaches for getElementById by name (not querySelector) when it
-    // toggles the challenge link, and guards the call away when the document has
-    // no such method -- which is how the earlier harness silently skipped the
-    // branch. Resolving it through querySelector keeps one stub per element, so
-    // a test can watch the very node the app toggled.
-    getElementById: (id) => ctx.document.querySelector('#' + id),
     // Resolves seeded selectors to the list a test put there, and nothing
     // otherwise. A control wired from a NodeList -- the lobby's series-length
     // toggle -- does not exist in a test unless the harness was told what the

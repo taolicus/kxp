@@ -812,7 +812,7 @@ function openChoose(mode) {
 // as a link. Setting the flag here -- before the transition into waiting -- is
 // what keeps the screen from showing a bare spinner over the code just made.
 function showInvite(token) {
-  const inp = document.getElementById('challenge-url');
+  const inp = $('#challenge-url');
   if (inp) inp.value = location.origin + '/?challenge=' + encodeURIComponent(token);
   challengePending = true;
 }
@@ -851,7 +851,7 @@ function tokenFromPaste(value) {
 // permission prompt, and the select() is what the command copies from; it is the
 // fallback for a browser with no share sheet and for a dismissed one.
 function copyInvite() {
-  const inp = document.getElementById('challenge-url');
+  const inp = $('#challenge-url');
   if (!inp) return;
   inp.select();
   try { document.execCommand('copy'); } catch (e) {}
@@ -860,12 +860,12 @@ function copyInvite() {
 // Paint the invite screen from the reservation flag. Called on entering the wait
 // and when "search for anyone" leaves the reservation without leaving the screen.
 function renderInvite() {
-  if (typeof document === 'undefined' || !document.getElementById) return;
-  const link = document.getElementById('challenge-link');
+  if (typeof document === 'undefined' || !document.querySelector) return;
+  const link = $('#challenge-link');
   if (link && link.classList) link.classList.toggle('hidden', !challengePending);
-  const search = document.getElementById('btn-search');
+  const search = $('#btn-search');
   if (search && search.classList) search.classList.toggle('hidden', !challengePending);
-  const title = document.getElementById('queue-title');
+  const title = $('#queue-title');
   if (title) title.textContent = challengePending ? 'Invite a friend' : 'Searching for an opponent\u2026';
 }
 
@@ -873,7 +873,7 @@ function renderInvite() {
 // screen usable rather than bounce the player to the lobby, so the message lives
 // here instead of the shared notice.
 function setClaimError(msg) {
-  const el = document.getElementById('claim-error');
+  const el = $('#claim-error');
   if (!el) return;
   el.textContent = msg || '';
   if (el.classList) el.classList.toggle('hidden', !msg);
@@ -1733,7 +1733,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // to float: an unhandled rejection from a cancelled sheet would reach the
   // error beacon and read as a client fault.
   $('#btn-share').addEventListener('click', () => {
-    const inp = document.getElementById('challenge-url');
+    const inp = $('#challenge-url');
     const url = inp && inp.value;
     if (!url) return;
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
@@ -1757,7 +1757,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // reply, so nothing moves the screen here; a refusal shows inline and leaves
   // the screen -- and the player's own code, if they hold one -- intact.
   $('#btn-claim').addEventListener('click', () => {
-    const inp = document.getElementById('claim-url');
+    const inp = $('#claim-url');
     const token = tokenFromPaste(inp && inp.value);
     if (!token) {
       setClaimError('Paste a link or code first.');
