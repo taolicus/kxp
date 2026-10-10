@@ -801,6 +801,23 @@ function showInvite(token) {
   challengePending = true;
 }
 
+// Mint a fresh challenge reservation and move to the invite screen on a 200.
+// The lobby's confirm and Play Again's online rematch post the same request and
+// both answer a 200 the same way; they differ only in which transition follows
+// and in what a refusal restores, so those are the parameters. The caller arms
+// its own button -- entering the invite screen re-arms it (see show).
+function mintChallenge(pair, event, onRefuse) {
+  post('/challenge', pair).then((res) => {
+    if (res && res.ok) {
+      showInvite((res.data || {}).token);
+      transition(event);
+      return;
+    }
+    clearPending();
+    if (onRefuse) onRefuse(res);
+  });
+}
+
 // The token out of whatever the player pasted: a full /?challenge= URL or a bare
 // token. The link is opaque and carries no format beyond its path, so the only
 // thing to strip is the surrounding URL when one was pasted.
@@ -1582,14 +1599,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     armPending(btn);
     if (mode === 'online') {
       // Invite-first: the confirm reserves the player at the lobby's chosen
-      // length and hands them a code, rather than entering the matchmaker.
-      post('/challenge', { roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }).then((res) => {
-        if (res && res.ok) {
-          showInvite((res.data || {}).token);
-          transition('queue');
-          return;
-        }
-        clearPending();
+      // length and hands them a code, rather than entering the matchmaker. A
+      // refusal restores the mode the button was pressed for, so the same tap
+      // retries the same request.
+      mintChallenge({ roundsTarget: cpuTarget, drawEnds: cpuDrawEnds }, 'queue', (res) => {
         pendingMode = mode;
         if (res && res.status === 409) setNotice('You are already in a match.');
       });
@@ -1784,14 +1797,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // one is minted and the invite screen returns with a new code. The length
       // is the match that just ran, not the lobby's current selection.
       armPending($('#btn-again'));
-      post('/challenge', { roundsTarget: again, drawEnds: againEnds }).then((res) => {
-        if (res && res.ok) {
-          showInvite((res.data || {}).token);
-          transition('rematch:online');
-          return;
-        }
-        clearPending();
-      });
+      mintChallenge({ roundsTarget: again, drawEnds: againEnds }, 'rematch:online');
     }
   });
   $('#btn-mode').addEventListener('click', () => {
