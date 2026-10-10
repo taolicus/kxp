@@ -1148,6 +1148,21 @@ function clearPending() {
   pendingButtons = [];
 }
 
+// Arm a button for a request whose success a later SSE frame confirms, and re-arm
+// it if the request is refused instead (a non-ok reply or a dropped fetch). That
+// arm-post-clear shape is the shared preamble of the CPU, tower, and rematch
+// entries. onRefuse runs after the re-arm, e.g. to restore what the press was
+// for, so a rejection reads as the same tap still pending rather than as a fresh
+// one.
+function postPending(btn, promise, onRefuse) {
+  armPending(btn);
+  Promise.resolve(promise).then((res) => {
+    if (res && res.ok) return;
+    clearPending();
+    if (onRefuse) onRefuse(res);
+  });
+}
+
 function transition(ev, data) {
   const to = SM.next(state, ev);
   if (!to) {
@@ -1616,10 +1631,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       return;
     }
-    const p = postCPU(mode);
-    Promise.resolve(p).then((res) => {
-      if (res && res.ok) return;
-      clearPending();
+    postPending(btn, postCPU(mode), (res) => {
       pendingMode = mode;
       if (res && res.status === 409) setNotice('You are already in a match.');
     });
@@ -1788,10 +1800,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const again = lastTarget || cpuTarget;
     const againEnds = lastDrawEnds ?? (again <= 1);
     if (lastMode === 'cpu') {
-      armPending($('#btn-again'));
-      post('/cpu', { roundsTarget: again, drawEnds: againEnds }).then((res) => {
-        if (!res || !res.ok) clearPending();
-      });
+      postPending($('#btn-again'), post('/cpu', { roundsTarget: again, drawEnds: againEnds }));
     } else {
       // Invite-first rematch: the ended match's reservation is spent, so a fresh
       // one is minted and the invite screen returns with a new code. The length
@@ -1811,11 +1820,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#ladder-fight').addEventListener('click', () => {
     const btn = $('#ladder-fight');
     if (btn.disabled) return;
-    armPending(btn);
-    const p = postCPU('ladder');
-    Promise.resolve(p).then((res) => {
-      if (!res || !res.ok) clearPending();
-    });
+    postPending(btn, postCPU('ladder'));
   });
   // Leaving mid-run. The tower draws the whole run, so without this the one
   // screen that shows all of it would be the one a player could not back out of.
