@@ -981,7 +981,6 @@ function planFromCountdown(d) {
     plannedShootAt = d.shootAt;
     slotStep = KXP.countdownPainter(() => Date.now(), d.shootAt, d.windowMs, () => clockSkew);
   }
-  clearTimeout(slotTimer);
   tick();
   if (plan.actionable) {
     punTimer = setTimeout(() => {
