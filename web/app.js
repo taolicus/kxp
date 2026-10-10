@@ -173,6 +173,14 @@ function stopReadyLoop() {
   readyTimer = null;
 }
 
+// The teardown every non-game entry opens with: stop asking to be readied for a
+// round and disarm the stall watchdog that was watching one. Both are idempotent,
+// so an entry that tears down twice, or never armed, is safe.
+function leaveLiveRound() {
+  stopReadyLoop();
+  clearTimeout(stallTimer);
+}
+
 function sendReady() { post('/ready'); }
 
 // The ack waits for the announced background to decode *and* for a presented
@@ -1214,8 +1222,7 @@ function enterMatchFromScratch(d, oppChar, oppName) {
 
 const enter = {
   lobby(d) {
-    stopReadyLoop();
-    clearTimeout(stallTimer);
+    leaveLiveRound();
     resetGame();
     ladderFloor = -1;
     ladderPair = null;
@@ -1238,8 +1245,7 @@ const enter = {
   },
 
   waiting(d) {
-    stopReadyLoop();
-    clearTimeout(stallTimer);
+    leaveLiveRound();
     show('queue');
     // Whether the screen shows the player's own code and the "search for anyone"
     // fallback is read here, the one entry both paths reach: a reservation keeps
@@ -1252,8 +1258,7 @@ const enter = {
   },
 
   matched(d) {
-    stopReadyLoop();
-    clearTimeout(stallTimer);
+    leaveLiveRound();
     setNotice(null);
     const stage = setBg(d);
     showGame();
@@ -1360,9 +1365,8 @@ const enter = {
   },
 
   result(d) {
-    stopReadyLoop();
+    leaveLiveRound();
     clearTimeout(shootTimer);
-    clearTimeout(stallTimer);
     lockMoves();
     lastMode = d.mode || 'online';
     lastTarget = Number(d.roundsTarget) || 0;
@@ -1403,8 +1407,7 @@ const enter = {
   // looking at rather than over a result they are still reading -- and from the
   // picker's start button, so the mode's first screen is the run itself.
   ladder() {
-    stopReadyLoop();
-    clearTimeout(stallTimer);
+    leaveLiveRound();
     // A roster that emptied between the match and this frame -- a deploy, a
     // roster written down to nothing -- leaves no floors to draw and no fighter
     // to send out. The lobby is where the mode lives either way.
