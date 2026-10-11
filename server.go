@@ -394,6 +394,20 @@ func (h *Hub) requireClient(w http.ResponseWriter, id string) *Client {
 	return c
 }
 
+// rejectInMatchLocked answers 409 "already in a match" and reports true when c
+// already holds a live match. The caller holds h.mu, and this unlocks it before
+// writing the error -- the locked-then-unlock shape every guarded preamble had,
+// kept in one place. It enforces the invariant that one client is in at most one
+// match.
+func (h *Hub) rejectInMatchLocked(w http.ResponseWriter, c *Client) bool {
+	if c.match == nil {
+		return false
+	}
+	h.mu.Unlock()
+	h.handlerError(w, http.StatusConflict, "already in a match")
+	return true
+}
+
 func (h *Hub) handlerError(w http.ResponseWriter, code int, msg string) {
 	h.metrics.incReject(code, msg)
 	w.Header().Set("Content-Type", "application/json")
@@ -930,9 +944,7 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 	// Same invariant as handleCPU: one client, at most one live match. Without
 	// this a client mid-round could be dropped into the queue and paired into a
 	// concurrent match, with the same interleaved-stream result.
-	if c.match != nil {
-		h.mu.Unlock()
-		h.handlerError(w, http.StatusConflict, "already in a match")
+	if h.rejectInMatchLocked(w, c) {
 		return
 	}
 	if len(h.queue) >= maxQueue {
@@ -1135,9 +1147,7 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	// tells a side still in *that* match to go idle, so the orphan's teardown is
 	// suppressed and the client keeps a phantom round on screen. Reject instead,
 	// so one client is in at most one match.
-	if c.match != nil {
-		h.mu.Unlock()
-		h.handlerError(w, http.StatusConflict, "already in a match")
+	if h.rejectInMatchLocked(w, c) {
 		return
 	}
 	if h.active.Load() >= maxMatches {
@@ -1367,9 +1377,7 @@ func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
-	if c.match != nil {
-		h.mu.Unlock()
-		h.handlerError(w, http.StatusConflict, "already in a match")
+	if h.rejectInMatchLocked(w, c) {
 		return
 	}
 	if ch, ok := h.challenge[c.pid]; ok {
@@ -1416,9 +1424,7 @@ func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
-	if c.match != nil {
-		h.mu.Unlock()
-		h.handlerError(w, http.StatusConflict, "already in a match")
+	if h.rejectInMatchLocked(w, c) {
 		return
 	}
 	ch, ok := h.challenges[req.Token]
