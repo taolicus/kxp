@@ -442,6 +442,15 @@ func (h *Hub) handlerError(w http.ResponseWriter, code int, msg string) {
 	log.Printf("kxp: reject %d %q", code, msg)
 }
 
+// okJSON writes the empty success body every state-changing POST returns. It
+// also sets the JSON content type, which only handleQueue used to set alone --
+// the other seven answered with the bare body -- so the handlers now agree and
+// a client can rely on the header.
+func okJSON(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte("{}"))
+}
+
 func (h *Hub) decode(w http.ResponseWriter, r *http.Request, v any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBodyBytes))
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
@@ -982,8 +991,7 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	h.mu.Unlock()
 	c.sendEv(evt("waiting", map[string]any{"ts": time.Now().UnixMilli()}))
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte("{}"))
+	okJSON(w)
 	go h.tryMatch()
 }
 
@@ -1012,7 +1020,7 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 	if cancelled {
 		c.sendEv(evt("state", map[string]any{"state": "idle"}))
 	}
-	w.Write([]byte("{}"))
+	okJSON(w)
 }
 
 func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
@@ -1071,7 +1079,7 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.ackReady(i)
-	w.Write([]byte("{}"))
+	okJSON(w)
 }
 
 // seriesOffer is the series lengths a match may be asked for, as decisive round
@@ -1188,7 +1196,7 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	m.drawEnds = drawEnds
 	h.startMatchLocked(m)
 	h.mu.Unlock()
-	w.Write([]byte("{}"))
+	okJSON(w)
 }
 
 func (h *Hub) handleCharacters(w http.ResponseWriter, r *http.Request) {
@@ -1255,7 +1263,7 @@ func (h *Hub) handleCharacter(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	c.character = req.Character
 	h.mu.Unlock()
-	w.Write([]byte("{}"))
+	okJSON(w)
 }
 
 func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
@@ -1322,7 +1330,7 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusConflict, "move already submitted")
 		return
 	}
-	w.Write([]byte("{}"))
+	okJSON(w)
 }
 
 func clip(s string, n int) string {
@@ -1359,7 +1367,7 @@ func (h *Hub) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 	h.metrics.incBeacon(kind)
 	log.Printf("kxp: beacon id=%s kind=%s state=%s detail=%q ts=%d", clip(req.ID, 64), kind, clip(req.State, 48), clip(req.Detail, 256), req.TS)
-	w.Write([]byte("{}"))
+	okJSON(w)
 }
 func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -1495,5 +1503,5 @@ func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request) {
 	m.requeue = func(int) bool { return false }
 	h.startMatchLocked(m)
 	h.mu.Unlock()
-	w.Write([]byte("{}"))
+	okJSON(w)
 }
