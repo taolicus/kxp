@@ -406,6 +406,16 @@ func (h *Hub) client(id string) *Client {
 	return h.clients[id]
 }
 
+// activeMatch returns c's current match, or nil when c has none. The caller
+// does not hold h.mu; the accessor takes it for the read, because c.match is
+// plain state and an unlocked read is a data race.
+func (h *Hub) activeMatch(c *Client) *match {
+	h.mu.Lock()
+	m := c.match
+	h.mu.Unlock()
+	return m
+}
+
 // requireClient resolves a request's connection id to its client, answering 400
 // "not connected" and returning nil when there is none, so a handler opens with
 // `c := h.requireClient(w, req.ID); if c == nil { return }`. It is the shared
@@ -1032,9 +1042,7 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 	if c == nil {
 		return
 	}
-	h.mu.Lock()
-	m := c.match
-	h.mu.Unlock()
+	m := h.activeMatch(c)
 	if m == nil {
 		h.handlerError(w, http.StatusBadRequest, "no active match")
 		return
@@ -1291,7 +1299,6 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 	if c == nil {
 		return
 	}
-	h.mu.Lock()
 	// The clock is sampled once, here, and that single reading is both the
 	// late-bound check below and the arrival stamp on the move. Sampling it
 	// twice is what let a pick submitted in the final sliver of the window pass
@@ -1305,8 +1312,7 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 	// buffered before the deadline fired, and a move that lands after the run
 	// loop captured its snapshot is just drained at finishMatch (it can only
 	// lose a round that had already effectively closed).
-	m := c.match
-	h.mu.Unlock()
+	m := h.activeMatch(c)
 	if m == nil {
 		h.handlerError(w, http.StatusBadRequest, "no active match")
 		return
