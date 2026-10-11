@@ -357,6 +357,32 @@ func (h *Hub) creatorClientLocked(pid string) *Client {
 	return nil
 }
 
+// dropChallengeByPidLocked removes the open reservation keyed to pid and the
+// token that points back at it, if either exists. The caller holds h.mu.
+func (h *Hub) dropChallengeByPidLocked(pid string) {
+	ch, ok := h.challenge[pid]
+	if !ok {
+		return
+	}
+	delete(h.challenge, pid)
+	if ch.token != "" {
+		delete(h.challenges, ch.token)
+	}
+}
+
+// dropChallengeByTokenLocked removes the reservation filed under tok and the pid
+// that points back at it, if either exists. The caller holds h.mu.
+func (h *Hub) dropChallengeByTokenLocked(tok string) {
+	ch, ok := h.challenges[tok]
+	if !ok {
+		return
+	}
+	delete(h.challenges, tok)
+	if ch.creatorPid != "" {
+		delete(h.challenge, ch.creatorPid)
+	}
+}
+
 func validID(id string) bool {
 	if len(id) > 64 || len(id) < 1 {
 		return false
@@ -860,21 +886,13 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 			s.client.match = nil
 			teardown[i] = true
 			// Consume any open challenge involving this side (match produced)
-			if ch, ok := h.challenge[s.client.pid]; ok {
-				delete(h.challenge, s.client.pid)
-				if ch.token != "" {
-					delete(h.challenges, ch.token)
-				}
-			}
+			h.dropChallengeByPidLocked(s.client.pid)
 		}
 	}
 	// Also consume challenges that reference this match
 	for tok, ch := range h.challenges {
 		if ch.match == m {
-			delete(h.challenges, tok)
-			if ch.creatorPid != "" {
-				delete(h.challenge, ch.creatorPid)
-			}
+			h.dropChallengeByTokenLocked(tok)
 		}
 	}
 	h.mu.Unlock()
@@ -996,12 +1014,7 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 	// reservation keyed to this player. Both maps are guarded by h.mu, so the
 	// drop must be inside the lock. A disconnect is not this path: the
 	// reservation is keyed to the player, so a closed stream leaves it open.
-	if ch, ok := h.challenge[c.pid]; ok {
-		delete(h.challenge, c.pid)
-		if ch.token != "" {
-			delete(h.challenges, ch.token)
-		}
-	}
+	h.dropChallengeByPidLocked(c.pid)
 	h.mu.Unlock()
 	if cancelled {
 		c.sendEv(evt("state", map[string]any{"state": "idle"}))
@@ -1160,12 +1173,7 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		c.queueing = false
 	}
 	// If the player has an open challenge, drop it (they chose CPU mode)
-	if ch, ok := h.challenge[c.pid]; ok {
-		delete(h.challenge, c.pid)
-		if ch.token != "" {
-			delete(h.challenges, ch.token)
-		}
-	}
+	h.dropChallengeByPidLocked(c.pid)
 	m := h.makeMatch(target, side{client: c}, side{bot: true, character: opponent})
 	// The engine's default is the 1-off inference; the wire has spoken, so the
 	// floor's rule is the request's. Set before startMatchLocked, so it lands
