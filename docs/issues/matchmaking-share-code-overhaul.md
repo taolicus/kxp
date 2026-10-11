@@ -151,3 +151,10 @@ lobby; route `waiting + challenge` to the lobby client-side. The one gate that
 blocked the button regardless — the online-count `disabled` — is already gone:
 *Play Online* is live from first paint (see `architecture.md`, the invite
 screen).
+
+**Deferred by the owner (current).** Taken up after
+[client-code-hygiene](../tasks/closed/client-code-hygiene.md) landed, the three
+collisions above were put to the owner and the call was to keep the button press
+for now: *Play Online* stays and the home screen does not mint on load. The
+questions above remain the ones to answer before it is a task, and none of the
+three is settled.
