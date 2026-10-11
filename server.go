@@ -946,17 +946,10 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 	// default; drawEnds follows the target unless the request names it, again
 	// the same way. So what a client can ask the queue for is what it can ask
 	// a CPU match for, default aside.
-	target := req.RoundsTarget
-	if target == 0 {
-		target = 1
-	}
-	if !validSeriesTarget(target) {
-		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
+	target, drawEnds, errMsg := normalizeTarget(req.RoundsTarget, 1, req.DrawEnds)
+	if errMsg != "" {
+		h.handlerError(w, http.StatusBadRequest, errMsg)
 		return
-	}
-	drawEnds := target <= 1
-	if req.DrawEnds != nil {
-		drawEnds = *req.DrawEnds
 	}
 	h.mu.Lock()
 	// Same invariant as handleCPU: one client, at most one live match. Without
@@ -1098,6 +1091,27 @@ func validSeriesTarget(n int) bool {
 	return false
 }
 
+// normalizeTarget applies the length rules /queue, /cpu and /challenge share: an
+// absent target (0) takes def, the result must be one of the offered lengths,
+// and drawEnds defaults to true for a single round and false for a series unless
+// the request names it (a pointer, so absent and explicit false stay different).
+// The returned message is non-empty for an unsupported target, which the caller
+// answers as a 400; it is empty otherwise. Only def differs between the three
+// callers -- the queue and a challenge default to one round, /cpu to a series.
+func normalizeTarget(t, def int, drawEnds *bool) (int, bool, string) {
+	if t == 0 {
+		t = def
+	}
+	if !validSeriesTarget(t) {
+		return 0, false, "unsupported roundsTarget"
+	}
+	de := t <= 1
+	if drawEnds != nil {
+		de = *drawEnds
+	}
+	return t, de, ""
+}
+
 func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ID                string
@@ -1111,23 +1125,16 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 	// Absent means the client predates the choice, so it gets the default rather
 	// than an error: the field is additive and a tab open across the deploy must
 	// still be able to start a match.
-	target := req.RoundsTarget
-	if target == 0 {
-		target = defaultSeriesTarget
-	}
-	if !validSeriesTarget(target) {
-		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
-		return
-	}
+	//
 	// Whether a drawn round ends the match. Absent means the inference one round
 	// always had -- a match of one round is whatever that round came to -- so an
 	// older client is unaffected. The ladder is the only caller that says
 	// otherwise: it always asks for replays, because a drawn round must not
-	// decide a floor. Pointer rather than plain bool because absent and explicit
-	// false are different requests here.
-	drawEnds := target <= 1
-	if req.DrawEnds != nil {
-		drawEnds = *req.DrawEnds
+	// decide a floor.
+	target, drawEnds, errMsg := normalizeTarget(req.RoundsTarget, defaultSeriesTarget, req.DrawEnds)
+	if errMsg != "" {
+		h.handlerError(w, http.StatusBadRequest, errMsg)
+		return
 	}
 	// Which fighter the bot plays, for a ladder floor. Absent means the random
 	// pick this handler always made, so an older client and every probe are
@@ -1368,17 +1375,10 @@ func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
 	// a target nobody could ask the queue for would be a series the lobby never
 	// described, and absent means one round with drawEnds=true, today's
 	// hardwired reservation.
-	target := req.RoundsTarget
-	if target == 0 {
-		target = 1
-	}
-	if !validSeriesTarget(target) {
-		h.handlerError(w, http.StatusBadRequest, "unsupported roundsTarget")
+	target, drawEnds, errMsg := normalizeTarget(req.RoundsTarget, 1, req.DrawEnds)
+	if errMsg != "" {
+		h.handlerError(w, http.StatusBadRequest, errMsg)
 		return
-	}
-	drawEnds := target <= 1
-	if req.DrawEnds != nil {
-		drawEnds = *req.DrawEnds
 	}
 	c := h.requireClient(w, req.ID)
 	if c == nil {
