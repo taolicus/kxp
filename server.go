@@ -1204,14 +1204,23 @@ func (h *Hub) handleCharacters(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(characters)
 }
 
+// gaugesLocked returns the two instantaneous counts /health and /metrics both
+// report, taking h.mu itself and releasing it before returning -- the same
+// lock-then-read-then-unlock shape the two inline readings had. Despite the
+// name, a caller does not hold the lock.
+func (h *Hub) gaugesLocked() (online, queue int) {
+	h.mu.Lock()
+	online = len(h.clients)
+	queue = len(h.queue)
+	h.mu.Unlock()
+	return online, queue
+}
+
 // handleHealth reports process liveness plus a few instantaneous gauges. It is
 // deliberately exempt from rate limiting (a read-only probe) so monitors and
 // the e2e readiness gate can always reach it.
 func (h *Hub) handleHealth(w http.ResponseWriter, r *http.Request) {
-	h.mu.Lock()
-	online := len(h.clients)
-	queue := len(h.queue)
-	h.mu.Unlock()
+	online, queue := h.gaugesLocked()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"status":        "ok",
@@ -1229,10 +1238,7 @@ func (h *Hub) handleHealth(w http.ResponseWriter, r *http.Request) {
 // handleMetrics returns the pollable counter snapshot. Read-only, exempt from
 // rate limiting for the same reason as /health.
 func (h *Hub) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	h.mu.Lock()
-	online := len(h.clients)
-	queue := len(h.queue)
-	h.mu.Unlock()
+	online, queue := h.gaugesLocked()
 	out := h.metrics.Copy()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
