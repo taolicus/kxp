@@ -99,6 +99,7 @@ Build on a stable foundation without rewriting the core.
 - [Busy affordances](tasks/closed/busy-affordances.md)
 - [Remove dead engine state](tasks/closed/engine-dead-state.md)
 - [De-duplicate the client's start paths and drop dead surface](tasks/closed/client-code-hygiene.md)
+- [De-duplicate the hub's handler boilerplate](tasks/closed/server-handler-boilerplate.md)
 
 ## Phase 4 — Public features
 
