@@ -380,6 +380,20 @@ func (h *Hub) client(id string) *Client {
 	return h.clients[id]
 }
 
+// requireClient resolves a request's connection id to its client, answering 400
+// "not connected" and returning nil when there is none, so a handler opens with
+// `c := h.requireClient(w, req.ID); if c == nil { return }`. It is the shared
+// preamble of /queue, /cancel, /ready, /cpu, /challenge, /join, /move and
+// /character.
+func (h *Hub) requireClient(w http.ResponseWriter, id string) *Client {
+	c := h.client(id)
+	if c == nil {
+		h.handlerError(w, http.StatusBadRequest, "not connected")
+		return nil
+	}
+	return c
+}
+
 func (h *Hub) handlerError(w http.ResponseWriter, code int, msg string) {
 	h.metrics.incReject(code, msg)
 	w.Header().Set("Content-Type", "application/json")
@@ -888,9 +902,8 @@ func (h *Hub) handleQueue(w http.ResponseWriter, r *http.Request) {
 	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
-	c := h.client(req.ID)
+	c := h.requireClient(w, req.ID)
 	if c == nil {
-		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
 	// The length is validated against the same closed set /cpu offers, because
@@ -956,9 +969,8 @@ func (h *Hub) handleCancel(w http.ResponseWriter, r *http.Request) {
 	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
-	c := h.client(req.ID)
+	c := h.requireClient(w, req.ID)
 	if c == nil {
-		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
 	cancelled := false
@@ -990,9 +1002,8 @@ func (h *Hub) handleReady(w http.ResponseWriter, r *http.Request) {
 	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
-	c := h.client(req.ID)
+	c := h.requireClient(w, req.ID)
 	if c == nil {
-		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
 	h.mu.Lock()
@@ -1106,9 +1117,8 @@ func (h *Hub) handleCPU(w http.ResponseWriter, r *http.Request) {
 		}
 		opponent = req.OpponentCharacter
 	}
-	c := h.client(req.ID)
+	c := h.requireClient(w, req.ID)
 	if c == nil {
-		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
 	h.mu.Lock()
@@ -1213,9 +1223,8 @@ func (h *Hub) handleCharacter(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "invalid character")
 		return
 	}
-	c := h.client(req.ID)
+	c := h.requireClient(w, req.ID)
 	if c == nil {
-		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
 	h.mu.Lock()
@@ -1239,9 +1248,8 @@ func (h *Hub) handleMove(w http.ResponseWriter, r *http.Request) {
 		h.handlerError(w, http.StatusBadRequest, "invalid move")
 		return
 	}
-	c := h.client(req.ID)
+	c := h.requireClient(w, req.ID)
 	if c == nil {
-		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
 	h.mu.Lock()
@@ -1354,9 +1362,8 @@ func (h *Hub) handleChallenge(w http.ResponseWriter, r *http.Request) {
 	if req.DrawEnds != nil {
 		drawEnds = *req.DrawEnds
 	}
-	c := h.client(req.ID)
+	c := h.requireClient(w, req.ID)
 	if c == nil {
-		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
 	h.mu.Lock()
@@ -1404,9 +1411,8 @@ func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request) {
 	if err := h.decode(w, r, &req); err != nil {
 		return
 	}
-	c := h.client(req.ID)
+	c := h.requireClient(w, req.ID)
 	if c == nil {
-		h.handlerError(w, http.StatusBadRequest, "not connected")
 		return
 	}
 	h.mu.Lock()
