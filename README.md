@@ -8,72 +8,57 @@ original terminal game.
 
 ## Features
 
-- **Single-binary web app** — the UI is embedded in the executable.
-- **Play Online** — opens an invite screen: it reserves you at the mode the
-  lobby's control is showing (one round or first to 3, the control naming the
-  draw rule) and hands you a code to share, beside a field for pasting a friend's
-  code. Share it through the browser's own share sheet where there is one, or the
-  copy button; either way the link is live while it waits and is spent when its
-  match ends, so it pairs exactly two players once. **Search for anyone** instead
-  leaves the reservation and joins the global matchmaker at the same length. A
-  series keeps the score as pips under each fighter and re-opens the ready
-  handshake between rounds. Synced countdown and a shared **PUN!** instant either
-  way.
-- **Play vs CPU** — a bot picks a random move after a random reaction delay, in
-  a series you pick in the lobby: one round (a draw is the result) or first to 3
-  (a draw replays). One round is the default, and the lobby remembers the mode
-  you last chose — its length and what a draw does. A series is scored as pips
-  under each fighter; a 1-off has no score to keep.
-- **Arcade Mode** — one floor per character in a random order, your own
-  character as the final mirror, the same stock bot on every floor. A floor is
-  first-to-1 at a lobby length of one — a drawn round replays, so a draw never
-  costs the run — and first to 3 at a length of three. A win climbs a
-  floor, a loss sends you back to the bottom, and progress is remembered in this
-  browser (`localStorage`). The mode opens on the tower and each floor starts from
-  its Fight button: the whole order drawn bottom-up with your fighter standing on
-  the floor you have reached, beside the one you are about to fight — after a win,
-  climbing into place.
-- **Match History** — every match this browser finished, one row per match and
-  expandable to the rounds inside it: the two fighters, the score, the stage and
-  how long ago it was. The record is kept in this browser (`localStorage`), capped
-  at fifty and cleared with the site — a record of what you played, not a ranking.
-- **Timing rules** — picks outside the shoot window are rejected with `400`
-  (a second pick with `409`); no pick in time is a timeout loss.
-- Server-sent events (SSE) for push, plain `POST` for player actions — no
-  WebSocket dependency.
+- **Play Online** — invite-first: you reserve a slot, share the code (or the
+  browser's share sheet), and the first pairing spends it. **Search for anyone**
+  joins the global matchmaker instead.
+- **Play vs CPU** — a bot that picks at a random moment, in a one-round or
+  first-to-3 series.
+- **Arcade Mode** — climb one floor per character, your own fighter as the final
+  mirror. A loss sends you back to the bottom; progress is remembered in this
+  browser.
+- **Match History** — every match this browser finished, expandable to its
+  rounds. Kept locally, capped at fifty — a record of what you played, not a
+  ranking.
+- **Server-side rules** — the browser renders; the server judges every pick by
+  arrival time. No clock or UI state on the client can change a result.
+- **Single binary, no dependencies** — the UI is embedded in the executable;
+  push is SSE, actions are plain `POST`, and there is no WebSocket to keep alive.
 
 ## Run
+
+Needs Go 1.26 or newer.
 
 ```sh
 go run .
 ```
 
-The server auto-picks the first available port in the 8000–8999 range and
-prints it on startup. To bind a specific address (e.g. behind nginx):
+The server picks the first free port in the 8000–8999 range and prints it; open
+`http://localhost:<port>`. To bind a specific address (e.g. behind nginx):
 
 ```sh
 go run . -addr :8080
 ```
 
-Run `go run . -h` for the operational flags: `-shoot-window` and
-`-ready-timeout` (round timing), `-sse-write-deadline`, `-max-body-bytes`, and
-the `-rl-*` rate limits. Each defaults to the value the game ships with, so an
-install can pin them and be recorded rather than running whatever the build
-compiled in.
-
-Then open `http://localhost:<port>`.
+`go run . -h` lists the operational flags — round timing
+(`-shoot-window`, `-ready-timeout`), `-sse-write-deadline`, `-max-body-bytes`
+and the `-rl-*` rate limits. Each defaults to what the game ships with, so an
+install can pin them rather than run whatever the build compiled in.
 
 ## Play
 
 1. Open the app in two browser tabs (one per player). Hit **Play Online** in one
-   to reserve that player and get an invite code, then paste it into the other
-   tab's invite screen to pair them. For a solo match hit **Play vs CPU**, or hit
+   to reserve that player and get a code, then paste it into the other tab's
+   invite screen to pair them. For a solo match hit **Play vs CPU**, or hit
    **Arcade Mode** to climb the roster one floor at a time.
 2. When a match is found, the round waits for you. **Both sides do** — keep the
    app in the foreground and a round never fires at someone who wasn't looking at
    the screen.
 3. A **READY – KA – CHI** countdown leads to **PUN!**.
 4. Tap ✊ ✋ ✌️ right on PUN — results are shown with your reaction timing.
+
+The lobby's length control (one round, or first to 3) decides whether a drawn
+round ends the match or replays; it rides with the length because the length
+alone does not say what a draw does.
 
 If the countdown is missing on your network — you go straight from *MATCH FOUND*
 to *PUN!* — open **`/diag.html`** on the same origin. It plays one throwaway
@@ -86,115 +71,40 @@ lasts, so it has no slack to spare and each second of delay costs a beat.
 A single Go binary serves an embedded web UI and enforces every game rule
 server-side — the browser is a renderer only. Matches progress
 `idle → countdown → shoot (PUN) → done`; the server judges every pick by
-arrival time relative to `shootAt`, so the client can't game the result the
-two players share. See [architecture](docs/features/architecture.md) for the internals.
+arrival time relative to `shootAt`, so the client can't game the result the two
+players share. See [architecture](docs/features/architecture.md) for the
+internals.
 
 ## Docs
 
-- [features/](docs/features/) — durable knowledge about the system as it now
-  stands. [architecture](docs/features/architecture.md) (engine, timing model,
-  matchmaking, SSE lifecycle, testing),
-  [protocol](docs/features/protocol.md) (the full wire format: events, endpoints,
-  the client state table, clock handling),
-  [character selection](docs/features/character-selection.md),
-  [characters](docs/features/characters.md) (who is playable, and what happens to
-  a selection or a saved ladder when the list changes),
-  [backgrounds](docs/features/backgrounds.md) (asset pipeline).
-- [development/](docs/development/) — how this repo is built and verified, and
-  which device a task belongs on:
-  [environment.md](docs/development/environment.md) (the two measured hosts —
-  the Android/Termux phone and the MacBook Pro — their toolchains, and how to
-  re-measure both),
-  [device-aware-workflow.md](docs/development/device-aware-workflow.md) (match
-  the work to the device, and record a deferral where it belongs),
-  [verification.md](docs/development/verification.md) (what each gate does and
-  does not cover, the browser-free probe suite, and the verdicts it reports) and
-  [deployment.md](docs/development/deployment.md) (the VPS, `deploy.sh`, and the
-  per-project layout kxp shares with its siblings).
-  What each host can and cannot verify, and the working loop, live in
-  [AGENTS.md](AGENTS.md).
-- [workflow/](workflow/README.md) — the rules that generalise across projects:
-  [device-aware-development.md](workflow/device-aware-development.md),
-  [incremental-slice-scoping.md](workflow/incremental-slice-scoping.md),
-  [commit-policy.md](workflow/commit-policy.md) and
-  [execution-and-stopping.md](workflow/execution-and-stopping.md). What is
-  specific to kxp — the invariants, the gates, the register rules — stays in
-  [AGENTS.md](AGENTS.md).
-- [register.md](docs/register.md) — what each of the directories below is for,
-  and the rules that keep them separate.
-- [tasks/](docs/tasks/) — work items: what is specified and not yet landed
-  ([open/](docs/tasks/open/), with `phase` and dependencies in the frontmatter) and
-  what has landed ([closed/](docs/tasks/closed/)).
-- [roadmap.md](docs/roadmap.md) — why the phases are ordered as they are, with a
-  link per landed item. Not a register, and carries no status.
-- [issues/](docs/issues/) — observed reliability symptoms parked until
-  their cause is confirmed, one file per symptom.
+Durable knowledge about the system as it stands lives in
+[features/](docs/features/): [architecture](docs/features/architecture.md)
+(engine, timing model, matchmaking, SSE lifecycle, testing),
+[protocol](docs/features/protocol.md) (the full wire format — events, endpoints,
+the client state table, clock handling),
+[characters](docs/features/characters.md) (who is playable, and what happens to a
+selection or a saved ladder when the list changes),
+[character selection](docs/features/character-selection.md) and
+[backgrounds](docs/features/backgrounds.md) (asset pipeline).
 
-## Testing
+For working on the repo — the gates, the host limits, and what each device can
+verify — start at [AGENTS.md](AGENTS.md), which points into
+[development/](docs/development/), [workflow/](workflow/README.md) and
+[deployment.md](docs/development/deployment.md).
 
-```sh
-npm run links     # internal doc paths resolve, and each #fragment names a heading
-go test ./...     # Go suite
-npm run unit      # web/*.test.cjs + tools/lib/*.test.mjs
-npm run e2e       # browser suite — boots its own server; needs Chromium
-```
-
-`npm run unit` is the way to run the client and harness tests; the files it
-globs are not a list to reproduce by hand, and every `web/app.*.test.cjs`
-(`web/app.countdown.test.cjs` and `web/app.reconnect.test.cjs` among them) runs
-the real `app.js` against a stubbed context, which nothing else covers. Pass a
-subset to check part of the doc tree: `npm run links -- AGENTS.md docs/features`.
-
-(`go test -race` isn't supported on the arm64-Android dev device, and the phone
-has no Chromium. CI covers both: `.github/workflows/ci.yml` runs `gofmt`, `go
-vet`, `go test` plain and `-race`, `npm run unit`, `npm run links` **and the
-browser suite** on a GitHub-hosted runner for every push and pull request. It is
-a third runner beside the phone and the laptop, not a replacement for either, and
-it never touches the deployed server.)
-
-The browser-free probe suite (`tools/t1`–`t8`) is the integration path. It
-targets the **deployed (production) server directly over the internet**; it
-never boots the app locally, needs only Node >= 20, and takes the production
-origin through a required `BASE_URL`:
-
-```sh
-npm install
-npm run t1                                   # measures the link first
-BASE_URL=https://your-server.example npm run tall
-```
-
-See [tools/README.md](tools/README.md) for what each probe proves and why the
-origin is required rather than defaulted. The flows create real (short-lived)
-matches by design. `npm run e2e` adds a Playwright suite that renders the lobby
-in a real Chromium — by default against a server it boots itself, or against the
-origin `BASE_URL` names. It needs Chromium, so not the phone; the CI `browser`
-job runs it. Styling and layout are asserted nowhere on any host. What each gate
-does and does not cover is in
-[docs/development/verification.md](docs/development/verification.md), and the
-host limits are in [AGENTS.md](AGENTS.md).
-
-## Status
-
-Core hardening, testability, and the pure-engine refactor are done, including
-per-IP rate limiting and resource caps — live on the public server.
-
-This file deliberately does not track what is left. Each of those lives in
-exactly one place, so there is one status to keep true:
-
-- [tasks/open/](docs/tasks/open/) — decided and scheduled work, one file per
-  item.
-- [tasks/closed/](docs/tasks/closed/) — what has landed.
-- [issues/](docs/issues/) — live symptoms parked until their cause is
-  confirmed.
+Work in flight is a file per item, and its directory is its only status:
+[tasks/open/](docs/tasks/open/) (decided, not landed),
+[tasks/closed/](docs/tasks/closed/) (landed) and
+[issues/](docs/issues/) (symptoms parked until their cause is confirmed).
+[roadmap.md](docs/roadmap.md) carries the phase structure and no status; the
+rules behind the split are in [register.md](docs/register.md). This file
+deliberately tracks none of it — one status to keep true is one place to look.
 
 ## Deploying
 
-`sh deploy.sh` cross-builds the linux/amd64 binary from the phone, copies it to
-the VPS, restarts `kxp.service`, and checks `GET /health` reports the commit it
-just built — the same value probe `t1` holds against local `HEAD`. Override the
-host, directory or health URL with `DEPLOY_HOST`, `DEPLOY_DIR` and `HEALTH_URL`.
-The VPS keeps no source checkout: the binary embeds `web/` (`//go:embed`), so it
-carries the whole client, and `-X main.buildSHA` supplies the identity that a
-build outside a work tree would otherwise lose. The layout it fits — ports,
-systemd, nginx, TLS — is the pattern the sibling projects share and is documented
-in [deployment.md](docs/development/deployment.md).
+`sh deploy.sh` cross-builds the linux/amd64 binary, copies it to the VPS,
+restarts the service, and checks `GET /health` reports the commit it just built —
+the same value probe `t1` holds against local `HEAD`, which is what tells a real
+deploy from a stale binary. Override the host, directory or health URL with
+`DEPLOY_HOST`, `DEPLOY_DIR` and `HEALTH_URL`. The layout it fits is in
+[deployment.md](docs/development/deployment.md).
