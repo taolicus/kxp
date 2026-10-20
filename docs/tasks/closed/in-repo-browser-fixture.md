@@ -78,9 +78,15 @@ see the gap below):
 cannot run on the phone, so the config's two modes, the `webServer` boot, and
 the CI `browser` job are verified by the first CI run and not before it. The
 local boot above is what makes that run's success expected rather than hoped
-for, but it is not the same claim as a green browser job. The `browser` job in
-`.github/workflows/ci.yml` is that gate; the first run against this commit is
-the evidence.
+for, but it is not the same claim as a green browser job.
+
+**And that run has now happened.** CI run `39409579853` on the landing commit
+reported `test`, `unit` and `browser` all `success`, with the browser job's
+`Install Chromium` and `Browser suite` steps green. Read against the paragraph
+below, production's `/health` was `activeMatches: 0` immediately after it, so
+the match the suite played was created on the runner and not on the public
+server. That is the whole claim this fixture makes, and it is now machine-checked
+rather than argued.
 
 **The negative proof for "local mode really is local"** is the same one the CI
 task already relies on: `npm run tall` is deliberately absent from CI because it

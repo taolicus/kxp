@@ -107,8 +107,9 @@ browser-free, which is what keeps them runnable on the phone.
 
 Cheap re-checks of the facts on this page. The first four work on either host,
 the next two are phone-only (macOS has neither `nproc` nor `free`), and the last
-is Mac-only — the phone has no way to install Chromium, which is why the browser
-suite is a laptop gate:
+is Mac-only — the phone has no way to install Chromium, which was why the browser
+suite was a laptop gate and is why CI runs it too
+([verification.md](verification.md#the-third-runner)):
 
 ```sh
 uname -a                      # kernel + arch

@@ -21,15 +21,15 @@ them a given task belongs on, see
 | `go test ./...` | server internals, engine, handlers, and the invariants `AGENTS.md` lists | client behaviour, the deployed binary |
 | `npm run unit` | client state machine, countdown arming, snapshot reconciliation, probe harness | rendering, CSS, console errors |
 | `npm run tall` | the deployed server over real SSE and HTTP | anything this machine cannot observe |
-| `npm run e2e` | the client rendered in a real browser: what the lobby paints, the POST that leaves the tab, console and page errors | styling and layout, the wire format (the probes own that); needs Chromium, so the laptop only |
+| `npm run e2e` | the client rendered in a real browser: what the lobby paints, the POST that leaves the tab, console and page errors | styling and layout, the wire format (the probes own that); needs Chromium, so not the phone |
 
-Three of these are also run by CI (`.github/workflows/ci.yml`) — `gofmt`, `go
-vet`, `go test` (plain **and** `-race`), `npm run unit` and `npm run links`.
-CI is the third runner, not a replacement for either dev host: the same suite
-still runs on the phone and on the laptop. What CI adds is the two claims no dev
-host here can make, `-race` and a browser. See
-[the third runner](#the-third-runner) below for what it runs, what it
-deliberately does not, and why the browser job is still missing.
+Every gate in that table is also run by CI (`.github/workflows/ci.yml`) — that
+is `gofmt`, `go vet`, `go test` (plain **and** `-race`), `npm run unit`,
+`npm run links` and `npm run e2e`, the last being the one the phone cannot run
+at all. CI is the third runner, not a replacement for either dev host: what it
+adds is the two claims no dev host here can make, `-race` and a browser. See
+[the third runner](#the-third-runner) below for what it runs and what it
+deliberately does not.
 
 `npm run unit` is the catch-all for client and harness tests, and the gate column
 above mirrors the run list in `AGENTS.md` ("Verify") — adding a gate means adding
@@ -174,11 +174,12 @@ to remove. If you touch client logic, add a client-behaviour test — the probe
 suite will not catch it for you.
 
 `npm run e2e` closes the part of that gap a browser can close: three specs in
-`e2e/` drive a real Chromium at the deployed origin, so a render that never
-lands, a control that ships unlit, a POST that carries the wrong rule, or an
-error thrown while the client paints all fail a test that neither `go test` nor
-a probe can see. It runs where Chromium installs — the laptop, never the phone
-([environment.md](environment.md)) — so on the phone the gap above still holds
+`e2e/` drive a real Chromium — by default at a server the config boots itself,
+or at an origin `BASE_URL` names — so a render that never lands, a control that
+ships unlit, a POST that carries the wrong rule, or an error thrown while the
+client paints all fail a test that neither `go test` nor a probe can see. It
+runs where Chromium installs: the laptop, and now CI. Never the phone
+([environment.md](environment.md)), so on the phone the gap above still holds
 and a rendering claim is hand-checked and says so.
 
 What is still unreached is stated rather than implied: styling and layout are
