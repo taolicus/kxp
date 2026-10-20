@@ -339,8 +339,10 @@ never gets committed. The kxp-specific parts:
 - **No deployment tooling beyond `deploy.sh`**, the one script that copies the
   built binary to the VPS: nginx vhosts, systemd units, TLS and the rest live on
   the host and outside this repo. Do not add deploy scripts, systemd units, or
-  infra config here. The script itself, and the layout it assumes, is documented
-  in [docs/development/deployment.md](docs/development/deployment.md).
+  infra config here — and do not transcribe the host into a doc either: the
+  script and its reasoning are in
+  [docs/development/deployment.md](docs/development/deployment.md), the paths,
+  ports and units stay on the host.
 - **A finished slice is deployed before the next one starts**, and the deploy is
   verified rather than assumed: `sh deploy.sh` ends by checking that `/health`
   reports the commit it just built, and probe `t1` re-checks the same value

@@ -5,18 +5,29 @@ why the pieces are shaped the way they are. The host pattern is shared with the
 sibling projects (asteroids, komikan) and was documented for it there; this file
 is the kxp instance of it.
 
+## What lives where
+
+The repo holds **how we deploy and why**: the script, the build flags, and the
+identity contract that makes a deploy checkable. The host holds **where and as
+whom**: the unit file, the vhost, TLS, paths, ports and ownership. Nothing here
+should be a second copy of something the host already states, because the host
+can change without this file hearing about it — and a stale host detail reads
+exactly like a current one. `deploy.sh` reaches the host through the `tao` SSH
+alias (in your own `~/.ssh/config`, so the repo names no address) and takes the
+remote directory and health URL from `DEPLOY_DIR` and `HEALTH_URL`, whose
+defaults are in the script itself.
+
 ## The shape
 
 `deploy.sh` is the whole mechanism, run from the phone:
 
 1. cross-build `linux/amd64` with `CGO_ENABLED=0` and `-trimpath -ldflags="-s -w"`;
-2. `scp` the binary to `/home/dev/kxp/kxp.new`;
-3. `mv` it over `kxp` and `systemctl restart kxp.service`;
+2. `scp` the binary to `<remote dir>/kxp.new`;
+3. `mv` it over `kxp` and restart the systemd service;
 4. check `GET /health` reports the SHA that was just built.
 
 There is no remote build and no `git pull` on the host. The VPS keeps no source
-checkout: `/home/dev/kxp` holds the binary and nothing else, like
-`/home/dev/komikan` and `/home/dev/asteroids`.
+checkout: its directory holds the binary and nothing else.
 
 **Why copy a binary rather than build on the host.** Go is not installed on the
 VPS (komikan's deployment notes record the cross-compile as the pattern), so a
@@ -27,14 +38,16 @@ half-pulled, and a rollback is the previous binary.
 **Why a single binary can carry the whole app.** `main.go` embeds the client
 with `//go:embed web`, and serves it and the API from one `http.ServeMux`
 (`hub.routes()` plus the file server). So `web/` needs no separate web root on
-the host and no nginx `root` — nginx only reverse-proxies to
-`127.0.0.1:18080`, and SSE needs `proxy_buffering off` there. This is the
-property that makes "copy the binary" sufficient rather than a simplification
-that drops assets.
+the host and no nginx `root` — nginx only reverse-proxies to the loopback
+address the service binds, and SSE needs `proxy_buffering off` there. This is
+the property that makes "copy the binary" sufficient rather than a
+simplification that drops assets.
 
 **Why the `.new` + rename.** `mv` over a running binary's path is a rename, so
 the inode the running process has open is untouched and the replacement is
-atomic. Writing the file in place would fault a running process mid-write.
+atomic. Writing the file in place would fault a running process mid-write. The
+deploy does this as a privileged user because the service runs as its own
+unprivileged one; the host says who and the script does not care.
 
 ## Build identity
 
@@ -58,22 +71,9 @@ a stale binary or a service that failed to come up is a deploy failure rather
 than a silent success. `HEALTH_URL` defaults to `/health` and not the site root
 for that reason.
 
-## Host facts
-
-From komikan's deployment notes, and re-checkable there:
-
-- SSH: `ssh tao` (root). `/home/dev/<name>` is `dev:dev`; the binary is
-  root-owned 0755 because the deploy copies it as root.
-- Port allocation on localhost: 18080 kxp, 18081 asteroids, 18082 komikan. Next
-  free: 18083.
-- systemd: `/etc/systemd/system/kxp.service`, `User=dev`,
-  `WorkingDirectory=/home/dev/kxp`, `ExecStart=/home/dev/kxp/kxp -addr
-  127.0.0.1:18080`.
-- nginx + certbot: `kxp.tao.cl` (TLS via certbot, auto-renewal configured).
-
 ## Rejected: pulling and building on the VPS
 
-The earlier flow was `ssh tao 'su - dev -c "cd /home/dev/kxp && git pull && go
+The earlier flow was `ssh tao 'su - dev -c "cd <remote dir> && git pull && go
 build kxp"'`, i.e. the VPS held a checkout and built from it. It was dropped for
 the source copy it kept on the host and the two toolchains it implied — the
 identity of the deployed binary then depended on that checkout being clean, up
@@ -82,3 +82,8 @@ verified. A stale remote checkout built on a `git pull` that silently failed
 looks exactly like a successful deploy. The stamped-SHA health check is the
 thing that makes the difference visible, and it is why the current form is not
 merely fewer steps.
+
+The host consequences of that removal — which account owns the binary, which
+directory it sits in, and whether a checkout was left behind — were checked on
+the host at the time and are recorded in the closed task
+([deploy-script.md](../tasks/closed/deploy-script.md)), not restated here.
