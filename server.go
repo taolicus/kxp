@@ -224,16 +224,36 @@ type Hub struct {
 	challenges map[string]*challengeEntry // token -> challenge
 	challenge  map[string]*challengeEntry // creator pid -> challenge (open)
 
+	// pacing is the engine timing this hub hands to every match it builds,
+	// snapshotted from the package vars at NewHub. Reading those vars per match
+	// made a hub's matches depend on global state that a test (or an operator's
+	// flag parse) could change under them: a match goroutine still running from
+	// an earlier test would requeue, build a fresh match through tryMatch, and
+	// read a var the next test had just written back. That was the third CI
+	// -race report, the one that came in through makeMatch -> newMatch. A hub
+	// owned by one test reads that test's snapshot and nobody else's.
+	pacing matchPacing
+
 	// tuneMatch, when set, adjusts a match's pacing fields at construction --
 	// before start() launches run, which is what makes it race-free where
-	// writing the package vars those fields are snapshotted from is not. Nil in
-	// production (NewHub leaves it unset); a test that needs a gate to give up
-	// quickly, or a series to skip its between-rounds pause, sets it on the hub
-	// before the match is built. This exists only because the pacing a test wants
-	// to shrink is read on run's goroutine: a test that drove makeMatch itself
-	// could set the fields directly, but several reach matches through the HTTP
-	// handlers, and a post-hoc write would race run's read.
+	// writing the pacing after the match exists is not. Nil in production
+	// (NewHub leaves it unset); a test that needs a gate to give up quickly, or
+	// a series to skip its between-rounds pause, sets it on the hub before the
+	// match is built. This exists only because the pacing a test wants to shrink
+	// is read on run's goroutine: a test that drove makeMatch itself could set
+	// the fields directly, but several reach matches through the HTTP handlers,
+	// and a post-hoc write would race run's read.
 	tuneMatch func(*match)
+}
+
+// matchPacing is the engine timing a hub gives each match it builds. Every field
+// is a copy of the package var of the same name, taken when the hub is created.
+type matchPacing struct {
+	shootWindow  time.Duration
+	readyTimeout time.Duration
+	readyLease   time.Duration
+	readyRecheck time.Duration
+	seriesBreak  time.Duration
 }
 
 func NewHub() *Hub {
@@ -248,6 +268,13 @@ func NewHub() *Hub {
 		limiter:    newRateLimiter(rlCapacity, rlRefillPerSec, rlMaxEntries, nil),
 		metrics:    newHubMetrics(),
 		started:    time.Now(),
+		pacing: matchPacing{
+			shootWindow:  shootWindow,
+			readyTimeout: readyTimeout,
+			readyLease:   readyLease,
+			readyRecheck: readyRecheck,
+			seriesBreak:  seriesBreak,
+		},
 	}
 }
 
@@ -833,6 +860,14 @@ func (h *Hub) firstEqualPairLocked() (int, int) {
 func (h *Hub) makeMatch(roundsTarget int, a, b side) *match {
 	src := [2]side{a, b}
 	m := newMatch(roundsTarget)
+	// The hub's snapshot wins over newMatch's read of the package vars: a match
+	// built through tryMatch belongs to this hub, and its timing must not depend
+	// on whatever a test or a late flag parse did to the globals since.
+	m.shootWindow = h.pacing.shootWindow
+	m.gateTimeout = h.pacing.readyTimeout
+	m.readyLease = h.pacing.readyLease
+	m.readyRecheck = h.pacing.readyRecheck
+	m.seriesBreak = h.pacing.seriesBreak
 	if h.tuneMatch != nil {
 		h.tuneMatch(m)
 	}

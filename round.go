@@ -342,15 +342,16 @@ type match struct {
 // as one round always did.
 func newMatch(roundsTarget int) *match {
 	return &match{
-		readyCh:      make(chan struct{}),
-		now:          time.Now,
-		pickMove:     randomMove,
-		botThink:     defaultBotThink,
-		readyLease:   readyLease,
-		readyRecheck: readyRecheck,
-		seriesBreak:  seriesBreak,
-		gateTimeout:  readyTimeout,
-		shootWindow:  shootWindow,
+		readyCh:  make(chan struct{}),
+		now:      time.Now,
+		pickMove: randomMove,
+		botThink: defaultBotThink,
+		// The pacing fields are left zero on purpose. Zero means "use the
+		// shipped value" to the *Or accessors, so a match built here directly --
+		// an engine test that drives judge or waitReady without a hub -- runs on
+		// the defaults without newMatch reading the package vars, which a test
+		// or a flag parse could be writing concurrently. Hub.makeMatch fills
+		// them from the hub's own snapshot before the match runs.
 		roundsTarget: roundsTarget,
 		drawEnds:     roundsTarget <= 1,
 		round:        1,
