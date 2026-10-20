@@ -28,7 +28,7 @@ endpoints answer on, with the browser pointed at it. Concretely, one of:
   auto-pick is in the way.
 - or the specs are made origin-injectable with a fixture the runner supplies.
 
-**Why this gates the CI task** — [github-actions-ci.md](../tasks/open/github-actions-ci.md)
+**Why this gates the CI task** — [github-actions-ci.md](../tasks/closed/github-actions-ci.md)
 schedules the browser job only behind this. Until there is an origin a runner may
 use, the honest CI shape is the Go and unit jobs alone, and the browser gap stays
 what it already is: closed on the laptop, open on the phone.

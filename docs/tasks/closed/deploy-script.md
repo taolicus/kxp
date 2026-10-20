@@ -40,7 +40,7 @@ the remote checkout.
 ## Out of scope
 
 The `-race`/browser coverage the phone cannot produce. That is a separate item —
-[github-actions-ci.md](../open/github-actions-ci.md) — and this slice does not
+[github-actions-ci.md](../closed/github-actions-ci.md) — and this slice does not
 touch it.
 
 ## Landed

@@ -1,0 +1,60 @@
+name: ci
+
+# CI is the third runner, alongside the phone and the laptop: it exists only for
+# the claims neither dev host can make. `go test -race` refuses on android/arm64,
+# and there is no Chromium on the phone. Everything it runs could be run on a
+# dev host except those, and the same suite still does run there — this adds, it
+# does not move the source of truth (AGENTS.md, "Verify").
+#
+# It never touches the deployed origin. `npm run tall` and `npm run e2e` both
+# create real matches on the live public server, so neither may run here; the
+# jobs below are the origin-free part. See docs/development/verification.md.
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # gofmt is a gate here (AGENTS.md, "Verify") but not in a form CI can use
+      # directly: `gofmt -l .` prints offending files and exits 0, so the check
+      # has to fail on non-empty output.
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt would change:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go test ./...
+      # The race detector needs cgo, so it is a separate step: if the plain
+      # suite already fails, a race report against it says less.
+      - run: go test -race ./...
+
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Both are origin-free by construction — that property is pinned by
+      # tools/lib/harness.test.mjs and recorded in
+      # docs/tasks/closed/unit-gate-needs-origin.md — so they run with no server
+      # behind them. `npm run unit` is the catch-all for the client and harness
+      # tests; the shorter `node --test` form in the README misses the
+      # web/app.*.test.cjs files.
+      - run: npm run unit
+      - run: npm run links

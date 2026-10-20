@@ -88,6 +88,7 @@ Make the system testable and debuggable in production.
 - [Stop counting the harness-driven client tests in prose](tasks/closed/client-behaviour-test-list.md)
 - [`npm run unit` should not need a deployed origin](tasks/closed/unit-gate-needs-origin.md)
 - [CPU determinism hooks](tasks/closed/cpu-determinism-hooks.md)
+- [GitHub Actions CI: recover the gates the phone cannot run](tasks/closed/github-actions-ci.md) (Go + unit jobs landed; the browser job is gated on [the browser fixture](issues/in-repo-browser-fixture.md))
 
 ## Phase 3 — Architecture & features
 

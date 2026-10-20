@@ -136,9 +136,12 @@ globs are not a list to reproduce by hand, and every `web/app.*.test.cjs`
 the real `app.js` against a stubbed context, which nothing else covers. Pass a
 subset to check part of the doc tree: `npm run links -- AGENTS.md docs/features`.
 
-(`go test -race` isn't supported on the arm64-Android dev device; see the
-[automated-test-workflow.md](docs/tasks/closed/automated-test-workflow.md)
-if you add CI.)
+(`go test -race` isn't supported on the arm64-Android dev device, and the phone
+has no Chromium. CI covers both: `.github/workflows/ci.yml` runs the origin-free
+gates — `gofmt`, `go vet`, `go test` plain and `-race`, `npm run unit`, `npm run
+links` — on a GitHub-hosted runner for every push and pull request. It is a third
+runner beside the phone and the laptop, not a replacement for either, and it
+never touches the deployed server.)
 
 The browser-free probe suite (`tools/t1`–`t8`) is the integration path. It
 targets the **deployed (production) server directly over the internet**; it

@@ -158,6 +158,14 @@ npm run tall        # probes t1–t8 — requires an origin (see below), creates
 npm run e2e         # browser suite — needs origin + Chromium, so the laptop only (see below)
 ```
 
+**CI is the third runner** (`.github/workflows/ci.yml`), alongside these two
+hosts. It runs the origin-free gates — `gofmt`, `go vet`, `go test` plain and
+`-race`, `npm run unit`, `npm run links` — on a GitHub-hosted runner, on every
+push and pull request. It adds exactly the two claims no dev host here can make:
+`-race` (which refuses on android/arm64) and, once the browser fixture exists, a
+real Chromium. The other gates still run locally as above; CI does not replace
+them.
+
 `npm run unit` is the catch-all for client and harness tests (the README's
 shorter `node --test web/kxp.test.cjs web/machine.test.cjs` misses
 `web/app.countdown.test.cjs`). `npm run links` is first because it costs
@@ -195,10 +203,17 @@ is a property of the phone alone; run the slice on the laptop and it goes away:
    pointer states directly instead of racing two goroutines. The laptop runs
    `-race` normally, so prefer that device for concurrency work
    ([device-aware-workflow.md](docs/development/device-aware-workflow.md)).
+   **CI runs it too** (`.github/workflows/ci.yml`), so a push is now a
+   machine-checked `-race` run even from the phone — but only after the push, so
+   a concurrency change is still argued at review time and CI is the backstop,
+   not the first reader.
 2. **Rendering / console errors** — `npm run e2e` covers the lobby's render and
    in-browser errors, but only on a host with Chromium — the laptop, never the
    phone. On the phone a rendering claim is hand-checked and says so. Styling
-   and layout are asserted nowhere on either host.
+   and layout are asserted nowhere on either host. CI carries no browser job yet:
+   the suite can only be pointed at an origin it is allowed to use, and there is
+   no such origin for a runner
+   ([in-repo-browser-fixture.md](docs/issues/in-repo-browser-fixture.md)).
 3. **Deployment** — a local build is not the deployed binary, and "it works
    here" is never evidence a change is live. `GET /health` reports `build.sha`;
    probe `t1` asserts it against local `HEAD` and fails loudly on a stale build.

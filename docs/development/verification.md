@@ -23,6 +23,14 @@ them a given task belongs on, see
 | `npm run tall` | the deployed server over real SSE and HTTP | anything this machine cannot observe |
 | `npm run e2e` | the client rendered in a real browser: what the lobby paints, the POST that leaves the tab, console and page errors | styling and layout, the wire format (the probes own that); needs Chromium, so the laptop only |
 
+Three of these are also run by CI (`.github/workflows/ci.yml`) — `gofmt`, `go
+vet`, `go test` (plain **and** `-race`), `npm run unit` and `npm run links`.
+CI is the third runner, not a replacement for either dev host: the same suite
+still runs on the phone and on the laptop. What CI adds is the two claims no dev
+host here can make, `-race` and a browser. See
+[the third runner](#the-third-runner) below for what it runs, what it
+deliberately does not, and why the browser job is still missing.
+
 `npm run unit` is the catch-all for client and harness tests, and the gate column
 above mirrors the run list in `AGENTS.md` ("Verify") — adding a gate means adding
 it in both places. Name the script, not the files it globs: the shorter
@@ -84,6 +92,45 @@ and run the full suite once, at the end.
 The habit is worth keeping on the laptop, where none of this pressure applies:
 the constraint there is availability rather than load
 ([device-aware-workflow.md](device-aware-workflow.md)).
+
+## The third runner
+
+`.github/workflows/ci.yml` runs on GitHub-hosted `ubuntu-latest`, on every push
+and pull request. It is the third runner alongside the phone and the laptop, and
+it exists for the claims neither dev host can make — nothing it runs is a claim
+those hosts own, and the same suite still runs on the phone. `taolicus/kxp` is
+public, so hosted minutes are free and unlimited; no self-hosted runner and no
+secrets are involved, and the job uses the automatic `GITHUB_TOKEN` with
+`contents: read`.
+
+Two jobs, both origin-free:
+
+- **`test`** — `gofmt` (the exit-on-nonempty wrapper below), `go vet ./...`,
+  `go test ./...`, then `go test -race ./...`. The last is the one gate in this
+  repo that no dev host can produce at all: `-race` refuses on android/arm64
+  ([environment.md](environment.md)), so until CI existed a concurrency change
+  was hand-argued and never machine-checked. Plain `go test` runs first so a race
+  report is never read against an already-failing suite.
+- **`unit`** — `npm ci`, `npm run unit`, `npm run links`. Both are origin-free by
+  construction, pinned by `tools/lib/harness.test.mjs` and recorded in
+  [unit-gate-needs-origin.md](../tasks/closed/unit-gate-needs-origin.md), so they
+  run on a runner with no server behind it.
+
+**`gofmt` needs the wrapper.** The gate in [Verify](../../AGENTS.md#verify) is
+`gofmt -l .`, which *prints* offending files and exits 0 — as a CI step it would
+pass on an unformatted tree. The workflow captures the output and fails when it
+is non-empty. That is the one place the CI form and the local form differ, and it
+differs because the local one is read by a person and the CI one is not.
+
+**What CI deliberately does not run is the two suites that need a deployed
+origin.** `npm run tall` and `npm run e2e` both create real matches on the live
+public server; a hosted runner firing either would be load on production and a
+flaky gate for everyone with no way to tell a transport fault from a defect. The
+browser job is therefore absent, not forgotten: [in-repo-browser-fixture.md](../issues/in-repo-browser-fixture.md)
+is the open question of finding an origin a runner is *allowed* to use, and
+[github-actions-ci.md](../tasks/closed/github-actions-ci.md) adds the job once that
+is answered. Until then the browser gap stays what it already is — closed on the
+laptop, open on the phone.
 
 ## The gap probes cannot close
 

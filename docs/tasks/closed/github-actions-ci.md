@@ -1,10 +1,3 @@
----
-phase: 2
-depends-on: []
-gated-on:
-  - in-repo-browser-fixture
----
-
 # GitHub Actions CI: recover the gates the phone cannot run
 
 The phone is the primary dev host and cannot run two of the gates that matter:
@@ -29,7 +22,7 @@ project did in its `features/continuous-integration.md`.
   (`go vet` + `go test -race` on `ubuntu-latest`, plus a `browser` job that
   installs Chromium and runs Playwright) and its `features/continuous-integration.md`
   for why the split is what it is.
-- [automated-test-workflow.md](../closed/automated-test-workflow.md) — the
+- [automated-test-workflow.md](./automated-test-workflow.md) — the
   Phase 2 item that parked exactly this, and why: "wire it into CI whenever a
   suitable host is available".
 
@@ -62,7 +55,7 @@ project did in its `features/continuous-integration.md`.
    either dev host.
 2. **`unit`** — `actions/setup-node` + `npm ci`, `npm run unit` and `npm run
    links`. Both are origin-free by construction (that property is pinned by
-   [unit-gate-needs-origin.md](../closed/unit-gate-needs-origin.md)), so they
+   [unit-gate-needs-origin.md](./unit-gate-needs-origin.md)), so they
    run on a runner with no server. `npm run links` costs nothing and catches the
    rename that nothing else here notices.
 3. **`browser`** — `npx playwright install --with-deps chromium` + `npm run
@@ -71,7 +64,7 @@ project did in its `features/continuous-integration.md`.
 
 ## Acceptance
 
-- A push runs all three jobs on a public repo with no secrets.
+- A push runs the origin-free jobs on a public repo with no secrets.
 - The `test` job fails on a real race and passes when it is removed — proven by
   reintroducing one deliberately in a scratch branch, not assumed.
 - The `browser` job renders the lobby in CI without touching production.
@@ -80,3 +73,46 @@ project did in its `features/continuous-integration.md`.
   [README.md](../../../README.md) all name CI and say which claims it now
   carries. A third runner that the docs do not describe is the drift this
   register exists to prevent.
+
+## Landed
+
+Jobs 1 and 2 are in `.github/workflows/ci.yml`; job 3 is still gated and is not
+in the file. The task moves here with the first two landed because they are
+independently useful and independently revertable — the `-race` gap the phone
+could never close is closed by them alone — and because leaving the whole item
+open behind a browser fixture it does not depend on would report scheduled work
+as unstarted.
+
+**What landed.** `test` (checkout, `setup-go` on `go-version-file: go.mod`,
+`gofmt`, `go vet ./...`, `go test ./...`, `go test -race ./...`) and `unit`
+(`setup-node` 22 with npm caching, `npm ci`, `npm run unit`, `npm run links`),
+both on `ubuntu-latest`, both with `timeout-minutes: 10`, triggered on push and
+pull request with `contents: read`. Public repo, so no secrets and free minutes.
+
+**`gofmt` is the one gate that differs between local and CI.** Locally it is
+`gofmt -l .` and a person reading the output; that command exits 0 on an
+unformatted tree, so as a CI step it would pass on everything. The step captures
+the output and fails on non-empty. Verified to bite: with a deliberately
+misformatted file in the tree the wrapper failed and named it, and with the tree
+clean it passed — the bare `gofmt -l .` exited 0 in both cases.
+
+**Origin-free was checked, not assumed.** With `tools/.base-url` moved away and
+`BASE_URL` unset — a runner's exact situation — `npm run unit` passed 222/222 and
+`npm run links` reported 136 documents, 443 links, 0 broken. That is the
+property [unit-gate-needs-origin.md](./unit-gate-needs-origin.md) landed, and it
+is what lets the `unit` job exist without a server.
+
+**`go test -race` was not verified from this host, and cannot be.** `-race`
+refuses on android/arm64, so the step's own behaviour is observed only on the
+runner. What was checked here is that `go1.26.5` — the version `go-version-file:
+go.mod` resolves — exists in the Go release index, so `setup-go` will not fail on
+an unknown toolchain. The race-detection claim itself is the runner's.
+
+**Not done, and why.** The `browser` job is absent rather than stubbed: `npm run
+e2e` resolves its origin through `playwright.config.mjs` → `tools/lib/base.mjs`,
+which requires a real origin, and the only origin in existence is production —
+which a runner must not use. That is
+[in-repo-browser-fixture.md](../../issues/in-repo-browser-fixture.md), still open.
+The three acceptance items above that name all three jobs or the browser job
+remain unmet on purpose; they belong to whoever answers that issue, and the
+verification docs say so rather than implying a browser is covered.
