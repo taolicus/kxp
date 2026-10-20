@@ -88,6 +88,16 @@ the match the suite played was created on the runner and not on the public
 server. That is the whole claim this fixture makes, and it is now machine-checked
 rather than argued.
 
+**That claim is about the `browser` job, and the `browser` job is green.** The
+`test` job is a separate matter: the next run (`39410641914`, a docs-only commit
+that touched no Go test) failed its `-race` step on a pre-existing, intermittent
+race in `sse_lifetime_test.go` — a leaked match goroutine, filed with its
+diagnosis in
+[test-helper-goroutine-leak.md](../open/test-helper-goroutine-leak.md) and deferred to
+the laptop, which is the only host that can run `-race`. So the browser fixture
+is verified and CI as a whole is not durably green until that race is fixed; the
+two claims are separate and this record does not conflate them.
+
 **The negative proof for "local mode really is local"** is the same one the CI
 task already relies on: `npm run tall` is deliberately absent from CI because it
 creates matches on the live server, and this suite is only admissible here

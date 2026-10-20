@@ -90,6 +90,7 @@ Make the system testable and debuggable in production.
 - [CPU determinism hooks](tasks/closed/cpu-determinism-hooks.md)
 - [GitHub Actions CI: recover the gates the phone cannot run](tasks/closed/github-actions-ci.md) (all three jobs landed, including the browser one — see [the browser fixture](tasks/closed/in-repo-browser-fixture.md))
 - [The test helpers race on the package vars they shrink](tasks/closed/test-helper-package-var-race.md) (found by CI's first `-race` run; green in CI now)
+- [The tests leak match goroutines, and `captureLog` is what catches it](tasks/open/test-helper-goroutine-leak.md) (the second race CI found — deferred to the laptop, which is the only host that can run `-race`)
 
 ## Phase 3 — Architecture & features
 
