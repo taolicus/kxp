@@ -210,12 +210,14 @@ button.primary:hover {
    deliberately far larger than the title's own size. An emoji glyph fills only
    part of its em box — roughly three quarters — so a mark set at the title's
    2.6rem reads about level with the wordmark instead of over it, which is why
-   this is 5rem rather than something nearer the title's number. The title keeps
-   its own margin below; this only has to clear the title above it, and the mark
-   is hidden from the accessibility tree (see index.html), so nothing here
-   carries meaning a reader needs -- only scale. */
+   this is 5rem rather than something nearer the title's number. The gap below
+   is `--s2` rather than the `--s1` the title's own margin would imply: the mark
+   is the tallest thing on the screen and needs the separation to read as sitting
+   over the wordmark rather than leaning on it. The mark is hidden from the
+   accessibility tree (see index.html), so nothing here carries meaning a reader
+   needs -- only scale. */
 .lobby-fist {
-  margin: 0 0 var(--s1);
+  margin: 0 0 var(--s2);
   font-size: 5rem;
   line-height: 1;
 }
@@ -719,8 +721,11 @@ button.primary:hover {
 @media (max-height: 800px) and (max-width: 768px) {
   .mkx-title { font-size: 2.2rem; margin-bottom: var(--s3); }
   /* The emblem shrinks with the title it sits over: the compacting below exists
-     to keep the lobby on one screen, and a full-size mark would spend it back. */
-  .lobby-fist { font-size: 3.6rem; }
+     to keep the lobby on one screen, and a full-size mark would spend it back.
+     Not as far as the title, though -- the sizes stay in the proportions the
+     full-size screen sets (mark ~2x its title), so the fist reads as the
+     landing screen's mark at every height rather than as a smaller cousin. */
+  .lobby-fist { font-size: 4.4rem; }
 
   .stage {
     min-height: 5.5rem;
@@ -735,7 +740,7 @@ button.primary:hover {
 
 @media (max-height: 600px) {
   .mkx-title { font-size: 1.9rem; margin-bottom: var(--s2); }
-  .lobby-fist { font-size: 3rem; }
+  .lobby-fist { font-size: 4rem; }
   .stage {
     min-height: 4.5rem;
     padding-top: var(--s2);
