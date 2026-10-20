@@ -14,9 +14,11 @@ register rules, the commit areas — where their links are.
 
 - [AGENTS.md](../../../AGENTS.md) itself, in full — the file being split. Every
   rule must survive the move.
-- [asteroids/workflow/](../../../../asteroids/workflow/) and
-  [bootstrap/bootstrap.sh](../../../../bootstrap/bootstrap.sh) — the target
-  shape and the wording worth adopting.
+- The sibling projects' `workflow/` directories (asteroids, komikan) and the
+  `bootstrap/bootstrap.sh` that generates them — the target shape and the
+  wording worth adopting. These live outside this repo; this slice was written
+  on the host that also holds them, and reading them is not required to review
+  the result, which is self-contained in `workflow/`.
 - [docs/register.md](../../register.md) — the level-1 register rules, which are
   kxp-specific and must **not** be flattened into the bootstrap model.
 - [docs/development/device-aware-workflow.md](../../development/device-aware-workflow.md)
