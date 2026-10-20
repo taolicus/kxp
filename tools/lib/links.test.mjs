@@ -89,3 +89,23 @@ test('splitTarget separates path from anchor, and says which is absent', () => {
   assert.deepEqual(splitTarget('#frag'), { path: '', anchor: 'frag' });
   assert.deepEqual(splitTarget('a.md'), { path: 'a.md', anchor: '' });
 });
+
+test('check-links rejects links escaping the repository', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const { spawnSync } = await import('node:child_process');
+
+  const dir = mkdtempSync(join(tmpdir(), 'links-'));
+  const doc = join(dir, 'test.md');
+  writeFileSync(doc, '[bad](../../../../etc/passwd)\n[good](README.md)\n');
+
+  const here = dirname(fileURLToPath(import.meta.url));
+  const checker = join(here, '..', 'check-links.mjs');
+  const res = spawnSync(process.execPath, [checker, doc], { encoding: 'utf8' });
+  assert.notEqual(res.status, 0);
+  const out = res.stdout + res.stderr;
+  assert.match(out, /no such file/);
+  assert.match(out, /etc\/passwd/);
+});

@@ -77,6 +77,14 @@ function main(argv) {
       const shown = relative(repoRoot, file);
       const where = `${shown.startsWith('..') ? file : shown}:${line}`;
 
+      // Never allow a link to resolve outside the repository. The gate's verdict
+      // must not depend on whether sibling checkouts exist on the host.
+      const relDest = relative(repoRoot, dest);
+      if (relDest.startsWith('..') || relDest === '..') {
+        findings.push(`${where} -> ${target}  no such file`);
+        continue;
+      }
+
       if (!existsSync(dest)) {
         findings.push(`${where} -> ${target}  no such file`);
         continue;
