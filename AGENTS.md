@@ -164,7 +164,10 @@ hosts. It runs the origin-free gates — `gofmt`, `go vet`, `go test` plain and
 push and pull request. It adds exactly the two claims no dev host here can make:
 `-race` (which refuses on android/arm64) and, once the browser fixture exists, a
 real Chromium. The other gates still run locally as above; CI does not replace
-them.
+them. The `-race` step is red as of the commit that added it — it found a race in
+the test helpers on its first run
+([test-helper-package-var-race.md](docs/tasks/open/test-helper-package-var-race.md)),
+which is the gate doing its job.
 
 `npm run unit` is the catch-all for client and harness tests (the README's
 shorter `node --test web/kxp.test.cjs web/machine.test.cjs` misses

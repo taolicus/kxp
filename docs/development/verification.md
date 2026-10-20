@@ -110,7 +110,10 @@ Two jobs, both origin-free:
   repo that no dev host can produce at all: `-race` refuses on android/arm64
   ([environment.md](environment.md)), so until CI existed a concurrency change
   was hand-argued and never machine-checked. Plain `go test` runs first so a race
-  report is never read against an already-failing suite.
+  report is never read against an already-failing suite. **It found one on its
+  first run** — a race in the test helpers, not the server
+  ([test-helper-package-var-race.md](../tasks/open/test-helper-package-var-race.md))
+  — so the job is red until that lands. That is the gate working, not failing.
 - **`unit`** — `npm ci`, `npm run unit`, `npm run links`. Both are origin-free by
   construction, pinned by `tools/lib/harness.test.mjs` and recorded in
   [unit-gate-needs-origin.md](../tasks/closed/unit-gate-needs-origin.md), so they
