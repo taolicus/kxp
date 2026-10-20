@@ -2,8 +2,10 @@
 
 Play it at **[kxp.pifia.net](https://kxp.pifia.net)**.
 
-A real-time online Rock-Paper-Scissors game in Go, with a web UI. Tap your move
-the moment **PUN!** appears.
+A real-time online Rock-Paper-Scissors tournament, played on a shared
+countdown. **KA — CHI — PUN!** and both fighters throw on the same instant —
+throwing early or missing the window loses the round. Invite a friend, meet a
+stranger, or climb Arcade Mode one fighter at a time.
 
 ## Features
 
