@@ -183,7 +183,6 @@ func readCountdown(t *testing.T, st *sseStream, timeout time.Duration) {
 // seen so far, seeded by `prev`, the result of the round the caller played.
 func finishCPUSeries(t *testing.T, st *sseStream, prev map[string]any) {
 	t.Helper()
-	noSeriesBreak(t)
 	you, opp := int(prev["youRoundWins"].(float64)), int(prev["oppRoundWins"].(float64))
 	for {
 		readCountdown(t, st, 10*time.Second)
@@ -213,7 +212,7 @@ func finishCPUSeries(t *testing.T, st *sseStream, prev map[string]any) {
 }
 
 func TestCPUIntegration(t *testing.T) {
-	h := NewHub()
+	h := noPacing()
 	srv := httptest.NewServer(h.routes())
 	defer srv.Close()
 
@@ -549,7 +548,7 @@ func TestPVPDisconnectDuringMatch(t *testing.T) {
 }
 
 func TestEndpointValidation(t *testing.T) {
-	h := NewHub()
+	h := noPacing()
 	srv := httptest.NewServer(h.routes())
 	defer srv.Close()
 
@@ -690,7 +689,7 @@ func TestReadyAckWhileGateOpenStaysAccepted(t *testing.T) {
 // finishMatch cannot clean that up (its stale-teardown guard suppresses the
 // orphan's frame), so the server has to refuse the second match up front.
 func TestSecondMatchRefusedForLiveClient(t *testing.T) {
-	h := NewHub()
+	h := noPacing()
 	srv := httptest.NewServer(h.routes())
 	defer srv.Close()
 

@@ -20,9 +20,16 @@ type challengeFixture struct {
 	id1, id2, id3 string
 }
 
-func setupChallenge(t *testing.T) *challengeFixture {
+// setupChallenge builds the fixture. A caller that wants the match's gate to
+// give up quickly passes a tuneMatch, which is installed on the hub *before*
+// /join constructs the match: run reads the pacing on entry, so shrinking it
+// afterwards would race that read -- green on a quiet machine, red on a hot one.
+func setupChallenge(t *testing.T, tune ...func(*match)) *challengeFixture {
 	t.Helper()
 	f := &challengeFixture{h: NewHub()}
+	if len(tune) > 0 {
+		f.h.tuneMatch = tune[0]
+	}
 	f.srv = httptest.NewServer(f.h.routes())
 	t.Cleanup(f.srv.Close)
 	f.st1, f.id1 = connectSSE(t, f.srv, "")
@@ -134,11 +141,10 @@ func TestChallengeConsumedAtDecidedEnd(t *testing.T) {
 // The opening handshake never acks: the match is cancelled, and that end
 // consumes the link too.
 func TestChallengeConsumedAtReadyTimeout(t *testing.T) {
-	old := readyTimeout
-	readyTimeout = 20 * time.Millisecond
-	t.Cleanup(func() { readyTimeout = old })
-
-	f := setupChallenge(t)
+	// The gate is what ends this match, and waiting out the shipped 8s would make
+	// the test slower than the SSE reads below allow. The timeout is installed on
+	// the hub, so /join's match is built with it -- before run reads it.
+	f := setupChallenge(t, func(m *match) { m.gateTimeout = 20 * time.Millisecond })
 	f.st1.readEventTyp(t, "state", 5*time.Second)
 	f.st2.readEventTyp(t, "state", 5*time.Second)
 

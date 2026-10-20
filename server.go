@@ -223,6 +223,17 @@ type Hub struct {
 	started    time.Time
 	challenges map[string]*challengeEntry // token -> challenge
 	challenge  map[string]*challengeEntry // creator pid -> challenge (open)
+
+	// tuneMatch, when set, adjusts a match's pacing fields at construction --
+	// before start() launches run, which is what makes it race-free where
+	// writing the package vars those fields are snapshotted from is not. Nil in
+	// production (NewHub leaves it unset); a test that needs a gate to give up
+	// quickly, or a series to skip its between-rounds pause, sets it on the hub
+	// before the match is built. This exists only because the pacing a test wants
+	// to shrink is read on run's goroutine: a test that drove makeMatch itself
+	// could set the fields directly, but several reach matches through the HTTP
+	// handlers, and a post-hoc write would race run's read.
+	tuneMatch func(*match)
 }
 
 func NewHub() *Hub {
@@ -822,6 +833,9 @@ func (h *Hub) firstEqualPairLocked() (int, int) {
 func (h *Hub) makeMatch(roundsTarget int, a, b side) *match {
 	src := [2]side{a, b}
 	m := newMatch(roundsTarget)
+	if h.tuneMatch != nil {
+		h.tuneMatch(m)
+	}
 	m.background = pickBackground()
 	for i := range src {
 		p := matchParty{name: "Opponent", character: src[i].character}

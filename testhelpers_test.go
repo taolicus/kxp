@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 // newPartiedMatch builds an engine match wired to concrete clients, for tests
 // that exercise resolve()/abort()/etc. without running a match or a hub.
 func newPartiedMatch(a, b *Client) *match {
@@ -19,4 +21,16 @@ func newPartiedMatch(a, b *Client) *match {
 		left:      b.alive.Done(),
 	}
 	return m
+}
+
+// noPacing builds a hub whose matches skip the between-rounds pause. The pause
+// exists so a client can read the round it just finished; a test that plays a
+// whole series does not need the wall-clock wait, and it must be removed at
+// construction rather than afterwards -- the match goroutine reads the pacing as
+// it runs, so writing it later is the race CI's first -race run found, just moved
+// from the package var to a field.
+func noPacing() *Hub {
+	h := NewHub()
+	h.tuneMatch = func(m *match) { m.seriesBreak = time.Nanosecond }
+	return h
 }

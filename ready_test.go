@@ -89,13 +89,10 @@ func TestCPUBotAckDoesNotReleaseGate(t *testing.T) {
 // requeueing them put them into the PvP queue for a human opponent they never
 // asked for. The teardown frame says why, so the bounce is explicable.
 func TestCPUReadyTimeoutReturnsHumanToLobby(t *testing.T) {
-	old := readyTimeout
-	readyTimeout = 80 * time.Millisecond
-	defer func() { readyTimeout = old }()
-
 	h := NewHub()
 	a := newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
+	shortReadyTimeout(t, m, 80*time.Millisecond)
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -123,13 +120,10 @@ func TestCPUReadyTimeoutReturnsHumanToLobby(t *testing.T) {
 // to the lobby while the server holds it in the queue — invisible, with no
 // Cancel, and re-matched within the gate window again.
 func TestReadyTimeoutRequeuesAndExplainsBothSides(t *testing.T) {
-	old := readyTimeout
-	readyTimeout = 80 * time.Millisecond
-	defer func() { readyTimeout = old }()
-
 	h := NewHub()
 	a, b := newClient(), newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
+	shortReadyTimeout(t, m, 80*time.Millisecond)
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -236,13 +230,10 @@ func TestReadyAbandonOnLeaveRequeuesSurvivor(t *testing.T) {
 }
 
 func TestReadyTimeoutRequeuesBoth(t *testing.T) {
-	old := readyTimeout
-	readyTimeout = 80 * time.Millisecond
-	defer func() { readyTimeout = old }()
-
 	h := NewHub()
 	a, b := newClient(), newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
+	shortReadyTimeout(t, m, 80*time.Millisecond)
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -323,7 +314,6 @@ func TestOnlineSeriesReacksBetweenRounds(t *testing.T) {
 // is the existing opponent-left with the series state added to it, so a tab
 // open across the change reads a terminal frame rather than a new event type.
 func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
-	noSeriesBreak(t)
 	h := NewHub()
 	a, b := newClient(), newClient()
 	// Distinct fighters, so the terminal frame's identity fields round-trip to a
@@ -331,6 +321,7 @@ func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
 	a.character, b.character = "ronin", "kitsune"
 	t.Cleanup(a.cancel)
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
+	noSeriesBreak(t, m)
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -399,16 +390,6 @@ func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
 // one's own gate was satisfied: waitReady reads it on entry, so this changes
 // the between-rounds gate alone.
 func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
-	noSeriesBreak(t)
-	// Short for both gates: waitReady reads it on entry, and the between-rounds
-	// entry happens the instant judge's pause is over -- before this test has
-	// read the result frame, so it cannot be installed after round one. The
-	// opening gate still has 1.5s to collect two acks from a same-process
-	// client, which is room a client on a phone would never need.
-	old := readyTimeout
-	readyTimeout = 1500 * time.Millisecond
-	defer func() { readyTimeout = old }()
-
 	h := NewHub()
 	// Registered for handleReady's id lookup, as in the reack test.
 	a := registerMoveTestClient(h, "to-between-a")
@@ -417,6 +398,13 @@ func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
 	t.Cleanup(a.cancel)
 	t.Cleanup(b.cancel)
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
+	noSeriesBreak(t, m)
+	// Short for both gates. Long enough that round one's opening handshake, which
+	// collects two acks from same-process clients, still completes; short enough
+	// that the between-rounds gate gives up quickly. A per-match field now, so it
+	// is set before start rather than after round one -- waitReady reads it on
+	// entry, and both gates belong to this match alone.
+	shortReadyTimeout(t, m, 1500*time.Millisecond)
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -478,12 +466,12 @@ func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
 // precisely the state run's gate takes over from. The award itself is pinned
 // end to end by TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide.
 func TestADepartureDuringTheRoundPauseReachesTheGate(t *testing.T) {
-	noSeriesBreak(t)
 	h := NewHub()
 	a, b := newClient(), newClient()
 	t.Cleanup(a.cancel)
 	t.Cleanup(b.cancel)
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
+	noSeriesBreak(t, m)
 
 	b.cancel() // leaves while judge is scoring the round and taking its pause
 	if cont := judgeRoundAs(t, m, a, [2]Result{ResultDraw, ResultDraw}); !cont {

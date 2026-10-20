@@ -38,7 +38,8 @@ var readyTimeout = 8 * time.Second
 // the gate. It must stay comfortably longer than the client's re-ack interval
 // (2s, see armReadyLoop in web/app.js) or a well-behaved client would expire its
 // own lease between acks and stall the match it is behaving correctly in. A
-// package var so tests can shorten it.
+// package var so tests can shorten it; a match snapshots it at construction (see
+// newMatch) so a test shrinks its own match rather than the package.
 var readyLease = 4 * time.Second
 
 // readyRecheck is how often waitReady re-tests freshness. It is only load-bearing
@@ -50,7 +51,8 @@ var readyRecheck = 250 * time.Millisecond
 // seriesBreak is the pause between one round of a series and the next. It exists
 // so the client is still showing the round it just finished -- the result panel,
 // the moves, the scoreboard -- before the next countdown starts repainting over
-// it. A package var so tests do not have to wait it out.
+// it. A package var so tests do not have to wait it out; a match snapshots it at
+// construction, for the same reason as readyLease.
 var seriesBreak = 3 * time.Second
 
 // defaultSeriesTarget is the number of decisive round wins that ends a series
@@ -271,6 +273,26 @@ type match struct {
 	// by advancing it rather than by sleeping. Never nil after newMatch.
 	now func() time.Time
 
+	// readyLease and readyRecheck are the readiness pacing this match runs on,
+	// and seriesBreak is its between-rounds pause. Snapshotted from the package
+	// defaults at construction rather than read from them per use: a test that
+	// shortened the package var to reach a second round without waiting was
+	// writing it while another test's match goroutine was still reading it in
+	// waitReady or judge -- a data race the phone cannot see (no -race on
+	// android/arm64) and which CI's first -race run caught. A per-match field
+	// makes a test shrink its own match and touch no shared state, which is what
+	// the -race detector needs and what the engine's other hooks (now, pickMove,
+	// botThink) already do.
+	readyLease   time.Duration
+	readyRecheck time.Duration
+	seriesBreak  time.Duration
+	// gateTimeout is the same story: operator-settable, so it stays a package var,
+	// but a test that shrinks it to force a gate timeout must shrink its own match
+	// rather than the one every other running match reads. Named apart from the
+	// readyTimeout method below, which is the cancellation that fires when this
+	// expires.
+	gateTimeout time.Duration
+
 	// pickMove chooses the CPU opponent's move, and botThink is how long it waits
 	// before doing so. Both are injectable so a CPU match's rounds are not decided
 	// by math/rand in a test: a test pins the move and removes the wait, and the
@@ -316,6 +338,10 @@ func newMatch(roundsTarget int) *match {
 		now:          time.Now,
 		pickMove:     randomMove,
 		botThink:     defaultBotThink,
+		readyLease:   readyLease,
+		readyRecheck: readyRecheck,
+		seriesBreak:  seriesBreak,
+		gateTimeout:  readyTimeout,
 		roundsTarget: roundsTarget,
 		drawEnds:     roundsTarget <= 1,
 		round:        1,
@@ -426,8 +452,41 @@ func (m *match) sideFreshLocked(i int, now time.Time) bool {
 	if m.sides[i].bot {
 		return true
 	}
-	cutoff := now.Add(-readyLease)
+	cutoff := now.Add(-m.readyLeaseOr())
 	return !m.readyAt[i].IsZero() && !m.readyAt[i].Before(cutoff)
+}
+
+// The four pacing values below are fields so a test can shrink its own match
+// instead of the package var every running match reads (see the field block in
+// the match struct). A struct-literal match never went through newMatch, so the
+// fields are zero there; these accessors fall back to the shipped value, the
+// same shape clock() and botThinkTime() use for their own injectable hooks.
+func (m *match) readyLeaseOr() time.Duration {
+	if m.readyLease == 0 {
+		return readyLease
+	}
+	return m.readyLease
+}
+
+func (m *match) readyRecheckOr() time.Duration {
+	if m.readyRecheck == 0 {
+		return readyRecheck
+	}
+	return m.readyRecheck
+}
+
+func (m *match) seriesBreakOr() time.Duration {
+	if m.seriesBreak == 0 {
+		return seriesBreak
+	}
+	return m.seriesBreak
+}
+
+func (m *match) gateTimeoutOr() time.Duration {
+	if m.gateTimeout == 0 {
+		return readyTimeout
+	}
+	return m.gateTimeout
 }
 
 // waitReady blocks until the countdown may begin. Every match gates on it, CPU
@@ -451,9 +510,9 @@ func (m *match) waitReady() bool {
 	// stands (failure forfeits the series to whoever came back). The flag is
 	// read once here because run clears it only after this returns.
 	betweenRounds := m.betweenRounds.Load()
-	deadline := time.NewTimer(readyTimeout)
+	deadline := time.NewTimer(m.gateTimeoutOr())
 	defer deadline.Stop()
-	recheck := time.NewTicker(readyRecheck)
+	recheck := time.NewTicker(m.readyRecheckOr())
 	defer recheck.Stop()
 	// readyCh is closed the first time every human side has acked. Taking from a
 	// closed channel never blocks, so it has to be nil'd out after the first
@@ -918,7 +977,7 @@ func (m *match) judge() bool {
 	// pause is pacing, and run's gate is where a side that never came back is
 	// found and the present side is awarded. Only a match with no gate to open
 	// -- a bot's rounds -- still ends here, as it always did.
-	if m.wait(seriesBreak) && !m.betweenRounds.Load() {
+	if m.wait(m.seriesBreakOr()) && !m.betweenRounds.Load() {
 		return false
 	}
 	return m.advance(phaseDone, phaseCountdown)

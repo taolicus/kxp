@@ -11,13 +11,29 @@ import (
 // nextRound's bookkeeping directly (fast, and the only way to reach a third
 // round without waiting out two countdowns) and playing real rounds end to end.
 
-// seriesBreak is three seconds of pacing between rounds. The bookkeeping tests
-// call nextRound directly, so they would otherwise spend that long per call.
-func noSeriesBreak(t *testing.T) {
+// noSeriesBreak removes a match's between-rounds pause, so a series test reaches
+// the next round without waiting out three real seconds.
+//
+// It shrinks the match's own field rather than the package var it was built
+// from. That var is read by every match goroutine still running from an earlier
+// test, and writing it there was a data race -- the one CI's first `-race` run
+// caught (see the match fields in round.go). It must be called before the match
+// is started, while no goroutine can be reading the field yet.
+//
+// A nanosecond rather than zero: zero is the "unset, use the default" sentinel
+// for a struct-literal match, so a test that wants no pause has to say so with a
+// value that is not the zero one.
+func noSeriesBreak(t *testing.T, m *match) {
 	t.Helper()
-	old := seriesBreak
-	seriesBreak = 0
-	t.Cleanup(func() { seriesBreak = old })
+	m.seriesBreak = time.Nanosecond
+}
+
+// shortReadyTimeout shrinks a match's opening and between-rounds gate, for a test
+// that wants it to give up quickly. Like noSeriesBreak it sets the match's own
+// field, before start(), rather than the package var every running match reads.
+func shortReadyTimeout(t *testing.T, m *match, d time.Duration) {
+	t.Helper()
+	m.gateTimeout = d
 }
 
 // seriesMatchForTest is a match with a CPU opponent, parked in the phase judge
@@ -25,7 +41,6 @@ func noSeriesBreak(t *testing.T) {
 // something to score.
 func seriesMatchForTest(t *testing.T) (*match, *Client) {
 	t.Helper()
-	noSeriesBreak(t)
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel)
@@ -38,7 +53,6 @@ func seriesMatchForTest(t *testing.T) (*match, *Client) {
 // shape, the length the lobby offers as the quick option.
 func oneRoundMatchForTest(t *testing.T) (*match, *Client) {
 	t.Helper()
-	noSeriesBreak(t)
 	h := NewHub()
 	a := newClient()
 	t.Cleanup(a.cancel)
@@ -238,10 +252,10 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 	// to true at this target and a match one round long is whatever its round
 	// came to. First-to-three PvP is the other neighbour:
 	// TestAPVPMatchCanBeAFirstToThree.
-	noSeriesBreak(t)
 	h := NewHub()
 	a, b := newClient(), newClient()
 	m := h.makeMatch(1, side{client: a}, side{client: b})
+	noSeriesBreak(t, m)
 	if m.seriesMatch() {
 		t.Fatal("a one-round PvP match reports itself as a series")
 	}
@@ -298,7 +312,6 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 // rounds is run's business; that gate is pinned end to end by the
 // TestOnlineSeries* tests in ready_test.go.
 func TestAPVPMatchCanBeAFirstToThree(t *testing.T) {
-	noSeriesBreak(t)
 	h := NewHub()
 	a, b := newClient(), newClient()
 	t.Cleanup(a.cancel)
@@ -333,10 +346,10 @@ func TestAPVPMatchCanBeAFirstToThree(t *testing.T) {
 // option, so this is the difference between a mode and a decoration: judge has to
 // stop the loop, or the player asked for one round and got five.
 func TestASeriesOfOneRoundEndsImmediately(t *testing.T) {
-	noSeriesBreak(t)
 	h := NewHub()
 	a := newClient()
 	m := h.makeMatch(1, side{client: a}, side{bot: true})
+	noSeriesBreak(t, m)
 	m.start()
 	m.ackReady(0)
 
@@ -372,11 +385,11 @@ func TestASeriesOfOneRoundEndsImmediately(t *testing.T) {
 // half of the rule bites too: a first-to-three online match is a series and
 // its `matched` frames carry the target like a CPU one's.
 func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
-	noSeriesBreak(t)
 	h := NewHub()
 
 	cpu := newClient()
 	cm := h.makeMatch(defaultSeriesTarget, side{client: cpu}, side{bot: true})
+	noSeriesBreak(t, cm)
 	cm.start()
 	md := waitForEvent(t, cpu, "matched")
 	if md["roundsTarget"] != float64(defaultSeriesTarget) {
@@ -420,10 +433,10 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 // without having to guess the bot's random move, and it exercises the same path
 // a dropped connection takes.
 func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
-	noSeriesBreak(t)
 	h := NewHub()
 	a := newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
+	noSeriesBreak(t, m)
 	m.start()
 	m.ackReady(0)
 

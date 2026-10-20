@@ -40,11 +40,8 @@ func twoSided() (*Hub, *match, *Client, *Client, *fakeClock) {
 // one-shot bit says it is forever. Before the lease this match opened as soon as
 // the second side arrived, however long after the first side's ack.
 func TestStaleAckDoesNotOpenTheGate(t *testing.T) {
-	oldTimeout := readyTimeout
-	readyTimeout = 5 * time.Second
-	defer func() { readyTimeout = oldTimeout }()
-
 	_, m, a, b, clk := twoSided()
+	shortReadyTimeout(t, m, 5*time.Second)
 	m.start()
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -64,11 +61,8 @@ func TestStaleAckDoesNotOpenTheGate(t *testing.T) {
 // re-opens the gate on its next ack. Without this the lease would be a one-way
 // door that fails closed and never recovers.
 func TestRenewalReopensTheGate(t *testing.T) {
-	oldTimeout := readyTimeout
-	readyTimeout = 5 * time.Second
-	defer func() { readyTimeout = oldTimeout }()
-
 	_, m, a, _, clk := twoSided()
+	shortReadyTimeout(t, m, 5*time.Second)
 	m.start()
 	waitForEvent(t, a, "matched")
 
@@ -148,11 +142,8 @@ func TestBotNeverSatisfiesTheGateLease(t *testing.T) {
 // This is the shape that matters, because the alternative is a countdown delivered
 // to nobody and a player waiting out a round that can never be played.
 func TestVanishedSideIsCancelledRatherThanServed(t *testing.T) {
-	oldTimeout := readyTimeout
-	readyTimeout = 800 * time.Millisecond
-	defer func() { readyTimeout = oldTimeout }()
-
 	_, m, a, b, clk := twoSided()
+	shortReadyTimeout(t, m, 800*time.Millisecond)
 	m.start()
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
