@@ -211,13 +211,14 @@ button.primary:hover {
    part of its em box — roughly three quarters — so a mark set at the title's
    2.6rem reads about level with the wordmark instead of over it, which is why
    this is 5rem rather than something nearer the title's number. The gap below
-   is `--s2` rather than the `--s1` the title's own margin would imply: the mark
-   is the tallest thing on the screen and needs the separation to read as sitting
-   over the wordmark rather than leaning on it. The mark is hidden from the
+   is a full `--s3`: the mark is the tallest thing on the screen and the gap
+   went out twice by a step each time it was looked at on a real one, from `--s1`
+   through `--s2` to here, which is the point at which the fist reads as sitting
+   above the wordmark rather than leaning on it. The mark is hidden from the
    accessibility tree (see index.html), so nothing here carries meaning a reader
    needs -- only scale. */
 .lobby-fist {
-  margin: 0 0 var(--s2);
+  margin: 0 0 var(--s3);
   font-size: 5rem;
   line-height: 1;
 }
