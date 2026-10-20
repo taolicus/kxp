@@ -72,8 +72,11 @@ Three capability differences matter more than the hardware does:
 
 - **`go test -race` runs here.** It refuses on the phone
   (`race is not supported on android/arm64`); on this host it compiles and runs,
-  measured with `go test -race -run TestNothingZZZ ./...` → `ok kxp`. Concurrency
-  changes can therefore be race-checked here, even though the phone still cannot.
+  measured with `go test -race -run TestNothingZZZ ./...` → `ok kxp`. That makes
+  this host a convenient place to *iterate* on a concurrency change, but it is
+  not the only place the check happens: CI runs `-race` on every push, so the
+  phone is not blocked on this host for the verdict
+  ([device-aware-workflow.md](device-aware-workflow.md)).
 - **`go test ./...` is timeable here.** The phone's wall time drifts for thermal
   and FUSE reasons; this host does not inherit that, so a duration measured on it
   is a fact about this host only and says nothing about the phone.

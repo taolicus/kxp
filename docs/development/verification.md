@@ -114,12 +114,22 @@ Three jobs, none of which touches the deployed origin:
   repo that no dev host can produce at all: `-race` refuses on android/arm64
   ([environment.md](environment.md)), so until CI existed a concurrency change
   was hand-argued and never machine-checked. Plain `go test` runs first so a race
-  report is never read against an already-failing suite. **It found one on its
-  first run** — a race in the test helpers, not the server
-  ([test-helper-package-var-race.md](../tasks/closed/test-helper-package-var-race.md))
-  — and the step is green now that the fix has landed. That red-then-green is the
-  gate working, and the only evidence in this repo that `-race` can fail here at
-  all.
+  report is never read against an already-failing suite.
+  **This is also what makes concurrency work a phone slice rather than a laptop
+  one**: the phone writes and argues the change, the push produces the race
+  verdict ([device-aware-workflow.md](device-aware-workflow.md)). Because a race
+  is often intermittent, one green run is weak evidence — green across several
+  pushes is the real proof.
+  The step has found **two** test-harness races so far, and neither was a server
+  bug: the first, on CI's maiden run, in the pacing vars the helpers shrink
+  ([test-helper-package-var-race.md](../tasks/closed/test-helper-package-var-race.md));
+  the second, in a match goroutine that outlives the test which built it, filed
+  open in
+  [test-helper-goroutine-leak.md](../tasks/open/test-helper-goroutine-leak.md)
+  and the reason the step is red as this is written. That red-then-green-then-red
+  is the gate doing its job: it is the only evidence in this repo that `-race`
+  can fail here at all, and the second failure is a case that had been passing
+  by luck.
 - **`unit`** — `npm ci`, `npm run unit`, `npm run links`. Both are origin-free by
   construction, pinned by `tools/lib/harness.test.mjs` and recorded in
   [unit-gate-needs-origin.md](../tasks/closed/unit-gate-needs-origin.md), so they
@@ -202,8 +212,9 @@ out either. That matters here more than it would elsewhere, because a lot of thi
 suite is deliberately internal: `finish_test.go` drives match pointer states
 directly because the live race is order-dependent and cannot be reproduced
 reliably, `state_test.go` and `snapshot_test.go` reach through `c.mu` and `h.mu`,
-and the whole reason `go test -race` being unavailable does not block those tests
-is that they assert by driving the state rather than by racing two goroutines.
+and those tests assert by driving the state rather than by racing two goroutines
+— which is what makes them deterministic, and what makes them pass under `-race`
+in CI rather than merely under plain `go test` on the phone.
 Relocating them would trade that for nothing.
 
 The JavaScript side could move — `node --test` takes any path — but would gain

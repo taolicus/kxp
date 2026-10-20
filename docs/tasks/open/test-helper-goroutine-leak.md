@@ -61,20 +61,31 @@ background goroutine someone adds.
 - The tests still assert what they asserted: no assertion is weakened to make a
   race go away.
 
-## Where this stopped (deferred to the laptop)
+## Where this stopped (superseded — see the correction below)
 
-**Not started.** This is a concurrency change and the phone cannot race-check it
-— `go test -race` refuses on android/arm64 — so per
-[device-aware-workflow.md](../../development/device-aware-workflow.md) it is
-deferred rather than half-done here. Everything below is what was established by
-inspection, so the laptop session can begin at the fix.
+**Correction, and the reason this file changed after being written.** It said
+this was "deferred to the laptop" because the phone cannot run `-race`. That was
+wrong, and the very CI run that found this race is the disproof: CI ran
+`go test -race ./...` on a hosted runner and produced the report below. CI runs
+`-race` on every push, so the phone does not need the laptop to race-check a
+concurrency change — it needs to push. The deferral premise is corrected in
+[device-aware-workflow.md](../../development/device-aware-workflow.md).
+
+The consequence here: **this task is not blocked on any device.** It is ordinary
+work that a phone session can start, with CI as the `-race` verdict rather than a
+laptop.
+
+**Not started**, but for an ordinary reason rather than a device one: it is a
+second, separate slice from the browser fixture it was discovered alongside, and
+each slice here lands on its own.
 
 **The diagnosis is confirmed from the stack, not guessed.** The full report is in
 CI run `39410641914`, job `test`, step `go test -race ./...`. Reproduce with
-`go test -race -run TestSSEFrameJournalLoggedOnLeave ./...` on the laptop; the
-pair of goroutines is `finishMatch → sendEv → logDroppedEvent → log.Printf`
-(writer) against `TestSSEFrameJournalLoggedOnLeave → buf.String()` (reader). The
-writer's goroutine was created in an earlier test, through
+`go test -race -run TestSSEFrameJournalLoggedOnLeave ./...` — on a host that can
+run it, which now means the laptop or CI, not the phone. The pair of goroutines
+is `finishMatch → sendEv → logDroppedEvent → log.Printf` (writer) against
+`TestSSEFrameJournalLoggedOnLeave → buf.String()` (reader). The writer's
+goroutine was created in an earlier test, through
 `makeMatch.func1 → tryMatch → startMatchLocked → match.start` — i.e. the match
 was built by a *different* test and is still running.
 
@@ -115,8 +126,10 @@ unlocked. The leak is the defect; the sink is the detector.
   signal cannot simply be threaded into the loop without breaking the
   engine/hub boundary that `AGENTS.md` lists as load-bearing.
 
-**Acceptance on the laptop:** the fix must be argued against `h.mu` and the
-phase atomics, then proven by a green `go test -race ./...` — and the
-`docs/issues/` rule applies: this is a traced mechanism, so it lands as a fix,
-not parked as a symptom.
+**Acceptance:** the fix must be argued against `h.mu` and the phase atomics, then
+proven by a green `go test -race ./...` — which CI produces on the push. Because
+the race is intermittent, one green run is weak evidence; the proof is a green
+`-race` step across several pushes, or a run of `go test -race ./...` on the
+laptop if it is to hand. The `docs/issues/` rule also applies: this is a traced
+mechanism, so it lands as a fix, not parked as a symptom.
 

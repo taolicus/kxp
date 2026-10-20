@@ -26,9 +26,11 @@ model, matchmaking, SSE lifecycle).
 
 - which device the work belongs on —
   [docs/development/device-aware-workflow.md](docs/development/device-aware-workflow.md):
-  the phone is always to hand and the laptop is not, and some work (race
-  detection, long or IO-heavy builds) only fits one of them. Read it before
-  starting a task, not when one is already stuck halfway.
+  the phone is always to hand and the laptop is not, and the laptop is worth
+  reaching for on long or IO-heavy work. The two gates the phone cannot run —
+  `-race` and the browser suite — are **CI's**, not the laptop's, so neither
+  blocks a slice started on the phone. Read it before starting a task, not when
+  one is already stuck halfway.
 - a claim about this host, or about how something is deployed —
   [docs/development/](docs/development/): the measured hosts, their toolchains,
   and the commands to re-measure them. Read it when the task touches the build,
@@ -91,9 +93,12 @@ Three rules govern what you pick up and how far you take it:
   implementing.** If the task is under-specified, investigate and update the task
   file rather than opening the code and assuming. An assumption made here is
   invisible to whoever picks it up next.
-- **Match the task to the device before starting it.** The phone cannot run
-  `go test -race` and is slow at long or IO-heavy work; if the slice needs the
-  device you are not on, defer it in the task file rather than opening it — see
+- **Match the task to the device before starting it.** The phone is slow at long
+  or IO-heavy work, and it cannot run `go test -race` or the browser suite
+  directly — but CI runs both on every push, so neither blocks a slice begun on
+  the phone. Reach for the laptop for iteration speed on heavy work, not because
+  a gate is unavailable; if a slice genuinely needs the device you are not on,
+  defer it in the task file rather than opening it — see
   [device-aware-workflow.md](docs/development/device-aware-workflow.md), which
   is also where a deferral is recorded and why it is not an issue.
 - **An unrelated discovery becomes a new issue, not extra scope.** Record it in
@@ -160,13 +165,17 @@ npm run e2e         # browser suite — needs Chromium; boots its own server unl
 
 **CI is the third runner** (`.github/workflows/ci.yml`), alongside these two
 hosts. It runs the origin-free gates — `gofmt`, `go vet`, `go test` plain and
-`-race`, `npm run unit`, `npm run links` — on a GitHub-hosted runner, on every
-push and pull request. It adds exactly the two claims no dev host here can make:
-`-race` (which refuses on android/arm64) and, once the browser fixture exists, a
+`-race`, `npm run unit`, `npm run links`, and the browser suite — on a
+GitHub-hosted runner, on every push and pull request. It adds exactly the two
+claims no dev host here can make: `-race` (which refuses on android/arm64) and a
 real Chromium. The other gates still run locally as above; CI does not replace
-them. The `-race` step found a race in the test helpers on its first run
-([test-helper-package-var-race.md](docs/tasks/closed/test-helper-package-var-race.md)),
-which is the gate doing its job; that task has since landed and the job is green.
+them — but for those two, CI *is* the gate, which is what keeps a concurrency or
+rendering slice workable from the phone. The `-race` step found a race in the
+test helpers on its first run
+([test-helper-package-var-race.md](docs/tasks/closed/test-helper-package-var-race.md))
+and a second, intermittent one in a leaked match goroutine since
+([test-helper-goroutine-leak.md](docs/tasks/open/test-helper-goroutine-leak.md)),
+which is the gate doing its job; the first has landed, the second is open.
 
 `npm run unit` is the catch-all for client and harness tests (the README's
 shorter `node --test web/kxp.test.cjs web/machine.test.cjs` misses
@@ -191,24 +200,27 @@ the meantime. Why the phone cannot put a number on that wall time, and how the
 gates are shaped around it, is in
 [docs/development/verification.md](docs/development/verification.md).
 
-**What no gate here covers** — state these limits in any report and in the
-slice's task file, rather than implying coverage that does not exist. The first
-is a property of the phone alone; run the slice on the laptop and it goes away:
+**What no dev host here covers** — state these limits in any report and in the
+slice's task file, rather than implying coverage that does not exist. Both are
+properties of the phone, and both are CI's job rather than the laptop's:
 
 1. **Race detector** — `go test -race` refuses on the phone: `race is not
-   supported on android/arm64`. Not configurable there, and no other gate
-   substitutes for it, so a concurrency change made on the phone is hand-checked
-   and argued in a comment: when it touches shared state (`h.mu`, `c.mu`, the
-   match phase atomics), name that state in the comment and say why the ordering
-   holds. `finishMatch`'s per-side teardown is the worked example — the decision
-   is taken under `h.mu` and pinned by `finish_test.go`, which drives the
-   pointer states directly instead of racing two goroutines. The laptop runs
-   `-race` normally, so prefer that device for concurrency work
+   supported on android/arm64`. Not configurable there, and no other *local* gate
+   substitutes for it, so a concurrency change made on the phone is argued in a
+   comment before it is machine-checked: when it touches shared state (`h.mu`,
+   `c.mu`, the match phase atomics), name that state in the comment and say why
+   the ordering holds. `finishMatch`'s per-side teardown is the worked example —
+   the decision is taken under `h.mu` and pinned by `finish_test.go`, which
+   drives the pointer states directly instead of racing two goroutines.
+   **CI runs `-race` on every push** (`.github/workflows/ci.yml`), which is what
+   makes this a phone-workable slice rather than a laptop-only one: the phone
+   writes and argues the change, the push produces the verdict. The argument
+   still comes first, because CI reads the code only after the push while a
+   reviewer reads it before
    ([device-aware-workflow.md](docs/development/device-aware-workflow.md)).
-   **CI runs it too** (`.github/workflows/ci.yml`), so a push is now a
-   machine-checked `-race` run even from the phone — but only after the push, so
-   a concurrency change is still argued at review time and CI is the backstop,
-   not the first reader.
+   Because a race can be intermittent, one green run is weak evidence — the
+   proof is green across several pushes, or one `go test -race ./...` on the
+   laptop if it is to hand.
 2. **Rendering / console errors** — `npm run e2e` covers the lobby's render and
    in-browser errors, but only on a host with Chromium. That was the laptop
    alone; the CI `browser` job now runs it too, booting its own server so no
