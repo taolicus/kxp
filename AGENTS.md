@@ -3,11 +3,14 @@
 KACHIPUN TOURNAMENT (`kxp`): a single-binary Go RPS game with an embedded web
 UI, SSE push, and POST actions. Server-authoritative rules; the browser renders.
 
+Read [`workflow/`](workflow/README.md) before working here: those are the rules
+that generalise across projects — device choice, slice scoping, commit policy,
+execution and stopping. This file holds what is *specific* to kxp: what to read,
+how to verify, where knowledge lives, and the invariants that must not break.
+
 **The house rule: one small slice at a time, and each slice leaves the tree
-green.** A slice is one concern — one fix, one field, one probe, one doc
-paragraph — that can be read, reviewed, tested, deployed, and reverted on its
-own. Anything larger gets split before it gets written. Every slice in this
-repo's history is one commit that a reader can hold in their head.
+green.** Full statement and the test for "too big":
+[workflow/incremental-slice-scoping.md](workflow/incremental-slice-scoping.md).
 
 Read what the task touches, not the whole repo. A full sweep of the text here is
 ~453KB; the engine, hub, client, and the two files that apply to most tasks are
@@ -25,12 +28,14 @@ model, matchmaking, SSE lifecycle).
 **When the task reaches them:**
 
 - which device the work belongs on —
-  [docs/development/device-aware-workflow.md](docs/development/device-aware-workflow.md):
+  [workflow/device-aware-development.md](workflow/device-aware-development.md):
   the phone is always to hand and the laptop is not, and the laptop is worth
   reaching for on long or IO-heavy work. The two gates the phone cannot run —
   `-race` and the browser suite — are **CI's**, not the laptop's, so neither
   blocks a slice started on the phone. Read it before starting a task, not when
-  one is already stuck halfway.
+  one is already stuck halfway. A deferral is recorded in the task file, never in
+  [docs/issues/](docs/issues/) — "cannot run `-race` here" is a known host
+  property, not an unconfirmed symptom.
 - a claim about this host, or about how something is deployed —
   [docs/development/](docs/development/): the measured hosts, their toolchains,
   and the commands to re-measure them. Read it when the task touches the build,
@@ -85,7 +90,8 @@ landing commit inside the landing commit; `git log --follow` on the moved task
 file answers "which commit landed this?". Where a "Landed in `…`" line earns its
 place, it is written once the cited commit exists — a later docs slice, or a
 reference to an already-pushed commit. Step 7 happens before the next task
-starts, not at the end of the session — see [Commit and push](#commit-and-push).
+starts, not at the end of the session — see
+[workflow/commit-policy.md](workflow/commit-policy.md).
 
 Three rules govern what you pick up and how far you take it:
 
@@ -93,43 +99,18 @@ Three rules govern what you pick up and how far you take it:
   implementing.** If the task is under-specified, investigate and update the task
   file rather than opening the code and assuming. An assumption made here is
   invisible to whoever picks it up next.
-- **Match the task to the device before starting it.** The phone is slow at long
-  or IO-heavy work, and it cannot run `go test -race` or the browser suite
-  directly — but CI runs both on every push, so neither blocks a slice begun on
-  the phone. Reach for the laptop for iteration speed on heavy work, not because
-  a gate is unavailable; if a slice genuinely needs the device you are not on,
-  defer it in the task file rather than opening it — see
-  [device-aware-workflow.md](docs/development/device-aware-workflow.md), which
-  is also where a deferral is recorded and why it is not an issue.
+- **Match the task to the device before starting it**, as
+  [workflow/device-aware-development.md](workflow/device-aware-development.md)
+  sets out: the phone is slow at long or IO-heavy work, and it cannot run
+  `go test -race` or the browser suite directly — but CI runs both on every push,
+  so neither blocks a slice begun on the phone. Reach for the laptop for
+  iteration speed on heavy work, not because a gate is unavailable; if a slice
+  genuinely needs the device you are not on, defer it in the task file rather
+  than opening it.
 - **An unrelated discovery becomes a new issue, not extra scope.** Record it in
   [docs/issues/](docs/issues/) — or the task file, if it is a named prerequisite —
   and leave the current slice alone. Quietly widening a slice is how one commit
   stops being independently revertable.
-
-### Pick the slice size
-
-Ask: *could this commit be reverted without stranding the repo?* If reverting
-leaves a feature half-wired, a test asserting behaviour that no longer exists,
-or docs describing code that is gone — the slice is too big. Split it. This is
-why the connectivity work landed as a series of single-trace commits
-(`5694980`, `7eec97c`, `a50628d`, `02047ff`, …) rather than one observability
-rewrite: each one produces evidence, and each is independently deployable.
-
-Do **not** park a half-finished refactor in the tree. Roadmap items exist for
-structural work that is deliberately unscheduled ("One owner for match
-termination") — write the reasoning there, leave the code alone.
-
-### Keep the session small too
-
-Slice size is not only a review concern: a slice small enough to finish, test,
-document, commit, and push is what keeps a long working session from losing its
-own thread. There is deliberately no rule here about when to compact — no rule
-about a tool's behaviour can be verified on this repo, and one nobody can
-re-derive is worse than none. What is left is not about tooling: **finish the
-slice — verified, documented, committed, pushed — before starting the next
-one.** Then the state that matters lives in git rather than in the
-conversation, and a new session starts from a clean tree, a pushed commit, and
-only the intent to carry forward.
 
 ### Test first, and prove the test bites
 
@@ -219,7 +200,7 @@ properties of the phone, and both are CI's job rather than the laptop's:
    writes and argues the change, the push produces the verdict. The argument
    still comes first, because CI reads the code only after the push while a
    reviewer reads it before
-   ([device-aware-workflow.md](docs/development/device-aware-workflow.md)).
+   ([workflow/device-aware-development.md](workflow/device-aware-development.md)).
    Because a race can be intermittent, one green run is weak evidence — the
    proof is green across several pushes, or one `go test -race ./...` on the
    laptop if it is to hand.
@@ -274,9 +255,10 @@ INCONCLUSIVE into a FAIL.
   below.
 - **A landed item** → [docs/tasks/closed/](docs/tasks/closed/), one file per item —
   the moved task file with a `Landed` record appended, never a rewrite of its own
-  text (see [Commit and push](#commit-and-push)). The file keeps the phase it ran
-  in by its position under [docs/roadmap.md](docs/roadmap.md), which holds the
-  phase structure and a link per item and no status of its own.
+  text (see [workflow/commit-policy.md](workflow/commit-policy.md)). The file
+  keeps the phase it ran in by its position under
+  [docs/roadmap.md](docs/roadmap.md), which holds the phase structure and a link
+  per item and no status of its own.
 - **The reasoning behind a landed item** — what you considered and rejected, and how it was verified → the section of the owning file in [docs/features/](docs/features/) (or [docs/development/](docs/development/)) that documents the invariant the decision constrains, written as present-tense prose and closed with the landing commit. The closed task file links to that section, so a reader who starts at the work item is routed to the reasoning.
 - **A symptom whose cause you cannot confirm** → [docs/issues/](docs/issues/): describe what was observed and the hypothesis, and state what evidence would graduate it. Do **not** park a bug here whose mechanism you traced — that is a fix, not a symptom.
 - **User-visible feature, or a changed command** → [README.md](README.md) (including the docs list).
@@ -343,65 +325,27 @@ These are load-bearing. Breaking one is a bug even if the tests pass.
 
 ## Commit and push
 
-One slice = one commit = one push. **A finished task is pushed when it is
-finished** — not batched with the next one, not held for the end of the session.
-Push each slice as soon as it is green; never accumulate a stack of slices to
-push at the end. The code, the test that pins it, the register move, and the
-roadmap link all belong in that one commit.
+See [workflow/commit-policy.md](workflow/commit-policy.md) for the rules — one
+slice = one commit = one push, the message format, register commits, and what
+never gets committed. The kxp-specific parts:
 
-**Register commits are additive.** A task file moves as it is: the plan, its
-required context and its acceptance criteria travel unchanged — only the
-frontmatter is dropped — and what changed when the work landed is **appended**
-as a `Landed` record (what was verified and how, and the negative proof), never
-woven back into the task's own text. Rewriting a once-open task into a report
-after the fact is how a plan stops being readable as the plan it was; the closed
-file is the plan plus its outcome, not a replacement for it.
-
-The `Landed` record names no commit hash, and cannot: the landing commit's own
-hash is the digest of the very content the record sits in, so it never exists at
-write time. Provenance is git's job — `git log --follow` on the moved file lands
-on exactly the landing commit. A "Landed in `…`" line in a features file is a
-different case: it cites a commit that already exists, and is written in a later
-docs slice or points at an already-pushed commit.
-
-A commit is the unit of work a task in [docs/tasks/open/](docs/tasks/open/)
-describes: a meaningful completed increment, not an arbitrary step through an
-implementation. Never combine unrelated work into one commit to reduce the
-number of commits — one concern per commit, so a reader, a revert, or a
-`git bisect` lands on exactly one thing.
-
-The reason is that a push is the only durable copy of the work, and it is what
-makes every other rule in this file hold. A pushed slice is independently
-reviewable, independently revertable, and independently deployable — and it
-survives a dead session, a lost context, or an interrupted machine. An unpushed
-slice is a claim; a pushed one is a fact. Batching also makes the failure worse
-when it comes: three unpushed slices that all need the same fix is one
-`git bisect` and one revert, not three.
-
-**Message format** (the repo's convention, used throughout history):
-
-```
-Area: imperative one-line summary
-
-What changed and why, in prose: the intent, the mechanism if a bug was
-involved, and what you considered and rejected where that stops a future reader
-re-litigating it. Keep it short — a line and a paragraph; more only when the
-mechanism genuinely needs it.
-```
-
-The **detail stays out of the message.** Implementation notes, validation
-results (which gates ran, what failed, what a host could not verify) and task
-history belong in the task file: in `docs/tasks/open/` while the work is
-scheduled and in `docs/tasks/closed/` once it lands, which is where a reader
-looks for them anyway. A message that quotes test counts or narrates the edit is
-a second copy of that file, and a second copy is the one thing in this tree that
-can silently drift. What you verified is reported in
-[Reporting back](#reporting-back).
-
-Areas in use: `Fix`, `Protocol`, `Testing`, `Observability`, `Probes`, `Docs`,
-`Client`, `Countdown`, `Characters`/`Roster`, `Game screen`.
-Bodies are real prose — a message whose body only restates the diff is a missed
-chance.
+- **Message areas in use:** `Fix`, `Protocol`, `Testing`, `Observability`,
+  `Probes`, `Docs`, `Client`, `Countdown`, `Characters`/`Roster`, `Game screen`.
+  Bodies are real prose — a message whose body only restates the diff is a
+  missed chance.
+- **Never commit:** the `kxp` binary, `node_modules/`, `web/img/sources/`,
+  `tools/.base-url` (the address of a public unauthenticated server). All
+  already gitignored — keep it that way.
+- **No deployment tooling beyond `deploy.sh`**, the one script that copies the
+  built binary to the VPS: nginx vhosts, systemd units, TLS and the rest live on
+  the host and outside this repo. Do not add deploy scripts, systemd units, or
+  infra config here. The script itself, and the layout it assumes, is documented
+  in [docs/development/deployment.md](docs/development/deployment.md).
+- **A finished slice is deployed before the next one starts**, and the deploy is
+  verified rather than assumed: `sh deploy.sh` ends by checking that `/health`
+  reports the commit it just built, and probe `t1` re-checks the same value
+  against local `HEAD`. A green probe run against a stale binary reads as
+  verification and is not.
 
 Before each commit and push:
 
@@ -410,23 +354,6 @@ git status                     # only intended files staged; no secrets, no orig
 git diff --cached
 git log --oneline -10          # match the area/summary style
 ```
-
-- Never commit: the `kxp` binary, `node_modules/`, `web/img/sources/`,
-  `tools/.base-url` (the address of a public unauthenticated server). All
-  already gitignored — keep it that way.
-- The repo carries **no deployment tooling** beyond `deploy.sh`, the one script
-  that copies the built binary to the VPS: nginx vhosts, systemd units, TLS and
-  the rest live on the host and outside this repo. Do not add deploy scripts,
-  systemd units, or infra config here. The script itself, and the layout it
-  assumes, is documented in [docs/development/deployment.md](docs/development/deployment.md).
-- **A finished slice is deployed before the next one starts**, and the deploy is
-  verified rather than assumed: `sh deploy.sh` ends by checking that `/health`
-  reports the commit it just built, and probe `t1` re-checks the same value
-  against local `HEAD`. A green probe run against a stale binary reads as
-  verification and is not.
-- Do not force-push `main`, rewrite published history, or skip hooks.
-- Only commit when asked. If asked to commit, commit the slice you just
-  verified — not whatever else the tree picked up.
 
 ## Reporting back
 

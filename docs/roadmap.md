@@ -91,6 +91,7 @@ Make the system testable and debuggable in production.
 - [GitHub Actions CI: recover the gates the phone cannot run](tasks/closed/github-actions-ci.md) (all three jobs landed, including the browser one — see [the browser fixture](tasks/closed/in-repo-browser-fixture.md))
 - [The test helpers race on the package vars they shrink](tasks/closed/test-helper-package-var-race.md) (found by CI's first `-race` run; green in CI now)
 - [The tests leak match goroutines, and `captureLog` is what catches it](tasks/closed/test-helper-goroutine-leak.md) (the second race CI found; landed — `Shutdown` now wakes and joins every match it started)
+- [Split the reusable workflow rules out of `AGENTS.md`](tasks/closed/workflow-rule-split.md) (the general rules moved to [workflow/](../workflow/README.md); `AGENTS.md` is now the kxp-specific entry point)
 
 ## Phase 3 — Architecture & features
 

@@ -16,7 +16,9 @@ reading a plan as a description of the system.
 structure and one link per landed item, and no status of its own, which is why it
 can be read without being able to contradict a file. The README tracks no status
 either: it points at the registers and at this file, which is where their rules
-live.
+live. Neither is [workflow/](../workflow/README.md): it sits outside `docs/`
+because it holds process rules rather than kxp knowledge, and nothing in it is a
+work item.
 
 **The directory is the status.** There is no checkbox to tick anywhere in this
 tree, and nothing per-entry restates its own state — a reader must never be able

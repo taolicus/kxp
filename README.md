@@ -111,6 +111,13 @@ two players share. See [architecture](docs/features/architecture.md) for the int
   per-project layout kxp shares with its siblings).
   What each host can and cannot verify, and the working loop, live in
   [AGENTS.md](AGENTS.md).
+- [workflow/](workflow/README.md) — the rules that generalise across projects:
+  [device-aware-development.md](workflow/device-aware-development.md),
+  [incremental-slice-scoping.md](workflow/incremental-slice-scoping.md),
+  [commit-policy.md](workflow/commit-policy.md) and
+  [execution-and-stopping.md](workflow/execution-and-stopping.md). What is
+  specific to kxp — the invariants, the gates, the register rules — stays in
+  [AGENTS.md](AGENTS.md).
 - [register.md](docs/register.md) — what each of the directories below is for,
   and the rules that keep them separate.
 - [tasks/](docs/tasks/) — work items: what is specified and not yet landed
