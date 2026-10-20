@@ -29,11 +29,13 @@ model, matchmaking, SSE lifecycle).
   the phone is always to hand and the laptop is not, and some work (race
   detection, long or IO-heavy builds) only fits one of them. Read it before
   starting a task, not when one is already stuck halfway.
-- a claim about this host — [docs/development/](docs/development/): the
-  measured hosts, their toolchains, and the commands to re-measure them. Read it
-  when the task touches the build, the toolchain, or a claim about what a
-  machine here can do — not every task, because the per-task verification rules
-  it used to carry live in [Verify](#verify) below instead.
+- a claim about this host, or about how something is deployed —
+  [docs/development/](docs/development/): the measured hosts, their toolchains,
+  and the commands to re-measure them. Read it when the task touches the build,
+  the toolchain, or a claim about what a machine here can do — not every task,
+  because the per-task verification rules it used to carry live in
+  [Verify](#verify) below instead. [deployment.md](docs/development/deployment.md)
+  holds the VPS layout and `deploy.sh` when the task changes either.
 - wire changes — [docs/features/protocol.md](docs/features/protocol.md): events,
   endpoints, the client state table, clock handling
 - the internals, or a feature that already ships —
@@ -373,9 +375,16 @@ git log --oneline -10          # match the area/summary style
 - Never commit: the `kxp` binary, `node_modules/`, `web/img/sources/`,
   `tools/.base-url` (the address of a public unauthenticated server). All
   already gitignored — keep it that way.
-- The repo carries **no deployment tooling**: the live server is kept current by
-  an ops script outside the repo (`git pull` + build + `systemctl restart`). Do
-  not add deploy scripts, systemd units, or infra config here.
+- The repo carries **no deployment tooling** beyond `deploy.sh`, the one script
+  that copies the built binary to the VPS: nginx vhosts, systemd units, TLS and
+  the rest live on the host and outside this repo. Do not add deploy scripts,
+  systemd units, or infra config here. The script itself, and the layout it
+  assumes, is documented in [docs/development/deployment.md](docs/development/deployment.md).
+- **A finished slice is deployed before the next one starts**, and the deploy is
+  verified rather than assumed: `sh deploy.sh` ends by checking that `/health`
+  reports the commit it just built, and probe `t1` re-checks the same value
+  against local `HEAD`. A green probe run against a stale binary reads as
+  verification and is not.
 - Do not force-push `main`, rewrite published history, or skip hooks.
 - Only commit when asked. If asked to commit, commit the slice you just
   verified — not whatever else the tree picked up.

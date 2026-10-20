@@ -104,9 +104,11 @@ two players share. See [architecture](docs/features/architecture.md) for the int
   the Android/Termux phone and the MacBook Pro — their toolchains, and how to
   re-measure both),
   [device-aware-workflow.md](docs/development/device-aware-workflow.md) (match
-  the work to the device, and record a deferral where it belongs) and
+  the work to the device, and record a deferral where it belongs),
   [verification.md](docs/development/verification.md) (what each gate does and
-  does not cover, the browser-free probe suite, and the verdicts it reports).
+  does not cover, the browser-free probe suite, and the verdicts it reports) and
+  [deployment.md](docs/development/deployment.md) (the VPS, `deploy.sh`, and the
+  per-project layout kxp shares with its siblings).
   What each host can and cannot verify, and the working loop, live in
   [AGENTS.md](AGENTS.md).
 - [register.md](docs/register.md) — what each of the directories below is for,
@@ -172,6 +174,14 @@ exactly one place, so there is one status to keep true:
 - [issues/](docs/issues/) — live symptoms parked until their cause is
   confirmed.
 
-The live server is kept at the current build by an ops script kept **outside**
-this repo (`git pull` + build + `systemctl restart`); the repository itself
-carries no deployment tools.
+## Deploying
+
+`sh deploy.sh` cross-builds the linux/amd64 binary from the phone, copies it to
+the VPS, restarts `kxp.service`, and checks `GET /health` reports the commit it
+just built — the same value probe `t1` holds against local `HEAD`. Override the
+host, directory or health URL with `DEPLOY_HOST`, `DEPLOY_DIR` and `HEALTH_URL`.
+The VPS keeps no source checkout: the binary embeds `web/` (`//go:embed`), so it
+carries the whole client, and `-X main.buildSHA` supplies the identity that a
+build outside a work tree would otherwise lose. The layout it fits — ports,
+systemd, nginx, TLS — is the pattern the sibling projects share and is documented
+in [deployment.md](docs/development/deployment.md).
