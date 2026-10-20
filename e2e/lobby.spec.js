@@ -14,13 +14,12 @@
 // No styling or pixel assertions: what a stubbed context and a probe both miss
 // is the render and the request, not a shade of a colour.
 //
-//   npm run e2e                                   # origin from tools/.base-url
-//   BASE_URL=https://your-server.example npm run e2e
+//   npm run e2e                                   # config boots its own server
+//   BASE_URL=https://your-server.example npm run e2e   # or this origin
 //
-// Needs Chromium, so it runs on the laptop and not on the phone
-// (docs/development/environment.md). Tests 2 and 3 start a real CPU match and
-// stop there — the tab goes away with the context, and /health's activeMatches
-// is the check that the server let it go.
+// Needs Chromium, not the phone (docs/development/environment.md). Tests 2 and
+// 3 start a real match and stop there — the tab goes away with the context, and
+// /health's activeMatches is the check that the server let it go.
 const { test, expect } = require('@playwright/test');
 const { CONNECT_BOUND, watchErrors, gotoLobby, nextPost, lengthBtn } = require('./support.cjs');
 

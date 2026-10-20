@@ -127,7 +127,7 @@ two players share. See [architecture](docs/features/architecture.md) for the int
 npm run links     # internal doc paths resolve, and each #fragment names a heading
 go test ./...     # Go suite
 npm run unit      # web/*.test.cjs + tools/lib/*.test.mjs
-npm run e2e       # browser suite — needs an origin and Chromium, so the laptop only
+npm run e2e       # browser suite — boots its own server; needs Chromium
 ```
 
 `npm run unit` is the way to run the client and harness tests; the files it
@@ -137,11 +137,11 @@ the real `app.js` against a stubbed context, which nothing else covers. Pass a
 subset to check part of the doc tree: `npm run links -- AGENTS.md docs/features`.
 
 (`go test -race` isn't supported on the arm64-Android dev device, and the phone
-has no Chromium. CI covers both: `.github/workflows/ci.yml` runs the origin-free
-gates — `gofmt`, `go vet`, `go test` plain and `-race`, `npm run unit`, `npm run
-links` — on a GitHub-hosted runner for every push and pull request. It is a third
-runner beside the phone and the laptop, not a replacement for either, and it
-never touches the deployed server.)
+has no Chromium. CI covers both: `.github/workflows/ci.yml` runs `gofmt`, `go
+vet`, `go test` plain and `-race`, `npm run unit`, `npm run links` **and the
+browser suite** on a GitHub-hosted runner for every push and pull request. It is
+a third runner beside the phone and the laptop, not a replacement for either, and
+it never touches the deployed server.)
 
 The browser-free probe suite (`tools/t1`–`t8`) is the integration path. It
 targets the **deployed (production) server directly over the internet**; it
@@ -157,9 +157,10 @@ BASE_URL=https://your-server.example npm run tall
 See [tools/README.md](tools/README.md) for what each probe proves and why the
 origin is required rather than defaulted. The flows create real (short-lived)
 matches by design. `npm run e2e` adds a Playwright suite that renders the lobby
-in a real Chromium against the same origin — laptop only, because the phone
-cannot install Chromium. Styling and layout are asserted nowhere on either
-host. What each gate does and does not cover is in
+in a real Chromium — by default against a server it boots itself, or against the
+origin `BASE_URL` names. It needs Chromium, so not the phone; the CI `browser`
+job runs it. Styling and layout are asserted nowhere on any host. What each gate
+does and does not cover is in
 [docs/development/verification.md](docs/development/verification.md), and the
 host limits are in [AGENTS.md](AGENTS.md).
 

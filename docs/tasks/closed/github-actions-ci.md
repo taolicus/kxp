@@ -124,11 +124,11 @@ The mechanics of the job were sound — it was the suite it runs that had the de
 **`go1.26.5`, the version `go-version-file: go.mod` resolves, exists in the Go
 release index**, so `setup-go` will not fail on an unknown toolchain.
 
-**Not done, and why.** The `browser` job is absent rather than stubbed: `npm run
-e2e` resolves its origin through `playwright.config.mjs` → `tools/lib/base.mjs`,
-which requires a real origin, and the only origin in existence is production —
-which a runner must not use. That is
-[in-repo-browser-fixture.md](../../issues/in-repo-browser-fixture.md), still open.
-The three acceptance items above that name all three jobs or the browser job
-remain unmet on purpose; they belong to whoever answers that issue, and the
-verification docs say so rather than implying a browser is covered.
+**Not done when this landed, and done since.** The `browser` job was absent from
+the first cut rather than stubbed: `npm run e2e` resolved its origin through
+`playwright.config.mjs` → `tools/lib/base.mjs`, which required a real origin, and
+the only origin in existence was production — which a runner must not use. That
+was [in-repo-browser-fixture.md](in-repo-browser-fixture.md), and it is now
+resolved: the config boots its own server when no origin is given, and the
+`browser` job exists as acceptance item 3 described it. The three acceptance
+items above that name all three jobs are met.

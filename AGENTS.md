@@ -155,7 +155,7 @@ go vet ./...
 go test ./...       # the one gate the phone cannot time: ALONE, generous timeout (below)
 npm run unit        # web/*.test.cjs + tools/lib/*.test.mjs
 npm run tall        # probes t1–t8 — requires an origin (see below), creates real matches
-npm run e2e         # browser suite — needs origin + Chromium, so the laptop only (see below)
+npm run e2e         # browser suite — needs Chromium; boots its own server unless BASE_URL is set
 ```
 
 **CI is the third runner** (`.github/workflows/ci.yml`), alongside these two
@@ -210,12 +210,12 @@ is a property of the phone alone; run the slice on the laptop and it goes away:
    a concurrency change is still argued at review time and CI is the backstop,
    not the first reader.
 2. **Rendering / console errors** — `npm run e2e` covers the lobby's render and
-   in-browser errors, but only on a host with Chromium — the laptop, never the
-   phone. On the phone a rendering claim is hand-checked and says so. Styling
-   and layout are asserted nowhere on either host. CI carries no browser job yet:
-   the suite can only be pointed at an origin it is allowed to use, and there is
-   no such origin for a runner
-   ([in-repo-browser-fixture.md](docs/issues/in-repo-browser-fixture.md)).
+   in-browser errors, but only on a host with Chromium. That was the laptop
+   alone; the CI `browser` job now runs it too, booting its own server so no
+   origin is needed ([in-repo-browser-fixture.md](docs/tasks/closed/in-repo-browser-fixture.md)).
+   On the phone a rendering claim is hand-checked and says so, and that has not
+   changed: the phone has no Chromium. Styling and layout are asserted nowhere on
+   any host.
 3. **Deployment** — a local build is not the deployed binary, and "it works
    here" is never evidence a change is live. `GET /health` reports `build.sha`;
    probe `t1` asserts it against local `HEAD` and fails loudly on a stale build.
@@ -227,11 +227,19 @@ is a property of the phone alone; run the slice on the laptop and it goes away:
 **Probing the deployed server** (never a local boot for the integration gate):
 
 ```sh
-echo 'https://your-host' > tools/.base-url   # gitignored, required, never committed
+echo 'https://your-host' > tools/.base-url   # gitignored, required for probes, never committed
 BASE_URL=https://your-host npm run tall
 npm run tall -- t5 t6                       # subset
 QUICK=1 npm run tall                        # creates no matches
-npm run e2e                                 # browser suite, laptop only: `-- -g lobby` runs a subset
+```
+
+**The browser suite** is the one integration run that does *not* need an origin.
+It boots its own server unless one is named, so it is reproducible anywhere with
+Chromium — the laptop and CI — and touches nothing deployed:
+
+```sh
+npm run e2e                                 # boots 127.0.0.1:18080; `-- -g lobby` runs a subset
+BASE_URL=https://your-host npm run e2e      # or drives a real origin instead
 ```
 
 `npm run t1` first, always: it measures the link, so every later number can be

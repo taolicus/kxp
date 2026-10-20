@@ -12,11 +12,12 @@
 // a production link can only flake.
 //
 //   npm run e2e -- -g "1-off"
-//   BASE_URL=https://your-server.example npm run e2e
+//   BASE_URL=https://your-server.example npm run e2e -- -g "1-off"
 //
-// Needs Chromium, so it runs on the laptop and not the phone
-// (docs/development/environment.md). The match this test starts is a real one;
-// /health's activeMatches is the check that the server let it go.
+// Needs Chromium, not the phone (docs/development/environment.md). Left to the
+// config, it boots its own server and the laptop and CI both run it; given an
+// origin, it plays a real match there instead. /health's activeMatches is the
+// check that the server let it go either way.
 const { test, expect } = require('@playwright/test');
 const { CONNECT_BOUND, watchErrors, gotoLobby, nextPost } = require('./support.cjs');
 

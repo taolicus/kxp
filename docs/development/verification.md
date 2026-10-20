@@ -103,7 +103,11 @@ public, so hosted minutes are free and unlimited; no self-hosted runner and no
 secrets are involved, and the job uses the automatic `GITHUB_TOKEN` with
 `contents: read`.
 
-Two jobs, both origin-free:
+One exception to "the same suite still runs on the phone": the browser suite
+never did, because the phone has no Chromium. That is exactly the claim CI was
+added to cover.
+
+Three jobs, none of which touches the deployed origin:
 
 - **`test`** — `gofmt` (the exit-on-nonempty wrapper below), `go vet ./...`,
   `go test ./...`, then `go test -race ./...`. The last is the one gate in this
@@ -120,6 +124,13 @@ Two jobs, both origin-free:
   construction, pinned by `tools/lib/harness.test.mjs` and recorded in
   [unit-gate-needs-origin.md](../tasks/closed/unit-gate-needs-origin.md), so they
   run on a runner with no server behind it.
+- **`browser`** — `npm ci`, `npx playwright install --with-deps chromium`, then
+  `npm run e2e`. Origin-free in the other direction: rather than needing no
+  origin, the config *makes* one, booting the compiled server through Playwright's
+  `webServer` on `127.0.0.1:18080`. It is the only job that runs a browser, and
+  therefore the only gate covering the render and in-browser console errors
+  ([the gap probes cannot close](#the-gap-probes-cannot-close)). See
+  [in-repo-browser-fixture.md](../tasks/closed/in-repo-browser-fixture.md).
 
 **`gofmt` needs the wrapper.** The gate in [Verify](../../AGENTS.md#verify) is
 `gofmt -l .`, which *prints* offending files and exits 0 — as a CI step it would
@@ -127,15 +138,22 @@ pass on an unformatted tree. The workflow captures the output and fails when it
 is non-empty. That is the one place the CI form and the local form differ, and it
 differs because the local one is read by a person and the CI one is not.
 
-**What CI deliberately does not run is the two suites that need a deployed
-origin.** `npm run tall` and `npm run e2e` both create real matches on the live
-public server; a hosted runner firing either would be load on production and a
-flaky gate for everyone with no way to tell a transport fault from a defect. The
-browser job is therefore absent, not forgotten: [in-repo-browser-fixture.md](../issues/in-repo-browser-fixture.md)
-is the open question of finding an origin a runner is *allowed* to use, and
-[github-actions-ci.md](../tasks/closed/github-actions-ci.md) adds the job once that
-is answered. Until then the browser gap stays what it already is — closed on the
-laptop, open on the phone.
+**What CI deliberately does not run is `npm run tall`.** The probes measure a
+real link and are meaningless anywhere but a real device; running them from a
+runner would also create matches on the live public server, which is load on
+production and a flaky gate for everyone with no way to tell a transport fault
+from a defect.
+
+**`npm run e2e` runs, and does not have that problem.** It looks like it should
+— the specs really do queue, ack and play — but `playwright.config.mjs` boots
+the app itself through Playwright's `webServer` when no origin is given, so the
+match is created on the runner and torn down with it. Nothing outside the runner
+is touched and no secret is needed. The fixture, and the two modes it selects
+between, are recorded in
+[in-repo-browser-fixture.md](../tasks/closed/in-repo-browser-fixture.md). The
+phone still cannot run the suite — no Chromium — so the browser gap is now
+narrower than it was: closed on CI as well as the laptop, and open only on the
+phone, where a rendering claim is hand-checked and says so.
 
 ## The gap probes cannot close
 

@@ -4,7 +4,7 @@ node_modules/
 test-results/
 playwright-report/
 
-# The deployed origin the probe and browser suites target. Required, never
-# committed: it is the address of a public unauthenticated server (see
-# tools/lib/base.mjs).
+# The deployed origin the probe suite targets. Not committed: it is the address
+# of a public unauthenticated server. Optional for the browser suite, which
+# boots its own server unless an origin is given (see tools/lib/base.mjs).
 tools/.base-url

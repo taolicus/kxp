@@ -2,7 +2,7 @@
   "name": "kxp-e2e",
   "private": true,
   "version": "0.0.0",
-  "description": "Probe, unit and browser harness for KACHIPUN TOURNAMENT. Tests the deployed server over the internet; never boots the app locally. The origin comes from BASE_URL or tools/.base-url.",
+  "description": "Probe, unit and browser harness for KACHIPUN TOURNAMENT. The probes test the deployed server over the internet; the browser suite boots its own server unless BASE_URL or tools/.base-url names one.",
   "engines": {
     "node": ">=20"
   },

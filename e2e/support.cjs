@@ -4,7 +4,8 @@
 const { expect } = require('@playwright/test');
 
 // Generous, and about the link rather than this machine: the `connected`,
-// `matched`, and beat frames all arrive over SSE from the deployed origin.
+// `matched`, and beat frames all arrive over SSE, from a local server when the
+// config booted one and from the deployed origin when an origin was given.
 const CONNECT_BOUND = 15000;
 
 // Every console.error and uncaught page error fails the test. A browser suite
