@@ -206,13 +206,17 @@ button.primary:hover {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 8) Lobby --------------------------------------------------------------- */
-/* The raised fist above the title: the tab's icon at landing size. The title
-   keeps its own margin below; this only has to clear the title above it, and
-   the mark is hidden from the accessibility tree (see index.html), so nothing
-   here carries meaning a reader needs -- only scale. */
+/* The raised fist above the title: the tab's icon at landing size, and
+   deliberately far larger than the title's own size. An emoji glyph fills only
+   part of its em box — roughly three quarters — so a mark set at the title's
+   2.6rem reads about level with the wordmark instead of over it, which is why
+   this is 5rem rather than something nearer the title's number. The title keeps
+   its own margin below; this only has to clear the title above it, and the mark
+   is hidden from the accessibility tree (see index.html), so nothing here
+   carries meaning a reader needs -- only scale. */
 .lobby-fist {
   margin: 0 0 var(--s1);
-  font-size: 3.4rem;
+  font-size: 5rem;
   line-height: 1;
 }
 
@@ -716,7 +720,7 @@ button.primary:hover {
   .mkx-title { font-size: 2.2rem; margin-bottom: var(--s3); }
   /* The emblem shrinks with the title it sits over: the compacting below exists
      to keep the lobby on one screen, and a full-size mark would spend it back. */
-  .lobby-fist { font-size: 2.5rem; }
+  .lobby-fist { font-size: 3.6rem; }
 
   .stage {
     min-height: 5.5rem;
@@ -731,7 +735,7 @@ button.primary:hover {
 
 @media (max-height: 600px) {
   .mkx-title { font-size: 1.9rem; margin-bottom: var(--s2); }
-  .lobby-fist { font-size: 1.9rem; }
+  .lobby-fist { font-size: 3rem; }
   .stage {
     min-height: 4.5rem;
     padding-top: var(--s2);
