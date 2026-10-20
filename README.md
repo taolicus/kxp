@@ -1,6 +1,6 @@
 # KACHIPUN TOURNAMENT
 
-Play it at **[kxp.tao.cl](https://kxp.tao.cl)**.
+Play it at **[kxp.pifia.net](https://kxp.pifia.net)**.
 
 A real-time online Rock-Paper-Scissors game in Go, with a web UI. Tap your move
 the moment **PUN!** appears — too early and you're disqualified, just like the

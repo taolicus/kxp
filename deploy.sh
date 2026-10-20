@@ -2,7 +2,7 @@
 # Build the server binary and deploy it to the production VPS.
 #
 # Deployment is deliberately just "copy the binary": systemd (kxp.service) and
-# nginx (kxp.tao.cl) are already set up on the host. The binary embeds the whole
+# nginx (kxp.pifia.net) are already set up on the host. The binary embeds the whole
 # web UI (main.go's `//go:embed web`), so the client ships with the server and
 # there is nothing else to copy.
 #
@@ -19,7 +19,7 @@ set -eu
 HOST="${DEPLOY_HOST:-tao}"
 REMOTE_DIR="${DEPLOY_DIR:-/home/dev/kxp}"
 SERVICE="kxp"
-HEALTH_URL="${HEALTH_URL:-https://kxp.tao.cl/health}"
+HEALTH_URL="${HEALTH_URL:-https://kxp.pifia.net/health}"
 
 cd "$(dirname "$0")"
 

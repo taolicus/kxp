@@ -1,6 +1,6 @@
 # Deployment
 
-How the live server at `https://kxp.tao.cl` is kept at the current build, and
+How the live server at `https://kxp.pifia.net` is kept at the current build, and
 why the pieces are shaped the way they are. The host pattern is shared with the
 sibling projects (asteroids, komikan) and was documented for it there; this file
 is the kxp instance of it.
