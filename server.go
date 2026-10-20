@@ -715,7 +715,7 @@ func (h *Hub) snapshot(c *Client) map[string]any {
 		// "preparing" is deliberately absent: the deadline is fixed at the far
 		// side of that phase, so there is nothing to leak during it.
 		if (out["phase"] == "shoot" || out["phase"] == "countdown") && m.hasShootAt() {
-			out["windowMs"] = shootWindow.Milliseconds()
+			out["windowMs"] = m.shootWindowOr().Milliseconds()
 			out["shootAt"] = m.shootAtMs()
 		}
 		// pending means "this client is mid-handshake and must re-admit and

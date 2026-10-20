@@ -23,7 +23,9 @@ const (
 
 // shootWindow is how long after PUN a pick may arrive before it is a timeout. A
 // var, not a const, so an operator can set -shoot-window; the engine reads this
-// one value, and the same value is announced to the client as windowMs.
+// one value, and the same value is announced to the client as windowMs. A match
+// snapshots it at construction (see newMatch) so a running match reads its own
+// value, not one an operator's flag parse or a test could change under it.
 var shootWindow = 2 * time.Second
 
 // countdownBeats are the beats announced before PUN, in the order they run.
@@ -292,6 +294,12 @@ type match struct {
 	// readyTimeout method below, which is the cancellation that fires when this
 	// expires.
 	gateTimeout time.Duration
+	// shootWindow is the PUN window this match runs on. Snapshotted for the same
+	// reason, and it is the one that made the point: the CI race report had a
+	// match goroutine reading the package var in playRound while settings_test
+	// rebound it through operationalFlags, a write nothing in the engine could
+	// see coming.
+	shootWindow time.Duration
 
 	// pickMove chooses the CPU opponent's move, and botThink is how long it waits
 	// before doing so. Both are injectable so a CPU match's rounds are not decided
@@ -342,6 +350,7 @@ func newMatch(roundsTarget int) *match {
 		readyRecheck: readyRecheck,
 		seriesBreak:  seriesBreak,
 		gateTimeout:  readyTimeout,
+		shootWindow:  shootWindow,
 		roundsTarget: roundsTarget,
 		drawEnds:     roundsTarget <= 1,
 		round:        1,
@@ -372,7 +381,7 @@ func (m *match) hasShootAt() bool { return m.shootAt.Load() != nil }
 func (m *match) shootAtMs() int64 { return m.shootAtTime().UnixMilli() }
 
 // deadline is when the PUN window closes, server-authoritative.
-func (m *match) deadline() time.Time { return m.shootAtTime().Add(shootWindow) }
+func (m *match) deadline() time.Time { return m.shootAtTime().Add(m.shootWindowOr()) }
 
 // tsNow stamps an outbound frame with the server clock (epoch-ms). Clients use
 // it to separate delivery lag from clock skew.
@@ -487,6 +496,13 @@ func (m *match) gateTimeoutOr() time.Duration {
 		return readyTimeout
 	}
 	return m.gateTimeout
+}
+
+func (m *match) shootWindowOr() time.Duration {
+	if m.shootWindow == 0 {
+		return shootWindow
+	}
+	return m.shootWindow
 }
 
 // waitReady blocks until the countdown may begin. Every match gates on it, CPU
@@ -797,7 +813,7 @@ func (m *match) playRound() bool {
 		return map[string]any{
 			"n":        n,
 			"shootAt":  m.shootAtMs(),
-			"windowMs": shootWindow.Milliseconds(),
+			"windowMs": m.shootWindowOr().Milliseconds(),
 			"ts":       tsNow(),
 		}
 	}
@@ -825,7 +841,7 @@ func (m *match) playRound() bool {
 	m.advance(phaseCountdown, phaseShoot)
 	for i := range m.sides {
 		m.send(i, evt("shoot", map[string]any{
-			"windowMs": shootWindow.Milliseconds(),
+			"windowMs": m.shootWindowOr().Milliseconds(),
 			"shootAt":  m.shootAtMs(),
 			"ts":       tsNow(),
 		}))
@@ -835,7 +851,7 @@ func (m *match) playRound() bool {
 		go m.botAction()
 	}
 
-	deadline := time.NewTimer(shootWindow)
+	deadline := time.NewTimer(m.shootWindowOr())
 	defer deadline.Stop()
 
 loop:
