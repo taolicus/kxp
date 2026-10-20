@@ -63,9 +63,9 @@ func waitEventWithin(t *testing.T, c *Client, typ string, within time.Duration) 
 
 func TestPVPRound(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -98,9 +98,9 @@ func TestPVPRound(t *testing.T) {
 
 func TestEarlyPickDisqualifies(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	m.ackReady(0)
@@ -123,9 +123,9 @@ func TestEarlyPickDisqualifies(t *testing.T) {
 
 func TestTimeoutLoses(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	m.ackReady(0)
@@ -152,9 +152,9 @@ func TestTimeoutLoses(t *testing.T) {
 
 func TestShootEventCarriesWindow(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
 
 	waitForEvent(t, a, "matched")
 	m.ackReady(0)
@@ -172,9 +172,9 @@ func TestShootEventCarriesWindow(t *testing.T) {
 // dropped `shoot` frame, and lag vs skew becomes measurable client-side.
 func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
 	m.ackReady(0)
 
 	d := waitForEvent(t, a, "countdown")
@@ -222,9 +222,9 @@ func TestCountdownCarriesAnnouncedPlan(t *testing.T) {
 // here rather than left to the countdown's pacing.
 func TestCountdownBeatsLeadPUN(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
 	m.ackReady(0)
 
 	want := []string{"READY", "KA", "CHI"}
@@ -248,10 +248,10 @@ func TestCountdownBeatsLeadPUN(t *testing.T) {
 
 func TestCPURound(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{bot: true})
 	m.ackReady(0)
 
 	waitForEvent(t, a, "shoot")
@@ -276,6 +276,7 @@ func TestCPURound(t *testing.T) {
 
 func TestDrainPendingCountsBufferedMove(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}
@@ -292,6 +293,7 @@ func TestDrainPendingCountsBufferedMove(t *testing.T) {
 
 func TestDrainPendingLeavesEmptyChannelAsTimeout(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 

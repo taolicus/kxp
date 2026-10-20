@@ -224,6 +224,26 @@ type Hub struct {
 	challenges map[string]*challengeEntry // token -> challenge
 	challenge  map[string]*challengeEntry // creator pid -> challenge (open)
 
+	// matches counts the match goroutines this hub has launched and not yet
+	// seen finish, so Shutdown can wait for them instead of returning with a
+	// match still running. h.active is the same population but for a different
+	// question -- it answers "is the hub at capacity" and is read on the hot
+	// path -- and it is decremented by finishMatch, which a match that is torn
+	// down by some other route can skip. This one is decremented when the
+	// goroutine actually returns, which is the only thing a join can wait on.
+	//
+	// It matters outside production too: a test that starts a match and returns
+	// leaves that goroutine running into the next test, where it can write to
+	// shared state the next test is reading. CI's -race step caught exactly that
+	// -- see docs/tasks/open/test-helper-goroutine-leak.md.
+	matches sync.WaitGroup
+	// running is the clients taking part in each match this hub has started,
+	// which is what Shutdown cancels to wake them. The engine's matchParty is
+	// deliberately client-agnostic (round.go knows nothing about Client), so the
+	// hub keeps its own side of that mapping rather than widening the party
+	// struct for a teardown detail. Guarded by h.mu.
+	running map[*match][2]*Client
+
 	// pacing is the engine timing this hub hands to every match it builds,
 	// snapshotted from the package vars at NewHub. Reading those vars per match
 	// made a hub's matches depend on global state that a test (or an operator's
@@ -263,6 +283,7 @@ func NewHub() *Hub {
 		players:    make(map[string]*player),
 		challenges: make(map[string]*challengeEntry),
 		challenge:  make(map[string]*challengeEntry),
+		running:    make(map[*match][2]*Client),
 		down:       down,
 		stop:       stop,
 		limiter:    newRateLimiter(rlCapacity, rlRefillPerSec, rlMaxEntries, nil),
@@ -315,8 +336,73 @@ func (h *Hub) routes() *http.ServeMux {
 	return mux
 }
 
+// Shutdown cancels the hub, wakes every match so it can leave its gate, and waits
+// for the match goroutines it launched to return. Waiting is the point: the
+// previous version only cancelled, so a match mid-round could still be running --
+// and writing to clients that were being torn down -- after Shutdown reported the
+// server stopped.
+//
+// The middle step is what makes the wait bounded. Cancelling h.down stops the
+// SSE writers but is invisible to a match, which is engine-only and never sees
+// the hub's context; a match parked in waitReady or in its shoot window would sit
+// out its full timeout before the wait returned. Cancelling the clients instead
+// closes the alive channel each side's leftCh is derived from, and every select
+// in the engine already watches that, so the match leaves by the ordinary
+// departure path -- the same route a client that closes its tab takes. Hub
+// shutdown is therefore expressed to the engine as "everyone left at once", which
+// needs no new hook in round.go.
 func (h *Hub) Shutdown() {
 	h.stop()
+	h.cancelClientsForShutdown()
+	h.Wait()
+}
+
+// cancelClientsForShutdown cancels the alive context of every client taking part
+// in a match this hub started, so any match selecting on leftCh wakes. Cancel is
+// idempotent, so a client already torn down by its own stream closing is harmless
+// here.
+//
+// It walks the matches rather than h.clients, because those are not the same set.
+// A test builds a match from clients it never registered with the hub
+// (makeMatch plus start, no /events), and cancelling by h.clients would leave
+// exactly those matches parked -- which is what a run of the full suite proved:
+// a match sat in playRound for the whole ten-minute package timeout. The matches
+// this hub started are the authoritative set for "who is in a match", and every
+// one of them is finished by the time Wait returns.
+//
+// Every cancel happens while h.mu is held, which is what makes the stop atomic
+// with respect to match starts: startMatchLocked refuses to start once h.down is
+// cancelled, and a tryMatch already waiting on h.mu therefore sees either all
+// clients cancelled (and its start refused) or none. Cancelling outside the lock
+// would leave a window where a match starts against clients about to be
+// cancelled, and the WaitGroup reuse that follows is a panic rather than a clean
+// failure.
+func (h *Hub) cancelClientsForShutdown() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, cs := range h.running {
+		for _, c := range cs {
+			if c != nil {
+				c.cancel()
+			}
+		}
+	}
+}
+
+// Wait blocks until every match goroutine this hub started has returned. A hub
+// that never started one returns immediately.
+//
+// It is separate from Shutdown because the two are wanted apart: a test joins a
+// hub it is not cancelling (the match should end on its own, and the test only
+// needs it to have done so before the test returns), while Shutdown always does
+// both. Nothing here cancels anything, so Wait on a hub whose matches are still
+// meaningfully running will block until they finish or their gates time out.
+//
+// A caller must not Wait twice concurrently with a match being started, because
+// sync.WaitGroup forbids reuse while a Wait is in flight. In practice each hub is
+// shut down once, and every Add happens before the hub is stopped.
+func (h *Hub) Wait() {
+	h.matches.Wait()
 }
 
 // getOrCreate returns the client for the connection id, minting a fresh
@@ -916,6 +1002,10 @@ func (h *Hub) makeMatch(roundsTarget int, a, b side) *match {
 		return queued
 	}
 	m.finish = func() { h.finishMatch(m, src) }
+	// Every match this hub builds is joined by Shutdown, including one a test
+	// starts by calling start() itself rather than through startMatchLocked.
+	m.goroutines = &h.matches
+	m.parties = [2]*Client{src[0].client, src[1].client}
 
 	for _, s := range src {
 		if s.client != nil {
@@ -927,6 +1017,26 @@ func (h *Hub) makeMatch(roundsTarget int, a, b side) *match {
 }
 
 func (h *Hub) startMatchLocked(m *match) {
+	// A hub that has been stopped must not start another match. Shutdown waits
+	// on h.matches, and a start after that Wait began is a WaitGroup reuse --
+	// "WaitGroup is reused before previous Wait has returned", a panic rather
+	// than a failure. The routes that could do it are all one step removed from
+	// here: requeue spawns a tryMatch goroutine that can still be waiting on
+	// h.mu when Shutdown takes it, and a queued request can be in flight. The
+	// check lives at the single point every start passes through, so no route
+	// has to remember it. Callers hold h.mu, and Shutdown's cancels happen under
+	// it too, so a start either completes before the stop is visible or is
+	// refused -- never interleaves with it.
+	if h.down.Err() != nil {
+		return
+	}
+	// Registered only here, at the moment the goroutine is launched: h.running is
+	// the set of matches that are actually running and therefore need waking, and
+	// a match built but never started has no goroutine to wake. Making the write
+	// here rather than in makeMatch also keeps makeMatch free of hub map state,
+	// so the many test call sites that build a match and never start it stay as
+	// harmless as they were.
+	h.running[m] = m.parties
 	h.active.Add(1)
 	m.start()
 }
@@ -949,6 +1059,7 @@ func (h *Hub) finishMatch(m *match, sides [2]side) {
 	// unlocked read here would be a data race.
 	var teardown [2]bool
 	h.mu.Lock()
+	delete(h.running, m)
 	for i, s := range sides {
 		if s.client != nil && s.client.match == m {
 			s.client.match = nil

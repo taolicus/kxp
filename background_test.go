@@ -50,9 +50,9 @@ func TestBackgroundRosterMatchesTheClient(t *testing.T) {
 // screens disagreeing -- so it is pinned directly.
 func TestBothSidesAreSentTheSameBackground(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	_ = startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	evA := waitForEvent(t, a, "matched")
 	evB := waitForEvent(t, b, "matched")
@@ -75,10 +75,10 @@ func TestBothSidesAreSentTheSameBackground(t *testing.T) {
 // ever goes missing it should surface here first.
 func TestCPUMatchAnnouncesABackground(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
-	m.start()
+	_ = startMatch(t, h, defaultSeriesTarget, side{client: a}, side{bot: true})
 
 	ev := waitForEvent(t, a, "matched")
 	bg, _ := ev["background"].(string)

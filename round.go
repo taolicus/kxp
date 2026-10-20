@@ -319,6 +319,34 @@ type match struct {
 	// provided for any match that actually runs.
 	finish func()
 
+	// goroutines, when non-nil, counts this match's run goroutine for the hub
+	// that built it, so Hub.Shutdown can join it instead of returning with a
+	// match still running. Set by makeMatch; nil for an engine-only match built
+	// from a struct literal, where there is no hub to join anything.
+	//
+	// The Add is in start, immediately before the `go`, and the Done is the
+	// first thing run's deferred block does -- paired around the goroutine
+	// itself rather than around finish, because finish is a hub callback that a
+	// match torn down by another route can skip, and a WaitGroup that adds
+	// without ever completing hangs the wait rather than failing it.
+	goroutines *sync.WaitGroup
+
+	// onExit, when non-nil, runs first in run's deferred block, before the
+	// goroutine counter is decremented. It exists so a test can observe *that*
+	// this match's goroutine is about to return and assert ordering against it
+	// (shutdown_test.go), which is a stronger claim than timing it. First, not
+	// last, because the counter reaching zero is what releases a waiter: a hook
+	// after Done would be able to run *after* Wait had already returned, which is
+	// precisely the thing it is meant to prove cannot happen. nil in production.
+	onExit func()
+
+	// parties is the hub's own record of which clients own each side, set by
+	// makeMatch and read only under h.mu. The engine deliberately knows nothing
+	// about Client (matchParty holds no client, only channels), so the mapping
+	// back to a cancellable client lives here rather than widening matchParty
+	// for a teardown detail. Shutdown cancels these to wake a parked match.
+	parties [2]*Client
+
 	// abandon records why the handshake was cancelled (zero for a match that
 	// ran). A plain int32 rather than an atomic: it is written in
 	// readyTimeout/readyAbandon and read in finish, which is deferred in run on
@@ -682,6 +710,12 @@ func (m *match) abandonReason() string { return abandonLabel(m.abandon) }
 // start advances idle -> countdown and runs the match concurrently.
 func (m *match) start() {
 	m.advance(phaseIdle, phasePreparing)
+	// Counted before the goroutine exists, so a Shutdown that races this start
+	// still waits for it: Add-then-go is the only order that cannot miss a
+	// goroutine that has already begun.
+	if m.goroutines != nil {
+		m.goroutines.Add(1)
+	}
 	go m.run()
 }
 
@@ -691,6 +725,12 @@ func (m *match) run() {
 		// stray /ready against a pointer that finish has not cleared yet must
 		// not be answered 200 for a countdown that is no longer coming.
 		m.betweenRounds.Store(false)
+		if m.onExit != nil {
+			m.onExit()
+		}
+		if m.goroutines != nil {
+			m.goroutines.Done()
+		}
 		if m.finish != nil {
 			m.finish()
 		}

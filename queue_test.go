@@ -32,6 +32,7 @@ func tryMatchNow(h *Hub) {
 
 func TestQueuePairsOnlyEqualLengths(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	w1 := registerMoveTestClient(h, "w1")
 	w2 := registerMoveTestClient(h, "w2")
 	w3 := registerMoveTestClient(h, "w3")
@@ -89,6 +90,7 @@ func TestQueuePairsOnlyEqualLengths(t *testing.T) {
 
 func TestRequeuedSideReentersWithTheLengthItWasPlaying(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
 	three := registerMoveTestClient(h, "rq-three")
 	t.Cleanup(three.cancel)
@@ -96,8 +98,7 @@ func TestRequeuedSideReentersWithTheLengthItWasPlaying(t *testing.T) {
 
 	// A first-to-three match loses a side to a disconnect mid-handshake. The
 	// survivor goes back to the queue asking for the length it was playing.
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 	waitForEvent(t, a, "matched")
 	m.ackReady(0)
 	b.cancel()
@@ -157,6 +158,7 @@ func TestRequeuedSideReentersWithTheLengthItWasPlaying(t *testing.T) {
 // their mind in the lobby changes what they will be paired with.
 func TestRequeueWhileWaitingUpdatesTheLength(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	one := registerMoveTestClient(h, "up-one")
 	x := registerMoveTestClient(h, "up-x")
 	t.Cleanup(one.cancel)

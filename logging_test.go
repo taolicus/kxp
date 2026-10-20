@@ -6,15 +6,41 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
-func captureLog(t *testing.T) (*bytes.Buffer, func()) {
+// logSink is a log destination that can be read while it is being written. A
+// bare bytes.Buffer cannot: a match goroutine from a previous test may still be
+// logging into it when the current test reads, and that unsynchronised pair is
+// what turned a leaked goroutine into a CI -race failure on
+// TestSSEFrameJournalLoggedOnLeave
+// (docs/tasks/open/test-helper-goroutine-leak.md). The leak is fixed at its
+// source -- see stopHub -- and this closes the other half, because a test sink
+// that any live goroutine can write is a trap for the next one.
+type logSink struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *logSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *logSink) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+func captureLog(t *testing.T) (*logSink, func()) {
 	t.Helper()
-	var buf bytes.Buffer
+	sink := &logSink{}
 	prev := log.Writer()
-	log.SetOutput(&buf)
-	return &buf, func() { log.SetOutput(prev) }
+	log.SetOutput(sink)
+	return sink, func() { log.SetOutput(prev) }
 }
 
 func TestLogAccessCapturesStatus(t *testing.T) {

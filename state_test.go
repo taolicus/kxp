@@ -77,12 +77,12 @@ func TestAllowedTransitionTable(t *testing.T) {
 
 func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
 	// Distinct fighters, so the terminal frame's identity fields round-trip to a
 	// value that cannot be confused with the sender's own.
 	a.character, b.character = "ronin", "kitsune"
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -125,9 +125,9 @@ func TestDoubleAbortEmitsOpponentLeftOnce(t *testing.T) {
 // the time before any countdown existed.
 func TestCountdownPhaseBeginsOnlyWhenTheGateOpens(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 	waitForEvent(t, a, "matched")
 
 	if got := m.phase.Load(); got != phasePreparing {
@@ -152,6 +152,7 @@ func TestCountdownPhaseBeginsOnlyWhenTheGateOpens(t *testing.T) {
 // mattered, and every match could then only ever end in a handshake timeout.
 func TestReadyAckIsAcceptedDuringPreparing(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	c := registerMoveTestClient(h, "prep")
 	m := &match{readyCh: make(chan struct{}), now: time.Now}
 	m.phase.Store(phasePreparing)

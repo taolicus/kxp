@@ -7,11 +7,12 @@ import (
 
 func TestStartDrainsLeftoverMoves(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	a.moves <- moveMsg{move: MoveRock, arrive: time.Now()}
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
 
-	m.start()
+	startBuiltMatch(t, h, m)
 
 	select {
 	case msg := <-a.moves:
@@ -24,6 +25,7 @@ func TestStartDrainsLeftoverMoves(t *testing.T) {
 
 func TestFinishDrainsLeftoverMoves(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	a.match = m
@@ -47,10 +49,10 @@ func TestFinishDrainsLeftoverMoves(t *testing.T) {
 
 func TestStartDoesNotEatValidPickDuringShoot(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	b := newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	m.ackReady(0)

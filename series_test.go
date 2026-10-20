@@ -42,6 +42,7 @@ func shortReadyTimeout(t *testing.T, m *match, d time.Duration) {
 func seriesMatchForTest(t *testing.T) (*match, *Client) {
 	t.Helper()
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	t.Cleanup(a.cancel)
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
@@ -54,6 +55,7 @@ func seriesMatchForTest(t *testing.T) (*match, *Client) {
 func oneRoundMatchForTest(t *testing.T) (*match, *Client) {
 	t.Helper()
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	t.Cleanup(a.cancel)
 	m := h.makeMatch(1, side{client: a}, side{bot: true})
@@ -253,6 +255,7 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 	// came to. First-to-three PvP is the other neighbour:
 	// TestAPVPMatchCanBeAFirstToThree.
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
 	m := h.makeMatch(1, side{client: a}, side{client: b})
 	noSeriesBreak(t, m)
@@ -260,7 +263,7 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 		t.Fatal("a one-round PvP match reports itself as a series")
 	}
 
-	m.start()
+	startBuiltMatch(t, h, m)
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
 	m.ackReady(0)
@@ -313,6 +316,7 @@ func TestPVPMatchEndsOnItsFirstRound(t *testing.T) {
 // TestOnlineSeries* tests in ready_test.go.
 func TestAPVPMatchCanBeAFirstToThree(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
 	t.Cleanup(a.cancel)
 	t.Cleanup(b.cancel)
@@ -347,10 +351,11 @@ func TestAPVPMatchCanBeAFirstToThree(t *testing.T) {
 // stop the loop, or the player asked for one round and got five.
 func TestASeriesOfOneRoundEndsImmediately(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	m := h.makeMatch(1, side{client: a}, side{bot: true})
 	noSeriesBreak(t, m)
-	m.start()
+	startBuiltMatch(t, h, m)
 	m.ackReady(0)
 
 	first := waitEventWithin(t, a, "result", 20*time.Second)
@@ -386,11 +391,12 @@ func TestASeriesOfOneRoundEndsImmediately(t *testing.T) {
 // its `matched` frames carry the target like a CPU one's.
 func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 
 	cpu := newClient()
 	cm := h.makeMatch(defaultSeriesTarget, side{client: cpu}, side{bot: true})
 	noSeriesBreak(t, cm)
-	cm.start()
+	startBuiltMatch(t, h, cm)
 	md := waitForEvent(t, cpu, "matched")
 	if md["roundsTarget"] != float64(defaultSeriesTarget) {
 		t.Errorf("cpu matched roundsTarget = %v, want %d -- the scoreboard has to be drawable before round one",
@@ -399,8 +405,7 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	cpu.cancel()
 
 	pvpA, pvpB := newClient(), newClient()
-	pm := h.makeMatch(1, side{client: pvpA}, side{client: pvpB})
-	pm.start()
+	startMatch(t, h, 1, side{client: pvpA}, side{client: pvpB})
 	for name, c := range map[string]*Client{"a": pvpA, "b": pvpB} {
 		frame := waitForEvent(t, c, "matched")
 		if _, ok := frame["roundsTarget"]; ok {
@@ -415,8 +420,7 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 	// before round one here as well. This half fails against the old single-
 	// round PvP rule.
 	longA, longB := newClient(), newClient()
-	lm := h.makeMatch(defaultSeriesTarget, side{client: longA}, side{client: longB})
-	lm.start()
+	startMatch(t, h, defaultSeriesTarget, side{client: longA}, side{client: longB})
 	for name, c := range map[string]*Client{"a": longA, "b": longB} {
 		frame := waitForEvent(t, c, "matched")
 		if frame["roundsTarget"] != float64(defaultSeriesTarget) {
@@ -434,10 +438,11 @@ func TestOnlyASeriesAnnouncesARoundsTarget(t *testing.T) {
 // a dropped connection takes.
 func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 	noSeriesBreak(t, m)
-	m.start()
+	startBuiltMatch(t, h, m)
 	m.ackReady(0)
 
 	first := waitEventWithin(t, a, "result", 20*time.Second)
@@ -487,6 +492,7 @@ func TestCPUSeriesPlaysTheNextRound(t *testing.T) {
 // second round would resolve on round one's pick and never open its window.
 func TestBeginRoundClearsTheLastRoundsPicks(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 

@@ -41,10 +41,10 @@ func TestRandomCharacter(t *testing.T) {
 
 func TestRoundCarriesCharacters(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
 	b.character = "kamo"
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	// a chose nothing, so its side carries the default. Spelled as the default
 	// rather than as the fighter that happens to be first: what this test claims is
@@ -83,10 +83,10 @@ func TestRoundCarriesCharacters(t *testing.T) {
 
 func TestMatchExposesBotCharacter(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{bot: true, character: "lucio"})
 
 	md := waitForEvent(t, a, "matched")
 	if md["opponentCharacter"] != "lucio" {

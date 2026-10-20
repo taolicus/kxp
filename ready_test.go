@@ -8,9 +8,9 @@ import (
 
 func TestPvPReadyGate(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -40,10 +40,10 @@ func TestPvPReadyGate(t *testing.T) {
 // long as it needs, a fast one pays nothing — rather than a fixed sleep.
 func TestCPUWaitsForHumanReady(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{bot: true})
 
 	waitForEvent(t, a, "matched")
 
@@ -62,10 +62,10 @@ func TestCPUWaitsForHumanReady(t *testing.T) {
 // be told anything, so its bit must not be able to satisfy the gate on its own.
 func TestCPUBotAckDoesNotReleaseGate(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	t.Cleanup(a.cancel) // a CPU match is a series: it would play rounds for the rest of the run
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{bot: true})
 
 	waitForEvent(t, a, "matched")
 
@@ -90,10 +90,11 @@ func TestCPUBotAckDoesNotReleaseGate(t *testing.T) {
 // asked for. The teardown frame says why, so the bounce is explicable.
 func TestCPUReadyTimeoutReturnsHumanToLobby(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 	shortReadyTimeout(t, m, 80*time.Millisecond)
-	m.start()
+	startBuiltMatch(t, h, m)
 
 	waitForEvent(t, a, "matched")
 
@@ -121,10 +122,10 @@ func TestCPUReadyTimeoutReturnsHumanToLobby(t *testing.T) {
 // Cancel, and re-matched within the gate window again.
 func TestReadyTimeoutRequeuesAndExplainsBothSides(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	shortGateTimeout(h, 80*time.Millisecond)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	_ = startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -154,9 +155,9 @@ func TestReadyTimeoutRequeuesAndExplainsBothSides(t *testing.T) {
 // timeout case — the round vanished for no stated reason.
 func TestReadyAbandonExplainsToSurvivor(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -185,9 +186,9 @@ func TestReadyAbandonExplainsToSurvivor(t *testing.T) {
 // cancelled right after they finished it.
 func TestFinishedMatchTeardownCarriesNoReason(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -211,9 +212,9 @@ func TestFinishedMatchTeardownCarriesNoReason(t *testing.T) {
 
 func TestReadyAbandonOnLeaveRequeuesSurvivor(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	m.ackReady(0)
@@ -231,10 +232,10 @@ func TestReadyAbandonOnLeaveRequeuesSurvivor(t *testing.T) {
 
 func TestReadyTimeoutRequeuesBoth(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	shortGateTimeout(h, 80*time.Millisecond)
 	a, b := newClient(), newClient()
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	_ = startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	// Neither side acks: after readyTimeout both are re-queued and finishMatch
@@ -255,14 +256,14 @@ func TestReadyTimeoutRequeuesBoth(t *testing.T) {
 // and a client whose lease expired during it must be able to re-arm.
 func TestOnlineSeriesReacksBetweenRounds(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	// Registered, unlike most engine tests here: the acks go through
 	// handleReady, which looks the id up the way a client's POST does.
 	a := registerMoveTestClient(h, "reack-a")
 	b := registerMoveTestClient(h, "reack-b")
 	t.Cleanup(a.cancel)
 	t.Cleanup(b.cancel)
-	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	m.start()
+	m := startMatch(t, h, defaultSeriesTarget, side{client: a}, side{client: b})
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -315,6 +316,7 @@ func TestOnlineSeriesReacksBetweenRounds(t *testing.T) {
 // open across the change reads a terminal frame rather than a new event type.
 func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
 	// Distinct fighters, so the terminal frame's identity fields round-trip to a
 	// value that cannot be confused with the sender's own.
@@ -322,7 +324,7 @@ func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
 	t.Cleanup(a.cancel)
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
 	noSeriesBreak(t, m)
-	m.start()
+	startBuiltMatch(t, h, m)
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -391,6 +393,7 @@ func TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide(t *testing.T) {
 // the between-rounds gate alone.
 func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	// Registered for handleReady's id lookup, as in the reack test.
 	a := registerMoveTestClient(h, "to-between-a")
 	b := registerMoveTestClient(h, "to-between-b")
@@ -405,7 +408,7 @@ func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
 	// is set before start rather than after round one -- waitReady reads it on
 	// entry, and both gates belong to this match alone.
 	shortReadyTimeout(t, m, 1500*time.Millisecond)
-	m.start()
+	startBuiltMatch(t, h, m)
 
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
@@ -467,6 +470,7 @@ func TestOnlineSeriesTimeoutBetweenRoundsAwardsTheAckedSide(t *testing.T) {
 // end to end by TestOnlineSeriesDisconnectBetweenRoundsAwardsThePresentSide.
 func TestADepartureDuringTheRoundPauseReachesTheGate(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a, b := newClient(), newClient()
 	t.Cleanup(a.cancel)
 	t.Cleanup(b.cancel)

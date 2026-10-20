@@ -29,8 +29,10 @@ func advance(c *fakeClock, d time.Duration) {
 // is applied to the hub as well as the match, because a gate that times out
 // re-queues the survivor and the hub pairs it into a fresh match -- one this test
 // never holds, which would otherwise wait out the shipped eight seconds.
-func twoSided(timeout time.Duration) (*Hub, *match, *Client, *Client, *fakeClock) {
+func twoSided(t *testing.T, timeout time.Duration) (*Hub, *match, *Client, *Client, *fakeClock) {
+	t.Helper()
 	h := NewHub()
+	stopHub(t, h)
 	shortGateTimeout(h, timeout)
 	a, b := newClient(), newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
@@ -44,8 +46,8 @@ func twoSided(timeout time.Duration) (*Hub, *match, *Client, *Client, *fakeClock
 // one-shot bit says it is forever. Before the lease this match opened as soon as
 // the second side arrived, however long after the first side's ack.
 func TestStaleAckDoesNotOpenTheGate(t *testing.T) {
-	_, m, a, b, clk := twoSided(5 * time.Second)
-	m.start()
+	h, m, a, b, clk := twoSided(t, 5*time.Second)
+	startBuiltMatch(t, h, m)
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
 
@@ -64,8 +66,8 @@ func TestStaleAckDoesNotOpenTheGate(t *testing.T) {
 // re-opens the gate on its next ack. Without this the lease would be a one-way
 // door that fails closed and never recovers.
 func TestRenewalReopensTheGate(t *testing.T) {
-	_, m, a, _, clk := twoSided(5 * time.Second)
-	m.start()
+	h, m, a, _, clk := twoSided(t, 5*time.Second)
+	startBuiltMatch(t, h, m)
 	waitForEvent(t, a, "matched")
 
 	m.ackReady(0)
@@ -124,6 +126,7 @@ func TestStaleAckExpiresTheGate(t *testing.T) {
 // on the strength of a side that has no client to receive anything.
 func TestBotNeverSatisfiesTheGateLease(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	a := newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{bot: true})
 	clk := leaseClock()
@@ -144,8 +147,8 @@ func TestBotNeverSatisfiesTheGateLease(t *testing.T) {
 // This is the shape that matters, because the alternative is a countdown delivered
 // to nobody and a player waiting out a round that can never be played.
 func TestVanishedSideIsCancelledRatherThanServed(t *testing.T) {
-	_, m, a, b, clk := twoSided(800 * time.Millisecond)
-	m.start()
+	h, m, a, b, clk := twoSided(t, 800*time.Millisecond)
+	startBuiltMatch(t, h, m)
 	waitForEvent(t, a, "matched")
 	waitForEvent(t, b, "matched")
 
@@ -192,6 +195,7 @@ func postReady(h *Hub, id string) *httptest.ResponseRecorder {
 // appears.
 func TestReadyRejectsAClientThatIsNotASideOfItsMatch(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	c := registerMoveTestClient(h, "outsider")
 
 	m := &match{readyCh: make(chan struct{}), now: time.Now}
@@ -214,6 +218,7 @@ func TestReadyRejectsAClientThatIsNotASideOfItsMatch(t *testing.T) {
 // passing by rejecting everybody.
 func TestReadyAcceptsAGenuineSide(t *testing.T) {
 	h := NewHub()
+	stopHub(t, h)
 	c := registerMoveTestClient(h, "insider")
 	m := &match{readyCh: make(chan struct{}), now: time.Now}
 	m.phase.Store(phaseCountdown)
