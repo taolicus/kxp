@@ -92,7 +92,7 @@ func shortGateTimeout(h *Hub, d time.Duration) {
 // this as its last act: a match goroutine left running writes through the hub's
 // clients into whatever the *next* test is reading, which is the race CI's -race
 // step reported between TestSSEFrameJournalLoggedOnLeave and a leaked match
-// (docs/tasks/open/test-helper-goroutine-leak.md).
+// (docs/tasks/closed/test-helper-goroutine-leak.md).
 //
 // It cancels first, which is what makes the wait bounded rather than a full
 // ready-timeout for every test: a match sitting in waitReady is abandoned by the

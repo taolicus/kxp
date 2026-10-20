@@ -93,10 +93,14 @@ rather than argued.
 that touched no Go test) failed its `-race` step on a pre-existing, intermittent
 race in `sse_lifetime_test.go` — a leaked match goroutine, filed with its
 diagnosis in
-[test-helper-goroutine-leak.md](../open/test-helper-goroutine-leak.md) and deferred to
-the laptop, which is the only host that can run `-race`. So the browser fixture
-is verified and CI as a whole is not durably green until that race is fixed; the
-two claims are separate and this record does not conflate them.
+[test-helper-goroutine-leak.md](test-helper-goroutine-leak.md). That file has
+since landed, and the "deferred to the laptop" framing it originally carried was
+wrong — CI is the `-race` runner, so the fix was made on the phone and the push
+produced the verdict
+([device-aware-workflow.md](../../development/device-aware-workflow.md)). So the
+browser fixture is verified and CI as a whole is not durably green until that
+race is fixed; the two claims are separate and this record does not conflate
+them.
 
 **The negative proof for "local mode really is local"** is the same one the CI
 task already relies on: `npm run tall` is deliberately absent from CI because it

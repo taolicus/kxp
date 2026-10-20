@@ -123,13 +123,14 @@ Three jobs, none of which touches the deployed origin:
   The step has found **two** test-harness races so far, and neither was a server
   bug: the first, on CI's maiden run, in the pacing vars the helpers shrink
   ([test-helper-package-var-race.md](../tasks/closed/test-helper-package-var-race.md));
-  the second, in a match goroutine that outlives the test which built it, filed
-  open in
-  [test-helper-goroutine-leak.md](../tasks/open/test-helper-goroutine-leak.md)
-  and the reason the step is red as this is written. That red-then-green-then-red
-  is the gate doing its job: it is the only evidence in this repo that `-race`
-  can fail here at all, and the second failure is a case that had been passing
-  by luck.
+  the second, in a match goroutine that outlived the test which built it, fixed
+  in
+  [test-helper-goroutine-leak.md](../tasks/closed/test-helper-goroutine-leak.md).
+  That red-then-green-then-red-then-green is the gate doing its job: it is the
+  only evidence in this repo that `-race` can fail here at all, and the second
+  failure was a case that had been passing by luck. The second fix is confirmed
+  green across six `-race` jobs on the same tree, because one green run of an
+  intermittent race proves very little.
 - **`unit`** — `npm ci`, `npm run unit`, `npm run links`. Both are origin-free by
   construction, pinned by `tools/lib/harness.test.mjs` and recorded in
   [unit-gate-needs-origin.md](../tasks/closed/unit-gate-needs-origin.md), so they

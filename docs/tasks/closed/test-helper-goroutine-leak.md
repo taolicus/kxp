@@ -1,9 +1,3 @@
----
-phase: 2
-depends-on: []
-gated-on: []
----
-
 # The tests leak match goroutines, and `captureLog` is what catches it
 
 CI's `-race` step failed on a docs-only commit (`39410641914`) with a data race
@@ -132,4 +126,78 @@ the race is intermittent, one green run is weak evidence; the proof is a green
 `-race` step across several pushes, or a run of `go test -race ./...` on the
 laptop if it is to hand. The `docs/issues/` rule also applies: this is a traced
 mechanism, so it lands as a fix, not parked as a symptom.
+
+## Landed
+
+Both defects fixed, in `server.go`, `round.go` and the test helpers.
+
+**The wait is bounded by cancel, and the join makes it a join.** `Hub.Shutdown`
+now cancels the clients taking part in every match the hub started, then waits
+on a `sync.WaitGroup` incremented in `match.start` and decremented in `run`'s
+deferred block. Cancelling *clients* rather than `h.down` is what preserves the
+engine boundary this file named as the blocker: `round.go` still never sees the
+hub's context, and every engine select already watches `leftCh` (derived from
+`client.alive`), so a match parked in `waitReady` or in its shoot window leaves
+by the ordinary departure path with no new hook. Hub shutdown is expressed to
+the engine as "everyone left at once".
+
+**`h.running` is the mapping the engine cannot hold.** `matchParty` deliberately
+carries no `Client`, so the hub keeps `map[*match][2]*Client`, written in
+`startMatchLocked` (and by the test helpers) and deleted in `finishMatch`. An
+early draft cancelled `h.clients` instead; the full suite then hung for the whole
+ten-minute package timeout with a match parked in `playRound`, because a test
+builds matches from clients it never registered with the hub. That hang is the
+reason the mapping exists, and it is why the naive fix is recorded here rather
+than left to be re-tried.
+
+**`startMatchLocked` refuses to start once `h.down` is cancelled.** This is what
+makes the Add-before-Wait ordering hold: `m.requeue` spawns a `tryMatch` that can
+still be waiting on `h.mu` when `Shutdown` takes it, and a start after `Wait`
+began is `sync: WaitGroup is reused before previous Wait has returned` — a panic,
+not a failure. The guard sits at the single point every start passes through, and
+the client cancels happen under the same lock, so a start either completes before
+the stop is visible or is refused.
+
+**`captureLog` is a mutex-guarded sink** (`logSink` in `logging_test.go`), which
+this file called defence in depth and still is: the leak is closed at its source
+by `stopHub`, and the sink closes the trap for the next background goroutine.
+
+**What was verified, and how.** On the phone: `gofmt -l .` clean, `go vet ./...`
+clean, `go test -count=1 ./...` ok (210s), `npm run unit` 222/222, `npm run
+links` 138 documents / 471 links / 0 broken. The phone cannot run `-race`, so per
+[device-aware-workflow.md](../../development/device-aware-workflow.md) CI is the
+verdict here rather than the laptop.
+
+**The race verdict, repeated.** `go test -race ./...` green in **six** CI jobs
+across three triggers on the identical tree (`e2da3fe`): two `push` runs, and
+`push` + `pull_request` for each of two empty commits branched from it. The
+step list of run `39464592193` confirms step 7 is `go test -race ./...` and
+`success` — not skipped. The temporary PR used to produce the repeats is closed
+and its branch deleted.
+
+**The negative proof, and it is two separate negatives.** `shutdown_test.go`
+gains `TestHubShutdownJoinsRunningMatch`, checked to *fail* against each half of
+the fix independently:
+- Drop `h.Wait()` → `Shutdown returned before the match goroutine exited; it
+  did not join`.
+- Drop the client cancel → `Shutdown took 29.95s with a 30s gate; it did not
+  wake the match`.
+
+Getting the second one to bite needed the observation hook placed *first* in
+`run`'s deferred block, before the counter is decremented: a hook after `Done`
+can run after `Wait` has already returned, which is exactly what the test exists
+to disprove, so the first draft passed for the wrong reason.
+
+**A note on the test-side change.** `makeMatch` requires `h.mu` and every test
+called it bare — harmless until it began registering matches, at which point the
+registration itself would have been a fresh race. Rather than teach forty call
+sites about the lock, tests now go through `startMatch`/`startBuiltMatch`, which
+take it; `stopHub(t, h)` registers a `t.Cleanup` that calls `Shutdown`, so a
+test that fails partway is covered too. Every test that creates a hub and starts
+a match calls it — checked by scanning the test sources, not by eye.
+
+**Still unverified here.** `npm run e2e` does not run on the phone (no
+Chromium); CI's `browser` job ran it green in each of the six runs above, which
+is the only coverage that claim has.
+
 

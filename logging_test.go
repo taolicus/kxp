@@ -15,7 +15,7 @@ import (
 // logging into it when the current test reads, and that unsynchronised pair is
 // what turned a leaked goroutine into a CI -race failure on
 // TestSSEFrameJournalLoggedOnLeave
-// (docs/tasks/open/test-helper-goroutine-leak.md). The leak is fixed at its
+// (docs/tasks/closed/test-helper-goroutine-leak.md). The leak is fixed at its
 // source -- see stopHub -- and this closes the other half, because a test sink
 // that any live goroutine can write is a trap for the next one.
 type logSink struct {

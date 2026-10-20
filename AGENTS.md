@@ -174,8 +174,10 @@ rendering slice workable from the phone. The `-race` step found a race in the
 test helpers on its first run
 ([test-helper-package-var-race.md](docs/tasks/closed/test-helper-package-var-race.md))
 and a second, intermittent one in a leaked match goroutine since
-([test-helper-goroutine-leak.md](docs/tasks/open/test-helper-goroutine-leak.md)),
-which is the gate doing its job; the first has landed, the second is open.
+([test-helper-goroutine-leak.md](docs/tasks/closed/test-helper-goroutine-leak.md)).
+Both have landed, and both were the gate doing its job: neither was a server bug,
+and the second had been passing by luck until CI's `-race` step made it fail on
+a docs-only commit.
 
 `npm run unit` is the catch-all for client and harness tests (the README's
 shorter `node --test web/kxp.test.cjs web/machine.test.cjs` misses

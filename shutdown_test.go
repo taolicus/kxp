@@ -62,7 +62,7 @@ func TestHubShutdownIdempotent(t *testing.T) {
 // whatever ran next. That is how a leaked match from one test logged through the
 // *next* test's captureLog sink and failed -race on
 // TestSSEFrameJournalLoggedOnLeave
-// (docs/tasks/open/test-helper-goroutine-leak.md).
+// (docs/tasks/closed/test-helper-goroutine-leak.md).
 //
 // Both halves are asserted, and each is a separate negative.
 //   - Waking: the match is demonstrably still parked in its gate when Shutdown is

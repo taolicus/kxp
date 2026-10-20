@@ -235,7 +235,7 @@ type Hub struct {
 	// It matters outside production too: a test that starts a match and returns
 	// leaves that goroutine running into the next test, where it can write to
 	// shared state the next test is reading. CI's -race step caught exactly that
-	// -- see docs/tasks/open/test-helper-goroutine-leak.md.
+	// -- see docs/tasks/closed/test-helper-goroutine-leak.md.
 	matches sync.WaitGroup
 	// running is the clients taking part in each match this hub has started,
 	// which is what Shutdown cancels to wake them. The engine's matchParty is

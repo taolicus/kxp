@@ -36,6 +36,14 @@ refactor: no production file changes.
   `readyCh`/`now`/`phase` by hand; a `testMatch()` constructor removes the
   repetition (the `match.id` field that used to label these literals is gone —
   see [engine-dead-state](../closed/engine-dead-state.md)).
+- **Hub + match setup** — `startMatch`/`startBuiltMatch`/`stopHub`
+  ([testhelpers_test.go](../../../testhelpers_test.go)) took over "build a match
+  under `h.mu`, register it, start it, and join it at cleanup" when the goroutine
+  leak landed ([test-helper-goroutine-leak](../closed/test-helper-goroutine-leak.md)).
+  They are not duplicated any more, but they are the seam this consolidation
+  should build on: a `testHub(t, opts…)` that does `NewHub` + `stopHub` +
+  optional pacing in one call would absorb the two statements every match-bearing
+  test now writes.
 
 ## Constraints
 
