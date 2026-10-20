@@ -511,18 +511,23 @@ match. Pinned by `web/app.challenge.test.cjs`; the claim path landed in
 `e5545fe`, the latch in `07c1d20`.
 
 The waiting screen *is* the invite screen, because reservation is the default.
-*Play Online* mints a reservation and shows its code beside a paste field, so the
-one who shares and the one who claims meet on the same screen — and the code's
-own `?challenge=` path is the claimer's one-tap route around the field. *Play
-Online* is live from first paint: the count does not gate it, because a solo
-player is exactly who mints a code, and the count's only remaining job is its
-own text and dimmed dot. Pinned by `web/lobby-markup.test.cjs` and
+*Play Online* mints a reservation and shows its code, so the one who shares and
+the one who claims meet on the same screen — and the code's own `?challenge=`
+path is the claimer's *only* route, which is why there is no paste field on the
+screen: a field could only duplicate the link's own `/join`, and its presence
+read as though the link a friend was sent might not be enough on its own.
+Claiming is therefore one path, not two, and it is the one the URL already
+describes. *Play Online* is live from first paint: the count does not gate it,
+because a solo player is exactly who mints a code, and the count's only remaining
+job is its own text and dimmed dot. Pinned by `web/lobby-markup.test.cjs` and
 `web/app.reconnect.test.cjs`. A player
 who would rather not wait for one person leaves the reservation with the screen's
 "search for anyone" control, which cancels and joins the shared queue; that is
 the only way to reach the screen without a reservation, so a reload of a plain
-wait shows no code. A pasted bad code surfaces inline and leaves both the screen
-and the player's own reservation intact, rather than bouncing to the lobby. The
+wait shows no code. A link that has expired, was already spent, or names a match
+in play reports through the shared notice, not an inline line beside a field —
+the inline form existed to keep a mistyped code from bouncing the player to the
+lobby, and with nothing to mistype the common notice is the honest one. The
 code leaves the screen through the browser's share sheet where there is one; a
 sheet that is absent, refuses (an insecure context), or is dismissed falls back
 to a clipboard copy, and the rejected promise is handled so a cancellation never

@@ -75,10 +75,12 @@
     </div>
   </section>
 
-  <!-- The invite screen: the one place an online match starts, whether by
-       sharing the code below or by pasting someone else's. It doubles as the
-       plain matchmaker's wait when the player chooses "search for anyone", in
-       which case the player holds no reservation and no code is shown. -->
+  <!-- The invite screen: the one place an online match starts, by sharing the
+       code below. It doubles as the plain matchmaker's wait when the player
+       chooses "search for anyone", in which case the player holds no
+       reservation and no code is shown. Claiming is the link's job, not this
+       screen's: the `?challenge=` URL a friend follows posts /join on connect,
+       so there is no field here to paste it into. -->
   <section id="queue" class="view hidden">
     <h2 id="queue-title">Invite a friend</h2>
     <div id="challenge-link" class="hidden" style="margin-top:1em;text-align:center">
@@ -88,9 +90,6 @@
       <button id="btn-copy">Copy</button>
     </div>
     <div id="claim" style="margin-top:1em;text-align:center">
-      <p>Have a code? Paste a link or token to join:</p>
-      <input id="claim-url" style="width:80%;max-width:30em;padding:0.5em">
-      <button id="btn-claim">Join</button>
       <p id="claim-error" class="note hidden"></p>
     </div>
     <div class="spinner"></div>

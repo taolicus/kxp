@@ -462,6 +462,17 @@ Notes:
   with each round would read as the score having been thrown away.
   A reconnect mid-series does not restore the tally — `snapshot:countdown` is a
   schedule, and the score returns with that round's `result`.
+- `waiting` is the invite screen: a reservation's own link, or a plain
+  matchmaker wait when the player came through "search for anyone". It carries no
+  client-generated events for claiming, because there is nothing to claim on it —
+  the `?challenge=` URL is the whole of the claim, and it posts `/join` from the
+  `connected` handler at boot rather than from a control on this screen. The
+  state that *is* on the wire is the token: `connected` carries `challenge` while
+  this player holds a reservation, which is how a reload or a reconnect rebuilds
+  the screen with the link it shared. A refusal (expired, spent, in play) reports
+  through the shared notice; there is no inline line, since the inline form
+  existed to keep a mistyped code from bouncing the player to the lobby and there
+  is no longer anything to mistype.
 - `history` is the [match history](architecture.md#match-history)'s record view:
   this browser's own list of the matches it finished, so nothing about it is on
   the wire either — no event, no field, no server-side state. It is left by

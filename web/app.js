@@ -910,19 +910,6 @@ function mintChallenge(pair, event, onRefuse) {
   });
 }
 
-// The token out of whatever the player pasted: a full /?challenge= URL or a bare
-// token. The link is opaque and carries no format beyond its path, so the only
-// thing to strip is the surrounding URL when one was pasted.
-function tokenFromPaste(value) {
-  const s = String(value || '').trim();
-  if (!s) return '';
-  const m = s.match(/[?&]challenge=([^&\s]+)/);
-  if (m) {
-    try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
-  }
-  return s;
-}
-
 // Put the invite URL on the clipboard. execCommand is the copy that needs no
 // permission prompt, and the select() is what the command copies from; it is the
 // fallback for a browser with no share sheet and for a dismissed one.
@@ -943,16 +930,6 @@ function renderInvite() {
   if (search && search.classList) search.classList.toggle('hidden', !challengePending);
   const title = $('#queue-title');
   if (title) title.textContent = challengePending ? 'Invite a friend' : 'Searching for an opponent\u2026';
-}
-
-// The inline failure line beside the paste field. A bad code must leave the
-// screen usable rather than bounce the player to the lobby, so the message lives
-// here instead of the shared notice.
-function setClaimError(msg) {
-  const el = $('#claim-error');
-  if (!el) return;
-  el.textContent = msg || '';
-  if (el.classList) el.classList.toggle('hidden', !msg);
 }
 
 function fighterHTML(charId, role) {
@@ -1799,25 +1776,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shareBtn = $('#btn-share');
     if (shareBtn && shareBtn.classList) shareBtn.classList.add('hidden');
   }
-  // The claim half of the invite screen: the player pasted someone else's code
-  // and is joining their reservation. Success is the `matched` frame, not the
-  // reply, so nothing moves the screen here; a refusal shows inline and leaves
-  // the screen -- and the player's own code, if they hold one -- intact.
-  $('#btn-claim').addEventListener('click', () => {
-    const inp = $('#claim-url');
-    const token = tokenFromPaste(inp && inp.value);
-    if (!token) {
-      setClaimError('Paste a link or code first.');
-      return;
-    }
-    setClaimError('');
-    post('/join', { token }).then((res) => {
-      if (res && res.ok) return;
-      if (res && res.status === 404) setClaimError('That code has expired or was already used.');
-      else if (res && res.status === 409) setClaimError('That game is already in play.');
-      else setClaimError('Could not join \u2014 check the code and try again.');
-    });
-  });
+  // A code is claimed by following the link, not by typing it here: the
+  // `?challenge=` URL runs its own /join at connect (the `connected` handler),
+  // so an input on this screen could only duplicate that -- and its presence
+  // read as though the link a friend shared might not be enough by itself.
   // The fallback: leave the reservation and take the ordinary matchmaker wait.
   // The cancel must land first, or the queue join trips the server's "challenge
   // already open" guard and the player is stuck on a code they no longer want.

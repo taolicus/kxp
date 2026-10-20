@@ -22,7 +22,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { runInContext } = require('node:vm');
 
-const { loadApp, stubElement } = require('./appHarness.cjs');
+const { loadApp } = require('./appHarness.cjs');
 const SM = require('./machine.js');
 
 // A fresh client sitting on `?challenge=<token>`, connected but not yet sent a
@@ -133,37 +133,20 @@ test('search for anyone cancels the reservation, then queues, and hides the code
   );
 });
 
-// The paste half. A full link and a bare token both reduce to the token the
-// server minted, because the link is opaque beyond its path.
-test('confirming a pasted full link posts /join with its token', async () => {
+// The claim half. There is no paste field and no Join button: the `?challenge=`
+// link is the whole of the claim, and following it posts /join at connect. The
+// cases that pinned a typed link/token are gone with the field, because there is
+// no longer a second route into /join for them to describe; what replaces them is
+// the assertion that neither the controls nor their wiring are still shipped.
+test('the invite screen ships no paste field and no Join control', async () => {
   const app = await creator();
-  app.seed('#claim-url', stubElement());
-  app.el('#claim-url').value = 'https://example.test/?challenge=abc123';
-  app.tap('#btn-claim');
+  app.tap('#btn-online');
+  app.tap('#btn-start');
   await app.settle();
-  const join = app.posts.filter((p) => String(p.url).endsWith('/join')).pop();
-  assert.ok(join, 'a join was posted');
-  assert.equal(JSON.parse(join.body).token, 'abc123');
-});
-
-test('confirming a bare pasted token posts /join with it', async () => {
-  const app = await creator();
-  app.seed('#claim-url', stubElement());
-  app.el('#claim-url').value = '  tok9  ';
-  app.tap('#btn-claim');
-  await app.settle();
-  const join = app.posts.filter((p) => String(p.url).endsWith('/join')).pop();
-  assert.ok(join, 'a join was posted');
-  assert.equal(JSON.parse(join.body).token, 'tok9');
-});
-
-test('an empty paste is refused without a request', async () => {
-  const app = await creator();
-  app.seed('#claim-url', stubElement());
-  app.el('#claim-url').value = '';
-  app.tap('#btn-claim');
-  await app.settle();
-  assert.equal(app.posted().filter((p) => p === '/join').length, 0, 'nothing to claim');
+  assert.ok(!app.posted().includes('/join'),
+    'reserving a link does not claim one; the claim is the link being followed');
+  assert.equal(app.el('#claim-url'), undefined, 'no field to paste into');
+  assert.equal(app.el('#btn-claim'), undefined, 'and no Join control beside it');
 });
 
 // A reconnect (or reload) while reserved. The creator's own URL carries no
