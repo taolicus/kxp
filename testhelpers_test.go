@@ -34,3 +34,12 @@ func noPacing() *Hub {
 	h.tuneMatch = func(m *match) { m.seriesBreak = time.Nanosecond }
 	return h
 }
+
+// shortGateTimeout shrinks the opening-handshake timeout on the hub itself, for a
+// test whose match re-queues: the re-pairing goes through tryMatch, which builds
+// a match from the hub's pacing, so shortening only the first match would leave
+// the second one waiting out the shipped eight seconds. Call it before the first
+// match is built.
+func shortGateTimeout(h *Hub, d time.Duration) {
+	h.pacing.readyTimeout = d
+}

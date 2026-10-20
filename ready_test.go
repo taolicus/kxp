@@ -121,9 +121,9 @@ func TestCPUReadyTimeoutReturnsHumanToLobby(t *testing.T) {
 // Cancel, and re-matched within the gate window again.
 func TestReadyTimeoutRequeuesAndExplainsBothSides(t *testing.T) {
 	h := NewHub()
+	shortGateTimeout(h, 80*time.Millisecond)
 	a, b := newClient(), newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	shortReadyTimeout(t, m, 80*time.Millisecond)
 	m.start()
 
 	waitForEvent(t, a, "matched")
@@ -231,9 +231,9 @@ func TestReadyAbandonOnLeaveRequeuesSurvivor(t *testing.T) {
 
 func TestReadyTimeoutRequeuesBoth(t *testing.T) {
 	h := NewHub()
+	shortGateTimeout(h, 80*time.Millisecond)
 	a, b := newClient(), newClient()
 	m := h.makeMatch(defaultSeriesTarget, side{client: a}, side{client: b})
-	shortReadyTimeout(t, m, 80*time.Millisecond)
 	m.start()
 
 	waitForEvent(t, a, "matched")
