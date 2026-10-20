@@ -22,6 +22,12 @@
   <p id="notice" class="note hidden"></p>
 
   <section id="lobby" class="view">
+    <!-- The rock at landing size: the same raised fist the tab icon draws (the
+         <link rel="icon"> above), written as the same codepoint so the two are
+         one mark rather than two assets that can drift apart -- the markup test
+         pins them together. Decorative: the title underneath is what a reader
+         should hear, so the emoji is hidden from the accessibility tree. -->
+    <div id="lobby-fist" class="lobby-fist" aria-hidden="true">&#x270A;</div>
     <h1 class="mkx-title">KACHIPUN TOURNAMENT</h1>
     <p id="online" class="online">&hellip;</p>
     <p id="stats" class="stats"></p>

@@ -206,6 +206,16 @@ button.primary:hover {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 8) Lobby --------------------------------------------------------------- */
+/* The raised fist above the title: the tab's icon at landing size. The title
+   keeps its own margin below; this only has to clear the title above it, and
+   the mark is hidden from the accessibility tree (see index.html), so nothing
+   here carries meaning a reader needs -- only scale. */
+.lobby-fist {
+  margin: 0 0 var(--s1);
+  font-size: 3.4rem;
+  line-height: 1;
+}
+
 .online {
   margin: 0 0 var(--s4);
   color: var(--muted);
@@ -704,6 +714,9 @@ button.primary:hover {
    the game screen so it fits one viewport and avoids nested scroll. */
 @media (max-height: 800px) and (max-width: 768px) {
   .mkx-title { font-size: 2.2rem; margin-bottom: var(--s3); }
+  /* The emblem shrinks with the title it sits over: the compacting below exists
+     to keep the lobby on one screen, and a full-size mark would spend it back. */
+  .lobby-fist { font-size: 2.5rem; }
 
   .stage {
     min-height: 5.5rem;
@@ -718,6 +731,7 @@ button.primary:hover {
 
 @media (max-height: 600px) {
   .mkx-title { font-size: 1.9rem; margin-bottom: var(--s2); }
+  .lobby-fist { font-size: 1.9rem; }
   .stage {
     min-height: 4.5rem;
     padding-top: var(--s2);
