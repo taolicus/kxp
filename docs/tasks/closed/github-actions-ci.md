@@ -80,9 +80,9 @@ Jobs 1 and 2 are in `.github/workflows/ci.yml`; job 3 is still gated and is not
 in the file. The task moves here with the first two landed because they are
 independently useful and independently revertable, and because leaving the whole
 item open behind a browser fixture it does not depend on would report scheduled
-work as unstarted. The `test` job is red at landing — the `-race` step found a
-real defect on its first run (below) — but the job itself is what landed and what
-the follow-up task is verified against.
+work as unstarted. The `test` job was red for the first four pushes — the `-race`
+step found real defects on its first run (below) — and is green now that they are
+fixed.
 
 **What landed.** `test` (checkout, `setup-go` on `go-version-file: go.mod`,
 `gofmt`, `go vet ./...`, `go test ./...`, `go test -race ./...`) and `unit`
@@ -103,23 +103,23 @@ clean it passed — the bare `gofmt -l .` exited 0 in both cases.
 property [unit-gate-needs-origin.md](./unit-gate-needs-origin.md) landed, and it
 is what lets the `unit` job exist without a server.
 
-**`go test -race` is the one gate this slice cannot claim green, and the first CI
-run is why.** `-race` refuses on android/arm64, so the step exists only to be run
-by the runner — and it failed there, on a real race in the *test harness*
+**`go test -race` found a real defect on its first run, which is what it exists
+for.** `-race` refuses on android/arm64, so the step could only ever be run by the
+runner — and it failed there, on a real race in the *test harness*
 (`noSeriesBreak` writing the package-level `seriesBreak` while another test's
-match goroutine reads it in `round.go:921`). That is precisely the class of defect
-no dev host here could have found, and it is filed as
-[test-helper-package-var-race.md](../../tasks/open/test-helper-package-var-race.md)
+match goroutine reads it in `round.go`). That is precisely the class of defect no
+dev host here could have found. It was filed as
+[test-helper-package-var-race.md](../../tasks/closed/test-helper-package-var-race.md)
 rather than fixed here: it is a test-harness concern with its own build, not CI
-wiring, and widening this slice to include it would make the CI commit
-unrevertable on its own. **`go test -race ./...` is therefore failing in CI at the
-time this landed, and the `test` job is red until that task lands.** Saying so is
-the point: a red gate that everyone knows about is a queue of work, while a green
-one silently skipped is a lie.
+wiring, and widening this slice to include it would have made the CI commit
+unrevertable on its own. That task has since landed and **`go test -race ./...` is
+green.** Three more pushes went into it, each red on a different live read of a
+package var; the whole sequence is in that file's `Landed` record, and it is the
+only evidence in this repo that the `-race` gate can fail.
 
 What the first run *did* prove about the wiring: `gofmt`, `go vet` and plain `go
 test ./...` (206s) all passed on the runner, and the `unit` job passed in full.
-The mechanics of the job are sound — it is the suite it runs that has the defect.
+The mechanics of the job were sound — it was the suite it runs that had the defect.
 
 **`go1.26.5`, the version `go-version-file: go.mod` resolves, exists in the Go
 release index**, so `setup-go` will not fail on an unknown toolchain.

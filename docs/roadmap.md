@@ -89,7 +89,7 @@ Make the system testable and debuggable in production.
 - [`npm run unit` should not need a deployed origin](tasks/closed/unit-gate-needs-origin.md)
 - [CPU determinism hooks](tasks/closed/cpu-determinism-hooks.md)
 - [GitHub Actions CI: recover the gates the phone cannot run](tasks/closed/github-actions-ci.md) (Go + unit jobs landed; the browser job is gated on [the browser fixture](issues/in-repo-browser-fixture.md))
-- [The test helpers race on the package vars they shrink](tasks/open/test-helper-package-var-race.md) (found by CI's first `-race` run)
+- [The test helpers race on the package vars they shrink](tasks/closed/test-helper-package-var-race.md) (found by CI's first `-race` run; green in CI now)
 
 ## Phase 3 — Architecture & features
 

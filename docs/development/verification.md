@@ -112,8 +112,10 @@ Two jobs, both origin-free:
   was hand-argued and never machine-checked. Plain `go test` runs first so a race
   report is never read against an already-failing suite. **It found one on its
   first run** — a race in the test helpers, not the server
-  ([test-helper-package-var-race.md](../tasks/open/test-helper-package-var-race.md))
-  — so the job is red until that lands. That is the gate working, not failing.
+  ([test-helper-package-var-race.md](../tasks/closed/test-helper-package-var-race.md))
+  — and the step is green now that the fix has landed. That red-then-green is the
+  gate working, and the only evidence in this repo that `-race` can fail here at
+  all.
 - **`unit`** — `npm ci`, `npm run unit`, `npm run links`. Both are origin-free by
   construction, pinned by `tools/lib/harness.test.mjs` and recorded in
   [unit-gate-needs-origin.md](../tasks/closed/unit-gate-needs-origin.md), so they

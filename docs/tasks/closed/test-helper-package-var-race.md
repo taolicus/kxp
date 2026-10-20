@@ -1,9 +1,3 @@
----
-phase: 2
-depends-on: []
-gated-on: []
----
-
 # The test helpers race on the package vars they shrink
 
 CI's first `go test -race ./...` run failed, and the report is a real race — in
@@ -95,3 +89,81 @@ candidates, in rough order of preference:
   ([environment.md](../../development/environment.md)), so this task is verified
   by pushing and reading the CI run. That is now possible only because CI landed,
   which is why this is a follow-up to it rather than work done alongside.
+
+## Landed
+
+`go test -race ./...` is green in CI. It took five pushes — four red, then green —
+and the shape of the fix is larger than this file first imagined: the race was not
+one pattern in one file but the general rule that **a test must not write anything
+a live match reads**, and the engine had five such values, not three.
+
+### What the fix is
+
+- **The pacing is per match.** `shootWindow`, `readyTimeout`, `readyLease`,
+  `readyRecheck` and `seriesBreak` are fields on `match`. A test shrinks its own
+  match and touches no shared state, which is what the engine's other injectable
+  hooks (`now`, `pickMove`, `botThink`) already did.
+- **The hub paces the matches it builds.** `Hub.pacing` is a `matchPacing`
+  snapshotted at `NewHub`, and `makeMatch` copies it onto each match.
+- **`newMatch` reads no package var.** It leaves the pacing fields zero, which
+  the `*Or` accessors read as "use the shipped value" — the same fallback
+  `clock()` and `botThinkTime()` use for a struct-literal match.
+
+### Why the first three attempts were not enough
+
+Each earlier push was a true statement about a real read and still left one
+behind, and the sequence is the evidence for the shape above:
+
+1. **Fields for the three vars this file named.** Sufficient for the tests that
+   held their match, and it still spent a CI run: `TestOperationalFlagsSet…`
+   writes `shootWindow` through `operationalFlags`, which no field on a match the
+   test holds could cover.
+2. **`shootWindow` as a field too.** That test writes the package var, and a match
+   goroutine read it in `playRound`.
+3. **Hub pacing, `newMatch` reading nothing.** The third report was a leftover
+   match goroutine from an earlier test re-queueing, building a fresh match
+   through `tryMatch`, and reading a var the next test's cleanup had just written
+   back — a read from a match no test had a handle on.
+
+### The call sites
+
+The eleven `noSeriesBreak` calls became seven `noSeriesBreak(t, m)` calls on
+matches that genuinely pause between rounds, and three `noPacing()` hubs where a
+test played a whole CPU series through HTTP and never held the match. Three more
+were dropped as no-ops: the two `seriesMatchForTest` helpers and
+`TestAPVPMatchCanBeAFirstToThree` drive `judgeRoundAs` directly and never start a
+match, so they had nothing to shrink. The `ready*` equivalents are all on
+`shortReadyTimeout`/`shortGateTimeout`, except the two `ready_lease_test.go` tests
+whose match re-queues, which pace the hub through `twoSided`'s new argument.
+
+### The negative proof
+
+There is no test that reintroduces the racy write, so the acceptance item asking
+for one is **not met as written**. What stands in its place is stronger evidence
+of the same thing: `-race` failed on four consecutive pushes (`39390815176`,
+`39396634152`, `39398392908`, `39400339958`), each naming a different live read,
+and passed on the fifth (`39402882216`) with no `-race` test weakened or skipped.
+A deliberate racy test would have to be kept in the suite to stay meaningful, and
+a permanently-racy test is the thing this task exists to remove.
+
+### One functional regression, caught by the same run
+
+The fourth push was clean of races and failed
+`TestReadyTimeoutRequeuesAndExplainsBothSides` instead: shortening only the first
+match left the re-paired one on the shipped eight-second gate. It passed on the
+phone and failed under `-race`, which is the timing difference and not a
+coincidence. `shortGateTimeout` now paces the hub, and `twoSided` takes the
+timeout it already applied to the match, so a test whose match can re-queue paces
+the thing that builds the replacement.
+
+### Verified
+
+- `go test -race ./...` green in CI run `39402882216`; `test` and `unit` both
+  `success`.
+- On the phone: `gofmt -l .` clean, `go vet ./...` clean, `go test ./...` ok
+  (226.9s), `npm run unit` 222/222, `npm run links` 137 documents / 458 links / 0
+  broken.
+- The re-queue path was run ten times over (`-count=10`) after the fix, since it
+  is the one that failed on timing rather than on a rule.
+- Not verified here: the race detector itself, which refuses on android/arm64.
+  Every `-race` claim in this record is the runner's.
